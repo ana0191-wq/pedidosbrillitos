@@ -47,6 +47,18 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        store: {
+          aliexpress: "hsl(var(--store-aliexpress))",
+          shein: "hsl(var(--store-shein))",
+          temu: "hsl(var(--store-temu))",
+        },
+        status: {
+          ordered: "hsl(var(--status-ordered))",
+          transit: "hsl(var(--status-transit))",
+          delivered: "hsl(var(--status-delivered))",
+          partial: "hsl(var(--status-partial))",
+          notified: "hsl(var(--status-notified))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
