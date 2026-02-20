@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useOrders } from '@/hooks/useOrders';
+import { useAuth } from '@/hooks/useAuth';
 import type { OrderCategory } from '@/types/orders';
 import { Dashboard } from '@/components/Dashboard';
 import { OrderSection } from '@/components/OrderSection';
 import { AddOrderDialog } from '@/components/AddOrderDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShoppingBag, Package, Users, LayoutDashboard } from 'lucide-react';
+import { ShoppingBag, Package, Users, LayoutDashboard, LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Index = () => {
-  const { orders, addOrder, updateOrder, deleteOrder, getByCategory, getCounts } = useOrders();
+  const { orders, loading, addOrder, updateOrder, deleteOrder, getByCategory, getCounts } = useOrders();
+  const { signOut } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogCategory, setDialogCategory] = useState<OrderCategory>('personal');
 
@@ -23,9 +26,14 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-md">
-        <div className="container max-w-4xl mx-auto px-4 py-3">
-          <h1 className="text-xl font-bold text-foreground">📦 Mis Pedidos Online</h1>
-          <p className="text-xs text-muted-foreground">AliExpress · Shein · Temu</p>
+        <div className="container max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-foreground">📦 Mis Pedidos Online</h1>
+            <p className="text-xs text-muted-foreground">AliExpress · Shein · Temu</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={signOut}>
+            <LogOut className="h-4 w-4 mr-1" /> Salir
+          </Button>
         </div>
       </header>
 

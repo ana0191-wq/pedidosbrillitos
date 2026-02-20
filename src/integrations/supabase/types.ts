@@ -14,13 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      orders: {
+        Row: {
+          amount_charged: number | null
+          category: string
+          client_name: string | null
+          created_at: string
+          estimated_arrival: string | null
+          id: string
+          notes: string | null
+          order_date: string | null
+          order_number: string | null
+          price_paid: number
+          price_per_unit: number | null
+          product_name: string
+          product_photo: string | null
+          shipping_cost: number | null
+          status: string
+          store: string
+          units_ordered: number | null
+          units_received: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_charged?: number | null
+          category: string
+          client_name?: string | null
+          created_at?: string
+          estimated_arrival?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string | null
+          order_number?: string | null
+          price_paid?: number
+          price_per_unit?: number | null
+          product_name: string
+          product_photo?: string | null
+          shipping_cost?: number | null
+          status?: string
+          store: string
+          units_ordered?: number | null
+          units_received?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_charged?: number | null
+          category?: string
+          client_name?: string | null
+          created_at?: string
+          estimated_arrival?: string | null
+          id?: string
+          notes?: string | null
+          order_date?: string | null
+          order_number?: string | null
+          price_paid?: number
+          price_per_unit?: number | null
+          product_name?: string
+          product_photo?: string | null
+          shipping_cost?: number | null
+          status?: string
+          store?: string
+          units_ordered?: number | null
+          units_received?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_own_order: { Args: { order_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
