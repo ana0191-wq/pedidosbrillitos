@@ -37,6 +37,7 @@
     --store-aliexpress: 24 95% 53%;
     --store-shein: 0 0% 13%;
     --store-temu: 14 90% 50%;
+    --store-amazon: 195 100% 30%;
 
     --status-ordered: 38 80% 55%;
     --status-transit: 210 70% 55%;
@@ -116,6 +117,10 @@
   }
   .store-badge-temu {
     background-color: hsl(var(--store-temu));
+    color: white;
+  }
+  .store-badge-amazon {
+    background-color: hsl(var(--store-amazon));
     color: white;
   }
 }

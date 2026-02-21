@@ -9,7 +9,7 @@ const EXTRACTION_PROMPT = `You are an order data extractor. Extract the followin
 
 Fields to extract:
 - productName: string (product name)
-- store: "AliExpress" | "Shein" | "Temu" | null
+- store: "AliExpress" | "Shein" | "Temu" | "Amazon" | null
 - pricePaid: number | null (total price paid)
 - orderNumber: string | null
 - orderDate: string | null (YYYY-MM-DD format)
@@ -76,6 +76,7 @@ Deno.serve(async (req) => {
       if (url.includes('aliexpress')) detectedStore = 'AliExpress';
       else if (url.includes('shein')) detectedStore = 'Shein';
       else if (url.includes('temu')) detectedStore = 'Temu';
+      else if (url.includes('amazon')) detectedStore = 'Amazon';
 
       messages.push({
         role: 'user',

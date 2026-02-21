@@ -21,6 +21,7 @@ const storeConfig: Record<Store, string> = {
   'AliExpress': 'store-badge-aliexpress',
   'Shein': 'store-badge-shein',
   'Temu': 'store-badge-temu',
+  'Amazon': 'store-badge-amazon',
 };
 
 export function StoreBadge({ store }: { store: Store }) {

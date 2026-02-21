@@ -44,7 +44,7 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
 
   const applyExtractedData = (data: any) => {
     if (data.productName) setProductName(data.productName);
-    if (data.store && ['AliExpress', 'Shein', 'Temu'].includes(data.store)) setStore(data.store);
+    if (data.store && ['AliExpress', 'Shein', 'Temu', 'Amazon'].includes(data.store)) setStore(data.store);
     if (data.pricePaid != null) setPricePaid(String(data.pricePaid));
     if (data.orderNumber) setOrderNumber(data.orderNumber);
     if (data.orderDate) setOrderDate(data.orderDate);
@@ -190,7 +190,7 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground mt-1">AliExpress, Shein o Temu — extraemos los datos automáticamente</p>
+              <p className="text-xs text-muted-foreground mt-1">AliExpress, Shein, Temu o Amazon — extraemos los datos automáticamente</p>
             </div>
             <Button onClick={handleUrlExtract} disabled={!url.trim() || loading} className="w-full">
               {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Extrayendo...</> : <><Sparkles className="h-4 w-4 mr-2" /> Extraer Datos</>}
@@ -257,6 +257,7 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
                   <SelectItem value="AliExpress">AliExpress</SelectItem>
                   <SelectItem value="Shein">Shein</SelectItem>
                   <SelectItem value="Temu">Temu</SelectItem>
+                  <SelectItem value="Amazon">Amazon</SelectItem>
                 </SelectContent>
               </Select>
             </div>

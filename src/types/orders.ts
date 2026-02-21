@@ -1,4 +1,4 @@
-export type Store = 'AliExpress' | 'Shein' | 'Temu';
+export type Store = 'AliExpress' | 'Shein' | 'Temu' | 'Amazon';
 
 export type PersonalStatus = 'Pedido' | 'En Tránsito' | 'Entregado';
 export type MerchandiseStatus = 'Pedido' | 'En Tránsito' | 'Parcialmente Recibido' | 'Completo';
