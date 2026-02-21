@@ -29,7 +29,7 @@ const Index = () => {
         <div className="container max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-foreground">📦 Mis Pedidos Online</h1>
-            <p className="text-xs text-muted-foreground">AliExpress · Shein · Temu</p>
+            <p className="text-xs text-muted-foreground">AliExpress · Shein · Temu · Amazon</p>
           </div>
           <Button variant="ghost" size="sm" onClick={signOut}>
             <LogOut className="h-4 w-4 mr-1" /> Salir

@@ -44,7 +44,7 @@ export default function Auth() {
         <CardHeader className="text-center">
           <Package className="h-10 w-10 mx-auto text-primary mb-2" />
           <CardTitle className="text-2xl text-foreground">📦 Mis Pedidos Online</CardTitle>
-          <p className="text-sm text-muted-foreground">AliExpress · Shein · Temu</p>
+          <p className="text-sm text-muted-foreground">AliExpress · Shein · Temu · Amazon</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
