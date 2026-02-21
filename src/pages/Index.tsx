@@ -62,7 +62,7 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="dashboard">
-            <Dashboard counts={counts} orders={orders} onAddOrder={() => openDialog()} />
+            <Dashboard counts={counts} orders={orders} onAddOrder={() => openDialog()} onImportOrders={async (imported) => { for (const o of imported) await addOrder(o); }} />
           </TabsContent>
 
           <TabsContent value="personal">
