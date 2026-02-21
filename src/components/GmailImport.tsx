@@ -1,9 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mail, Loader2, Check, X, Plus } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Mail, Loader2, Check, X, Plus, CalendarIcon, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import type { Order, Store } from '@/types/orders';
 
 interface GmailImportProps {
@@ -18,6 +23,15 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
   const [scanning, setScanning] = useState(false);
   const [foundOrders, setFoundOrders] = useState<any[]>([]);
   const [tokens, setTokens] = useState<{ accessToken: string; refreshToken: string } | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Date range - default last 7 days
+  const [dateFrom, setDateFrom] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d;
+  });
+  const [dateTo, setDateTo] = useState<Date>(new Date());
 
   // Check if Gmail is already connected
   useEffect(() => {
@@ -42,7 +56,6 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
       if (event.data?.type === 'gmail-success') {
         const { accessToken, refreshToken, expiresAt, email } = event.data;
 
-        // Save tokens to DB
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
@@ -58,10 +71,13 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
         setGmailEmail(email);
         setTokens({ accessToken, refreshToken });
         setConnecting(false);
+        setErrorMessage('');
         toast({ title: '✅ Gmail conectado', description: `Cuenta: ${email}` });
       } else if (event.data?.type === 'gmail-error') {
         setConnecting(false);
-        toast({ title: 'Error', description: 'No se pudo conectar Gmail', variant: 'destructive' });
+        const msg = event.data.message || 'No se pudo conectar Gmail. Intenta de nuevo.';
+        setErrorMessage(msg);
+        toast({ title: 'Error de conexión', description: msg, variant: 'destructive' });
       }
     };
 
@@ -71,6 +87,7 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
 
   const connectGmail = async () => {
     setConnecting(true);
+    setErrorMessage('');
     try {
       const { data, error } = await supabase.functions.invoke('gmail-auth', {
         body: { returnUrl: window.location.origin },
@@ -78,12 +95,19 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
 
       if (error) throw error;
       if (data?.url) {
-        window.open(data.url, 'gmail-auth', 'width=500,height=600,left=200,top=100');
+        const popup = window.open(data.url, 'gmail-auth', 'width=500,height=600,left=200,top=100');
+        // Check if popup was blocked
+        if (!popup) {
+          setConnecting(false);
+          setErrorMessage('El navegador bloqueó la ventana emergente. Permite las ventanas emergentes e intenta de nuevo.');
+          toast({ title: 'Ventana bloqueada', description: 'Permite las ventanas emergentes para conectar Gmail.', variant: 'destructive' });
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setConnecting(false);
-      toast({ title: 'Error', description: 'No se pudo iniciar la conexión', variant: 'destructive' });
+      setErrorMessage(err.message || 'No se pudo iniciar la conexión');
+      toast({ title: 'Error', description: 'No se pudo iniciar la conexión con Gmail', variant: 'destructive' });
     }
   };
 
@@ -93,6 +117,7 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
     setGmailEmail('');
     setTokens(null);
     setFoundOrders([]);
+    setErrorMessage('');
     toast({ title: 'Gmail desconectado' });
   };
 
@@ -100,17 +125,34 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
     if (!tokens) return;
     setScanning(true);
     setFoundOrders([]);
+    setErrorMessage('');
 
     try {
       const { data, error } = await supabase.functions.invoke('gmail-scan', {
-        body: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
+        body: {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          dateFrom: format(dateFrom, 'yyyy/MM/dd'),
+          dateTo: format(dateTo, 'yyyy/MM/dd'),
+        },
       });
 
       if (error) throw error;
 
+      if (data?.needsReconnect) {
+        setGmailConnected(false);
+        setTokens(null);
+        setErrorMessage('La sesión de Gmail expiró. Reconecta tu cuenta.');
+        toast({ title: '🔄 Reconecta Gmail', description: 'La sesión expiró, conecta de nuevo.', variant: 'destructive' });
+        return;
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Error desconocido');
+      }
+
       if (data?.newAccessToken) {
         setTokens(prev => prev ? { ...prev, accessToken: data.newAccessToken } : null);
-        // Update stored token
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           await supabase.from('gmail_tokens').update({ access_token: data.newAccessToken }).eq('user_id', user.id);
@@ -121,11 +163,13 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
         setFoundOrders(data.orders);
         toast({ title: `📧 ${data.orders.length} pedido(s) encontrado(s)`, description: 'Selecciona los que quieras importar' });
       } else {
-        toast({ title: '📭 Sin pedidos nuevos', description: 'No se encontraron pedidos en los últimos 30 días' });
+        toast({ title: '📭 Sin pedidos nuevos', description: `No se encontraron pedidos pagados entre ${format(dateFrom, 'dd/MM/yyyy')} y ${format(dateTo, 'dd/MM/yyyy')}` });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast({ title: 'Error', description: 'No se pudieron escanear los correos', variant: 'destructive' });
+      const msg = err.message || 'No se pudieron escanear los correos';
+      setErrorMessage(msg);
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
     } finally {
       setScanning(false);
     }
@@ -139,7 +183,7 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
       id: Math.random().toString(36).substring(2, 15),
       category: 'personal',
       productName: orderData.productName || 'Pedido importado',
-      productPhoto: '',
+      productPhoto: orderData.productImageUrl || '',
       store,
       pricePaid: orderData.pricePaid || 0,
       orderDate: orderData.orderDate || new Date().toISOString().split('T')[0],
@@ -162,7 +206,7 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
       id: Math.random().toString(36).substring(2, 15),
       category: 'personal' as const,
       productName: orderData.productName || 'Pedido importado',
-      productPhoto: '',
+      productPhoto: orderData.productImageUrl || '',
       store: validStores.includes(orderData.store) ? orderData.store : 'AliExpress' as Store,
       pricePaid: orderData.pricePaid || 0,
       orderDate: orderData.orderDate || new Date().toISOString().split('T')[0],
@@ -187,6 +231,14 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Error message */}
+        {errorMessage && (
+          <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-xs">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {!gmailConnected ? (
           <Button onClick={connectGmail} disabled={connecting} variant="outline" className="w-full">
             {connecting ? (
@@ -207,6 +259,33 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
               </Button>
             </div>
 
+            {/* Date range pickers */}
+            <div className="grid grid-cols-2 gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal text-xs h-8", !dateFrom && "text-muted-foreground")}>
+                    <CalendarIcon className="h-3 w-3 mr-1" />
+                    {dateFrom ? format(dateFrom, 'dd/MM/yy') : 'Desde'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={dateFrom} onSelect={(d) => d && setDateFrom(d)} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal text-xs h-8", !dateTo && "text-muted-foreground")}>
+                    <CalendarIcon className="h-3 w-3 mr-1" />
+                    {dateTo ? format(dateTo, 'dd/MM/yy') : 'Hasta'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={dateTo} onSelect={(d) => d && setDateTo(d)} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+            </div>
+
             <Button onClick={scanEmails} disabled={scanning} className="w-full" size="sm">
               {scanning ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Escaneando correos...</>
@@ -225,14 +304,22 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
                 </div>
 
                 {foundOrders.map((order, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
+                  <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
+                    {/* Product thumbnail */}
+                    {order.productImageUrl ? (
+                      <img src={order.productImageUrl} alt="" className="h-12 w-12 rounded object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="h-12 w-12 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                        <Mail className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{order.productName || 'Sin nombre'}</p>
                       <p className="text-xs text-muted-foreground">
                         {order.store || '?'} · ${order.pricePaid || '?'}
                       </p>
                     </div>
-                    <div className="flex gap-1 ml-2">
+                    <div className="flex gap-1 flex-shrink-0">
                       <Button variant="ghost" size="sm" onClick={() => importOrder(order)} className="h-7 w-7 p-0">
                         <Plus className="h-3 w-3" />
                       </Button>
