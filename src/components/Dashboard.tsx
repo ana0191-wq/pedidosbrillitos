@@ -2,14 +2,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShoppingBag, Package, Users, Plus, TrendingUp } from 'lucide-react';
 import type { Order } from '@/types/orders';
+import { GmailImport } from '@/components/GmailImport';
 
 interface DashboardProps {
   counts: { personal: number; merchandise: number; client: number; total: number };
   orders: Order[];
   onAddOrder: () => void;
+  onImportOrders: (orders: Order[]) => void;
 }
 
-export function Dashboard({ counts, orders, onAddOrder }: DashboardProps) {
+export function Dashboard({ counts, orders, onAddOrder, onImportOrders }: DashboardProps) {
   const recentOrders = orders.slice(0, 5);
 
   const summaryCards = [
@@ -39,6 +41,9 @@ export function Dashboard({ counts, orders, onAddOrder }: DashboardProps) {
           </Card>
         ))}
       </div>
+
+      {/* Gmail Import */}
+      <GmailImport onImportOrders={onImportOrders} />
 
       {/* Recent activity */}
       <div>
