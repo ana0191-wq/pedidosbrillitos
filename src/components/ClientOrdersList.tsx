@@ -1,32 +1,48 @@
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Package, DollarSign } from 'lucide-react';
+import { Trash2, Package, DollarSign, Plus } from 'lucide-react';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { Client } from '@/hooks/useClients';
+import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 
 const ORDER_STATUSES = ['Pendiente', 'Pagado', 'En Tránsito', 'Entregado', 'Notificado'];
 
 interface ClientOrdersListProps {
   clientOrders: ClientOrder[];
   clients: Client[];
+  onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
   onUpdateOrder: (id: string, updates: Record<string, any>) => void;
   onDeleteOrder: (id: string) => void;
   exchangeRate: number | null;
 }
 
-export function ClientOrdersList({ clientOrders, clients, onUpdateOrder, onDeleteOrder, exchangeRate }: ClientOrdersListProps) {
+export function ClientOrdersList({ clientOrders, clients, onAddOrder, onUpdateOrder, onDeleteOrder, exchangeRate }: ClientOrdersListProps) {
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const fmt = (n: number) => `$${n.toFixed(2)}`;
   const clientMap: Record<string, string> = {};
   clients.forEach(c => { clientMap[c.id] = c.name; });
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold text-foreground">📋 Pedidos de Clientes</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-foreground">📋 Pedidos de Clientes</h2>
+        <Button onClick={() => setShowAddDialog(true)} size="sm">
+          <Plus className="h-4 w-4 mr-1" /> Nuevo Pedido
+        </Button>
+      </div>
+
+      <AddClientOrderDialog
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        clients={clients}
+        onAddOrder={onAddOrder}
+      />
 
       {clientOrders.length === 0 ? (
-        <Card><CardContent className="p-6 text-center text-muted-foreground">No hay pedidos. Crea uno desde la pestaña de Clientes.</CardContent></Card>
+        <Card><CardContent className="p-6 text-center text-muted-foreground">No hay pedidos. ¡Crea uno!</CardContent></Card>
       ) : (
         clientOrders.map(order => {
           const totalProductCost = order.products.reduce((s, p) => s + p.pricePaid, 0);
