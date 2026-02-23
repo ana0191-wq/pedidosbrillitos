@@ -14,6 +14,98 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_orders: {
+        Row: {
+          amount_charged: number | null
+          client_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          shipping_cost: number | null
+          shipping_dimensions: string | null
+          shipping_type: string | null
+          shipping_volume_ft3: number | null
+          shipping_weight_lb: number | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_charged?: number | null
+          client_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          shipping_cost?: number | null
+          shipping_dimensions?: string | null
+          shipping_type?: string | null
+          shipping_volume_ft3?: number | null
+          shipping_weight_lb?: number | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_charged?: number | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          shipping_cost?: number | null
+          shipping_dimensions?: string | null
+          shipping_type?: string | null
+          shipping_volume_ft3?: number | null
+          shipping_weight_lb?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       gmail_tokens: {
         Row: {
           access_token: string
@@ -52,6 +144,7 @@ export type Database = {
           amount_charged: number | null
           category: string
           client_name: string | null
+          client_order_id: string | null
           created_at: string
           estimated_arrival: string | null
           id: string
@@ -74,6 +167,7 @@ export type Database = {
           amount_charged?: number | null
           category: string
           client_name?: string | null
+          client_order_id?: string | null
           created_at?: string
           estimated_arrival?: string | null
           id?: string
@@ -96,6 +190,7 @@ export type Database = {
           amount_charged?: number | null
           category?: string
           client_name?: string | null
+          client_order_id?: string | null
           created_at?: string
           estimated_arrival?: string | null
           id?: string
@@ -111,6 +206,59 @@ export type Database = {
           store?: string
           units_ordered?: number | null
           units_received?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_client_order_id_fkey"
+            columns: ["client_order_id"]
+            isOneToOne: false
+            referencedRelation: "client_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipping_settings: {
+        Row: {
+          air_price_per_lb: number | null
+          air_rate_per_lb: number | null
+          created_at: string
+          default_margin_percent: number | null
+          default_shipping_percent: number | null
+          id: string
+          sea_insurance: number | null
+          sea_minimum: number | null
+          sea_profit: number | null
+          sea_rate_per_ft3: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          air_price_per_lb?: number | null
+          air_rate_per_lb?: number | null
+          created_at?: string
+          default_margin_percent?: number | null
+          default_shipping_percent?: number | null
+          id?: string
+          sea_insurance?: number | null
+          sea_minimum?: number | null
+          sea_profit?: number | null
+          sea_rate_per_ft3?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          air_price_per_lb?: number | null
+          air_rate_per_lb?: number | null
+          created_at?: string
+          default_margin_percent?: number | null
+          default_shipping_percent?: number | null
+          id?: string
+          sea_insurance?: number | null
+          sea_minimum?: number | null
+          sea_profit?: number | null
+          sea_rate_per_ft3?: number | null
           updated_at?: string
           user_id?: string
         }
