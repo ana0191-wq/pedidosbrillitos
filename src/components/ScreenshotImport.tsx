@@ -76,9 +76,14 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
             if (order.imageBbox && Array.isArray(order.imageBbox) && order.imageBbox.length === 4) {
               try {
                 croppedImage = await cropImageFromBbox(base64, order.imageBbox);
+                console.log('Cropped bbox:', order.imageBbox, 'for:', order.productName?.slice(0, 30));
               } catch (e) {
                 console.warn('Could not crop thumbnail:', e);
+                croppedImage = base64; // fallback: use full screenshot
               }
+            } else {
+              console.warn('No imageBbox for:', order.productName, 'bbox:', order.imageBbox);
+              croppedImage = base64; // fallback: use full screenshot
             }
             return { ...order, croppedImage };
           })

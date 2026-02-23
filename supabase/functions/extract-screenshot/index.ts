@@ -9,10 +9,12 @@ const EXTRACTION_PROMPT = `Eres un experto en leer capturas de pantalla de pedid
 
 Analiza la imagen y extrae CADA producto visible. Devuelve un JSON array.
 
+IMPORTANTE: Cada producto en las apps de compras tiene una MINIATURA/FOTO a la izquierda. DEBES indicar dónde está esa foto.
+
 Campos requeridos por producto:
 {
-  "productName": "nombre real del producto tal como aparece en la captura",
-  "imageBbox": [x1, y1, x2, y2],
+  "productName": "nombre real del producto",
+  "imageBbox": [x1_percent, y1_percent, x2_percent, y2_percent],
   "store": "Temu" | "AliExpress" | "Shein" | "Amazon",
   "pricePaid": 12.99,
   "orderNumber": "123456789",
@@ -22,12 +24,17 @@ Campos requeridos por producto:
   "pricePerUnit": 12.99
 }
 
-REGLAS:
-- productName DEBE ser el nombre real del artículo visible en la imagen. NUNCA escribas "Product", "Pedido" u otro texto genérico.
-- imageBbox: coordenadas [x1, y1, x2, y2] en PORCENTAJE (0-100) de la miniatura/foto del producto dentro de la captura. x1,y1 es la esquina superior izquierda, x2,y2 la inferior derecha. Ejemplo: [2, 15, 25, 40] significa que la miniatura empieza en 2% desde la izquierda, 15% desde arriba, y termina en 25% ancho, 40% alto. Si no hay miniatura visible, usa null.
-- Si no puedes leer un campo, usa null.
-- Detecta la tienda por el diseño/logo visible (Temu naranja, AliExpress rojo, Shein negro, Amazon azul).
-- Si hay varios productos en la imagen, crea una entrada por cada uno.
+REGLAS CRÍTICAS PARA imageBbox:
+- imageBbox es OBLIGATORIO para cada producto. Es un array de 4 números.
+- Los valores son PORCENTAJES (0-100) relativos al tamaño total de la imagen.
+- [x1, y1, x2, y2] donde (x1,y1) = esquina superior-izquierda y (x2,y2) = esquina inferior-derecha de la FOTO/MINIATURA del producto.
+- Ejemplo: si la miniatura del producto está en la esquina superior izquierda ocupando ~20% del ancho y entre 10%-30% del alto: [0, 10, 20, 30]
+- NUNCA pongas null en imageBbox. Siempre hay una miniatura visible junto a cada producto.
+
+OTRAS REGLAS:
+- productName DEBE ser el nombre real del artículo. NUNCA escribas texto genérico.
+- Si no puedes leer un campo (excepto imageBbox), usa null.
+- Detecta la tienda por el diseño/logo visible.
 - pricePaid es el precio total pagado por ese producto.
 
 Devuelve SOLO un JSON array válido. Sin markdown, sin explicación. Si no ves ningún pedido, devuelve [].`;
@@ -115,7 +122,7 @@ Deno.serve(async (req) => {
       let cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
       const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
       orders = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-      console.log(`Extracted ${orders.length} orders:`, JSON.stringify(orders.map((o: any) => ({ name: o.productName?.slice(0, 40), price: o.pricePaid, store: o.store }))));
+      console.log(`Extracted ${orders.length} orders:`, JSON.stringify(orders.map((o: any) => ({ name: o.productName?.slice(0, 30), bbox: o.imageBbox, price: o.pricePaid }))));
     } catch {
       console.error('Parse error:', content.slice(0, 300));
       return new Response(
