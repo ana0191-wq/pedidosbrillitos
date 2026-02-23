@@ -10,18 +10,55 @@ interface ScreenshotImportProps {
   onImportOrders: (orders: Order[]) => void;
 }
 
+interface DetectedOrder {
+  productName?: string;
+  imageBbox?: [number, number, number, number] | null;
+  store?: string;
+  pricePaid?: number;
+  orderNumber?: string;
+  orderDate?: string;
+  estimatedArrival?: string;
+  unitsOrdered?: number;
+  croppedImage?: string; // base64 cropped thumbnail
+}
+
+function cropImageFromBbox(
+  imageBase64: string,
+  bbox: [number, number, number, number]
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const [x1Pct, y1Pct, x2Pct, y2Pct] = bbox;
+      const x = (x1Pct / 100) * img.width;
+      const y = (y1Pct / 100) * img.height;
+      const w = ((x2Pct - x1Pct) / 100) * img.width;
+      const h = ((y2Pct - y1Pct) / 100) * img.height;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(w));
+      canvas.height = Math.max(1, Math.round(h));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject('No canvas context');
+
+      ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    img.src = imageBase64;
+  });
+}
+
 export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
   const { toast } = useToast();
   const [processing, setProcessing] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
-  const [foundOrders, setFoundOrders] = useState<any[]>([]);
+  const [foundOrders, setFoundOrders] = useState<DetectedOrder[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   const processImage = useCallback(async (base64: string) => {
     setPreview(base64);
     setProcessing(true);
-    setFoundOrders([]);
 
     try {
       const { data, error } = await supabase.functions.invoke('extract-screenshot', {
@@ -32,7 +69,22 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
       if (!data?.success) throw new Error(data?.error || 'Error desconocido');
 
       if (data.orders?.length) {
-        setFoundOrders(prev => [...prev, ...data.orders]);
+        // Crop thumbnails from bounding boxes
+        const ordersWithImages: DetectedOrder[] = await Promise.all(
+          data.orders.map(async (order: any) => {
+            let croppedImage = '';
+            if (order.imageBbox && Array.isArray(order.imageBbox) && order.imageBbox.length === 4) {
+              try {
+                croppedImage = await cropImageFromBbox(base64, order.imageBbox);
+              } catch (e) {
+                console.warn('Could not crop thumbnail:', e);
+              }
+            }
+            return { ...order, croppedImage };
+          })
+        );
+
+        setFoundOrders(prev => [...prev, ...ordersWithImages]);
         toast({ title: `📸 ${data.orders.length} producto(s) detectado(s)` });
       } else {
         toast({ title: '🤔 No se detectaron pedidos', description: 'Intenta con otra captura más clara' });
@@ -59,8 +111,8 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
 
           const reader = new FileReader();
           reader.onload = (ev) => {
-            const base64 = ev.target?.result as string;
-            processImage(base64);
+            const b64 = ev.target?.result as string;
+            processImage(b64);
           };
           reader.readAsDataURL(file);
           return;
@@ -78,21 +130,21 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
 
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const base64 = ev.target?.result as string;
-      processImage(base64);
+      const b64 = ev.target?.result as string;
+      processImage(b64);
     };
     reader.readAsDataURL(file);
   };
 
-  const importOrder = (orderData: any) => {
+  const importOrder = (orderData: DetectedOrder) => {
     const validStores: Store[] = ['AliExpress', 'Shein', 'Temu', 'Amazon'];
-    const store: Store = validStores.includes(orderData.store) ? orderData.store : 'AliExpress';
+    const store: Store = validStores.includes(orderData.store as Store) ? orderData.store as Store : 'AliExpress';
 
     const order: Order = {
       id: Math.random().toString(36).substring(2, 15),
       category: 'personal',
       productName: orderData.productName || 'Pedido importado',
-      productPhoto: orderData.productImageUrl || '',
+      productPhoto: orderData.croppedImage || '',
       store,
       pricePaid: orderData.pricePaid || 0,
       orderDate: orderData.orderDate || new Date().toISOString().split('T')[0],
@@ -115,8 +167,8 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
       id: Math.random().toString(36).substring(2, 15),
       category: 'personal' as const,
       productName: orderData.productName || 'Pedido importado',
-      productPhoto: orderData.productImageUrl || '',
-      store: validStores.includes(orderData.store) ? orderData.store : 'AliExpress' as Store,
+      productPhoto: orderData.croppedImage || '',
+      store: validStores.includes(orderData.store as Store) ? orderData.store as Store : 'AliExpress' as Store,
       pricePaid: orderData.pricePaid || 0,
       orderDate: orderData.orderDate || new Date().toISOString().split('T')[0],
       estimatedArrival: orderData.estimatedArrival || '',
@@ -158,7 +210,6 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
 
         {!preview ? (
           <div
-            ref={dropZoneRef}
             onClick={() => fileInputRef.current?.click()}
             className="w-full h-28 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
           >
@@ -204,8 +255,8 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
             {foundOrders.map((order, i) => (
               <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
                 <div className="h-10 w-10 rounded-md bg-muted flex-shrink-0 overflow-hidden">
-                  {order.productImageUrl ? (
-                    <img src={order.productImageUrl} alt="" className="h-full w-full object-cover" />
+                  {order.croppedImage ? (
+                    <img src={order.croppedImage} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center text-muted-foreground">
                       <Camera className="h-4 w-4" />
@@ -216,7 +267,7 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
                   <p className="font-medium truncate">{order.productName || 'Sin nombre'}</p>
                   <p className="text-xs text-muted-foreground">
                     {order.store || '?'} · ${order.pricePaid?.toFixed(2) || '?'}
-                    {order.unitsOrdered > 1 ? ` · x${order.unitsOrdered}` : ''}
+                    {(order.unitsOrdered ?? 0) > 1 ? ` · x${order.unitsOrdered}` : ''}
                   </p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
