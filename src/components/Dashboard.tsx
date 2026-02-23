@@ -34,7 +34,26 @@ export function Dashboard({ counts, orders, clients, clientOrders, onAddOrder, o
       if (o.category === 'merchandise') {
         merchandise += (o as MerchandiseOrder).pricePerUnit * (o as MerchandiseOrder).unitsOrdered;
       }
-      if (o.category === 'client') {
+      // Don't count individual client products here — use clientOrders below
+    }
+
+    // Use clientOrders for accurate client financials
+    for (const co of clientOrders) {
+      const productCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
+      const name = co.clientName || clients.find(c => c.id === co.clientId)?.name || 'Sin cliente';
+      client += productCost;
+      clientRevenue += co.amountCharged;
+      clientProfit += co.amountCharged - productCost - co.shippingCost;
+      if (!clientBreakdown[name]) clientBreakdown[name] = { spent: 0, charged: 0, items: 0 };
+      clientBreakdown[name].spent += productCost + co.shippingCost;
+      clientBreakdown[name].charged += co.amountCharged;
+      clientBreakdown[name].items += co.products.length;
+    }
+
+    // Also count loose client orders (no client_order_id) from orders
+    const linkedProductIds = new Set(clientOrders.flatMap(co => co.products.map(p => p.id)));
+    for (const o of orders) {
+      if (o.category === 'client' && !linkedProductIds.has(o.id)) {
         const co = o as ClientOrder;
         client += o.pricePaid;
         clientRevenue += co.amountCharged;
@@ -46,8 +65,9 @@ export function Dashboard({ counts, orders, clients, clientOrders, onAddOrder, o
         clientBreakdown[name].items += 1;
       }
     }
+
     return { personal, merchandise, client, clientRevenue, clientProfit, clientBreakdown, total: personal + merchandise + client };
-  }, [orders]);
+  }, [orders, clientOrders, clients]);
 
   const summaryCards = [
     { label: 'Mis Pedidos', count: counts.personal, icon: ShoppingBag, color: 'text-primary', tab: 'personal' },
