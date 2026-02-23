@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.gmail-scan]
 verify_jwt = false
+
+[functions.extract-screenshot]
+verify_jwt = false

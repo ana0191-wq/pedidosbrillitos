@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShoppingBag, Package, Users, Plus, TrendingUp } from 'lucide-react';
 import type { Order } from '@/types/orders';
-import { GmailImport } from '@/components/GmailImport';
+import { ScreenshotImport } from '@/components/ScreenshotImport';
 
 interface DashboardProps {
   counts: { personal: number; merchandise: number; client: number; total: number };
@@ -42,8 +42,8 @@ export function Dashboard({ counts, orders, onAddOrder, onImportOrders }: Dashbo
         ))}
       </div>
 
-      {/* Gmail Import */}
-      <GmailImport onImportOrders={onImportOrders} />
+      {/* Screenshot Import */}
+      <ScreenshotImport onImportOrders={onImportOrders} />
 
       {/* Recent activity */}
       <div>
