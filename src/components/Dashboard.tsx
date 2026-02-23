@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShoppingBag, Package, Users, Plus, TrendingUp } from 'lucide-react';
-import type { Order } from '@/types/orders';
+import { ShoppingBag, Package, Users, Plus, TrendingUp, DollarSign } from 'lucide-react';
+import type { Order, ClientOrder, MerchandiseOrder } from '@/types/orders';
 import { ScreenshotImport } from '@/components/ScreenshotImport';
 
 interface DashboardProps {
@@ -14,12 +15,38 @@ interface DashboardProps {
 export function Dashboard({ counts, orders, onAddOrder, onImportOrders }: DashboardProps) {
   const recentOrders = orders.slice(0, 5);
 
+  const spending = useMemo(() => {
+    let personal = 0, merchandise = 0, client = 0, clientRevenue = 0, clientProfit = 0;
+    const clientBreakdown: Record<string, { spent: number; charged: number; items: number }> = {};
+
+    for (const o of orders) {
+      if (o.category === 'personal') personal += o.pricePaid;
+      if (o.category === 'merchandise') {
+        merchandise += (o as MerchandiseOrder).pricePerUnit * (o as MerchandiseOrder).unitsOrdered;
+      }
+      if (o.category === 'client') {
+        const co = o as ClientOrder;
+        client += o.pricePaid;
+        clientRevenue += co.amountCharged;
+        clientProfit += co.amountCharged - o.pricePaid - co.shippingCost;
+        const name = co.clientName || 'Sin cliente';
+        if (!clientBreakdown[name]) clientBreakdown[name] = { spent: 0, charged: 0, items: 0 };
+        clientBreakdown[name].spent += o.pricePaid + co.shippingCost;
+        clientBreakdown[name].charged += co.amountCharged;
+        clientBreakdown[name].items += 1;
+      }
+    }
+    return { personal, merchandise, client, clientRevenue, clientProfit, clientBreakdown, total: personal + merchandise + client };
+  }, [orders]);
+
   const summaryCards = [
     { label: 'Mis Pedidos', count: counts.personal, icon: ShoppingBag, color: 'text-primary' },
     { label: 'Mercancía', count: counts.merchandise, icon: Package, color: 'text-secondary' },
     { label: 'Clientes', count: counts.client, icon: Users, color: 'text-accent' },
     { label: 'Total Pendiente', count: counts.total, icon: TrendingUp, color: 'text-foreground' },
   ];
+
+  const fmt = (n: number) => `$${n.toFixed(2)}`;
 
   return (
     <div className="space-y-6">
@@ -41,6 +68,52 @@ export function Dashboard({ counts, orders, onAddOrder, onImportOrders }: Dashbo
           </Card>
         ))}
       </div>
+
+      {/* Spending Summary */}
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-4 space-y-3">
+          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-primary" /> Gastos y Compras
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground">🛍️ Personal</p>
+              <p className="text-lg font-bold text-foreground">{fmt(spending.personal)}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground">📦 Mercancía</p>
+              <p className="text-lg font-bold text-foreground">{fmt(spending.merchandise)}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground">👤 Clientes (costo)</p>
+              <p className="text-lg font-bold text-foreground">{fmt(spending.client)}</p>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-muted-foreground">💰 Ganancia clientes</p>
+              <p className={`text-lg font-bold ${spending.clientProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>{fmt(spending.clientProfit)}</p>
+            </div>
+          </div>
+          <div className="border-t border-border pt-2 flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Total invertido</span>
+            <span className="text-xl font-bold text-foreground">{fmt(spending.total)}</span>
+          </div>
+
+          {/* Client breakdown */}
+          {Object.keys(spending.clientBreakdown).length > 0 && (
+            <div className="border-t border-border pt-2 space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Desglose por cliente:</p>
+              {Object.entries(spending.clientBreakdown).map(([name, data]) => (
+                <div key={name} className="flex items-center justify-between text-xs">
+                  <span className="text-foreground font-medium">{name} <span className="text-muted-foreground">({data.items} art.)</span></span>
+                  <span className={`font-semibold ${(data.charged - data.spent) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                    {fmt(data.charged - data.spent)} ganancia
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Screenshot Import */}
       <ScreenshotImport onImportOrders={onImportOrders} />
