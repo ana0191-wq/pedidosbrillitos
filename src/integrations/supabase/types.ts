@@ -158,6 +158,7 @@ export type Database = {
           shipping_cost: number | null
           status: string
           store: string
+          suggested_price: number | null
           units_ordered: number | null
           units_received: number | null
           updated_at: string
@@ -181,6 +182,7 @@ export type Database = {
           shipping_cost?: number | null
           status?: string
           store: string
+          suggested_price?: number | null
           units_ordered?: number | null
           units_received?: number | null
           updated_at?: string
@@ -204,6 +206,7 @@ export type Database = {
           shipping_cost?: number | null
           status?: string
           store?: string
+          suggested_price?: number | null
           units_ordered?: number | null
           units_received?: number | null
           updated_at?: string

@@ -36,7 +36,7 @@ export function useOrders() {
       };
 
       if (row.category === 'merchandise') {
-        return { ...base, category: 'merchandise' as const, unitsOrdered: row.units_ordered || 1, unitsReceived: row.units_received || 0, pricePerUnit: Number(row.price_per_unit) || 0 };
+        return { ...base, category: 'merchandise' as const, unitsOrdered: row.units_ordered || 1, unitsReceived: row.units_received || 0, pricePerUnit: Number(row.price_per_unit) || 0, suggestedPrice: row.suggested_price != null ? Number(row.suggested_price) : null };
       }
       if (row.category === 'client') {
         return { ...base, category: 'client' as const, clientName: row.client_name || '', shippingCost: Number(row.shipping_cost) || 0, amountCharged: Number(row.amount_charged) || 0 };
@@ -72,6 +72,7 @@ export function useOrders() {
       row.units_ordered = (order as any).unitsOrdered;
       row.units_received = (order as any).unitsReceived;
       row.price_per_unit = (order as any).pricePerUnit;
+      row.suggested_price = (order as any).suggestedPrice ?? null;
     }
     if (order.category === 'client') {
       row.client_name = (order as any).clientName;
@@ -104,6 +105,7 @@ export function useOrders() {
     if ((updates as any).shippingCost !== undefined) row.shipping_cost = (updates as any).shippingCost;
     if ((updates as any).amountCharged !== undefined) row.amount_charged = (updates as any).amountCharged;
     if (updates.notes !== undefined) row.notes = updates.notes;
+    if ((updates as any).suggestedPrice !== undefined) row.suggested_price = (updates as any).suggestedPrice;
 
     const { error } = await supabase.from('orders').update(row).eq('id', id);
     if (error) {
