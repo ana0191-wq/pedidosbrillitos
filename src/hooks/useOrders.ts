@@ -90,7 +90,13 @@ export function useOrders() {
   const updateOrder = useCallback(async (id: string, updates: Partial<Order>) => {
     const row: any = {};
     if (updates.status !== undefined) row.status = updates.status;
+    if (updates.category !== undefined) row.category = updates.category;
     if ((updates as any).unitsReceived !== undefined) row.units_received = (updates as any).unitsReceived;
+    if ((updates as any).unitsOrdered !== undefined) row.units_ordered = (updates as any).unitsOrdered;
+    if ((updates as any).pricePerUnit !== undefined) row.price_per_unit = (updates as any).pricePerUnit;
+    if ((updates as any).clientName !== undefined) row.client_name = (updates as any).clientName;
+    if ((updates as any).shippingCost !== undefined) row.shipping_cost = (updates as any).shippingCost;
+    if ((updates as any).amountCharged !== undefined) row.amount_charged = (updates as any).amountCharged;
     if (updates.notes !== undefined) row.notes = updates.notes;
 
     const { error } = await supabase.from('orders').update(row).eq('id', id);
