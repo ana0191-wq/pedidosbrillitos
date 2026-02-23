@@ -86,11 +86,19 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [shipping, setShipping] = useState('');
   const [charged, setCharged] = useState('');
   const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   // Screenshot import state
   const [processing, setProcessing] = useState(false);
   const [products, setProducts] = useState<DetectedProduct[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync clientId when defaultClientId changes or dialog opens
+  useEffect(() => {
+    if (open && defaultClientId) {
+      setClientId(defaultClientId);
+    }
+  }, [open, defaultClientId]);
 
   const reset = () => {
     setClientId(defaultClientId || '');
@@ -101,6 +109,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setNotes('');
     setProducts([]);
     setProcessing(false);
+    setSubmitting(false);
   };
 
   const processImage = useCallback(async (base64Raw: string) => {
@@ -190,46 +199,61 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
       return;
     }
 
-    // Create the client order first
-    const orderId = await onAddOrder(selectedClient, {
-      paymentMethod: payment,
-      paymentReference: payRef,
-      shippingCost: parseFloat(shipping) || 0,
-      amountCharged: parseFloat(charged) || 0,
-      notes,
-    });
+    setSubmitting(true);
+    try {
+      // Create the client order first
+      const orderId = await onAddOrder(selectedClient, {
+        paymentMethod: payment,
+        paymentReference: payRef,
+        shippingCost: parseFloat(shipping) || 0,
+        amountCharged: parseFloat(charged) || 0,
+        notes,
+      });
 
-    if (!orderId) return;
+      if (!orderId) {
+        toast({ title: 'Error al crear pedido', description: 'Verifica que estés conectado e intenta de nuevo.', variant: 'destructive' });
+        return;
+      }
 
       // Now add each product as an order linked to this client_order_id
       const validStores: Store[] = ['AliExpress', 'Shein', 'Temu', 'Amazon'];
+      let savedCount = 0;
       for (const p of products) {
-        const store: Store = validStores.includes(p.store as Store) ? (p.store as Store) : 'AliExpress';
-        const clientName = clients.find(c => c.id === selectedClient)?.name || '';
-        const order: Order = {
-          id: Math.random().toString(36).substring(2, 15),
-          category: 'client',
-          productName: p.productName,
-          productPhoto: p.croppedImage,
-          store,
-          pricePaid: p.pricePaid,
-          orderDate: new Date().toISOString().split('T')[0],
-          estimatedArrival: '',
-          orderNumber: p.orderNumber,
-          notes: '',
-          createdAt: new Date().toISOString(),
-          status: 'Pedido',
-          clientName,
-          shippingCost: 0,
-          amountCharged: 0,
-        };
-
-        await onAddProduct(order, orderId as any);
+        try {
+          const store: Store = validStores.includes(p.store as Store) ? (p.store as Store) : 'AliExpress';
+          const clientName = clients.find(c => c.id === selectedClient)?.name || '';
+          const order: Order = {
+            id: Math.random().toString(36).substring(2, 15),
+            category: 'client',
+            productName: p.productName,
+            productPhoto: p.croppedImage,
+            store,
+            pricePaid: p.pricePaid,
+            orderDate: new Date().toISOString().split('T')[0],
+            estimatedArrival: '',
+            orderNumber: p.orderNumber,
+            notes: '',
+            createdAt: new Date().toISOString(),
+            status: 'Pedido',
+            clientName,
+            shippingCost: 0,
+            amountCharged: 0,
+          };
+          await onAddProduct(order, orderId);
+          savedCount++;
+        } catch (err: any) {
+          console.error('Error saving product:', err);
+        }
       }
 
-    reset();
-    onOpenChange(false);
-    toast({ title: `✅ Pedido creado${products.length > 0 ? ` con ${products.length} producto(s)` : ''}` });
+      reset();
+      onOpenChange(false);
+      toast({ title: `✅ Pedido creado${savedCount > 0 ? ` con ${savedCount} producto(s)` : ''}` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const totalProducts = products.reduce((s, p) => s + p.pricePaid, 0);
@@ -366,8 +390,8 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
             )}
           </div>
 
-          <Button onClick={handleSubmit} className="w-full" disabled={!clientId && !defaultClientId}>
-            Crear Pedido{products.length > 0 ? ` (${products.length} productos)` : ''}
+          <Button onClick={handleSubmit} className="w-full" disabled={(!clientId && !defaultClientId) || submitting}>
+            {submitting ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando...</> : <>Crear Pedido{products.length > 0 ? ` (${products.length} productos)` : ''}</>}
           </Button>
         </div>
       </DialogContent>
