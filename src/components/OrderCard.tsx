@@ -275,37 +275,46 @@ export function OrderCard({ order, onUpdate, onDelete }: OrderCardProps) {
                       const shippingBase = 37;
                       const totalProducts = 20;
                       const marginPercent = 0.35;
+                      // pricePerUnit should be per-unit; if it equals pricePaid and units > 1, derive it
+                      const actualPricePerUnit = (m.pricePerUnit > 0 && m.unitsOrdered > 1 && m.pricePerUnit === order.pricePaid)
+                        ? order.pricePaid / m.unitsOrdered
+                        : (m.pricePerUnit > 0 ? m.pricePerUnit : order.pricePaid / (m.unitsOrdered || 1));
                       const shippingPerUnit = shippingBase / totalProducts;
-                      const costPerUnit = m.pricePerUnit + shippingPerUnit;
+                      const costPerUnit = actualPricePerUnit + shippingPerUnit;
                       const suggestedPrice = costPerUnit * (1 + marginPercent);
                       const profitPerUnit = suggestedPrice - costPerUnit;
                       return (
                         <>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Unidades: {m.unitsReceived}/{m.unitsOrdered}</span>
-                            <span className="font-medium">{formatCurrency(m.pricePerUnit * m.unitsOrdered)}</span>
+                            <span className="font-medium">{formatCurrency(order.pricePaid)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Precio/unidad</span>
-                            <span>{formatCurrency(m.pricePerUnit)}</span>
+                            <span>{formatCurrency(actualPricePerUnit)}</span>
                           </div>
-                          <div className="border-t border-primary/20 pt-1 mt-1 space-y-1">
-                            <p className="font-medium text-foreground flex items-center gap-1 text-xs">🏷️ Precio sugerido de venta</p>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Envío/ud (${shippingBase}/{totalProducts})</span>
-                              <span>{formatCurrency(shippingPerUnit)}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Costo real/ud</span>
-                              <span>{formatCurrency(costPerUnit)}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">Margen (35%)</span>
-                              <span className="text-green-600">+{formatCurrency(profitPerUnit)}</span>
-                            </div>
-                            <div className="flex justify-between font-bold">
-                              <span className="text-foreground">Vender a</span>
-                              <span className="text-primary">{formatCurrency(suggestedPrice)}</span>
+                          <div className="border-t border-primary/20 pt-1 mt-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="space-y-1 text-xs flex-1">
+                                <p className="font-medium text-foreground flex items-center gap-1">🏷️ Precio sugerido</p>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Costo/ud</span>
+                                  <span>{formatCurrency(actualPricePerUnit)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">+ Envío/ud</span>
+                                  <span>{formatCurrency(shippingPerUnit)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">+ Margen 35%</span>
+                                  <span className="text-green-600">+{formatCurrency(profitPerUnit)}</span>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0 pl-3 border-l border-primary/20">
+                                <p className="text-xs text-muted-foreground">Vender a</p>
+                                <p className="text-2xl font-bold text-primary">{formatCurrency(suggestedPrice)}</p>
+                                <p className="text-xs text-green-600">+{formatCurrency(profitPerUnit)}/ud</p>
+                              </div>
                             </div>
                           </div>
                         </>
