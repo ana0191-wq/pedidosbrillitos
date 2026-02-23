@@ -5,12 +5,13 @@ const corsHeaders = {
 
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
-const EXTRACTION_PROMPT = `You are an expert at extracting purchase order data from retail confirmation emails.
+const EXTRACTION_PROMPT = `You are an expert at reading retail purchase confirmation emails and extracting product data.
 
-Analyze each email carefully. For EACH product purchased, return a JSON object with these fields:
+Your task: From this SINGLE email, extract every product that was purchased. Return a JSON array.
 
+Each product object MUST have:
 {
-  "productName": "exact product title/description from the email - NEVER use generic words like 'Product' or 'Pedido'",
+  "productName": "the real product name/title as written in the email",
   "store": "AliExpress" | "Shein" | "Temu" | "Amazon",
   "pricePaid": 12.99,
   "orderNumber": "8123456789",
@@ -22,20 +23,28 @@ Analyze each email carefully. For EACH product purchased, return a JSON object w
   "isPurchaseConfirmation": true
 }
 
-CRITICAL RULES:
-1. productName: Extract the ACTUAL item name. Look for text near product images, inside <td> cells with item descriptions, or after labels like "Item:", "Producto:", "Product:". Examples of GOOD names: "Xiaomi Redmi Buds 4 Active", "Vestido largo floral talla M", "Funda silicona iPhone 15 Pro". Examples of BAD names: "Product", "Pedido", "Order", "Item".
-2. productImageUrl: Find <img> tags showing the product. Look for URLs containing:
-   - alicdn.com, img.alicdn.com (AliExpress)
-   - ltwebstatic.com (Shein)
-   - kwcdn.com, aimg.kwcdn.com (Temu)
-   - images-na.ssl-images-amazon.com, m.media-amazon.com (Amazon)
-   Skip logos, icons (< 50px), tracking pixels (1x1), and social media icons.
-3. store: Detect from sender email domain or email content (e.g. @temu.com = Temu, @aliexpress.com = AliExpress).
-4. Only extract REAL purchase confirmations or shipping notifications. IGNORE marketing/promotional emails.
-5. If one email has multiple products, create one entry per product with its own name and image.
-6. pricePaid should be the total amount paid for that item (unit price × quantity if applicable).
+HOW TO FIND THE PRODUCT NAME:
+- In Temu emails: Look inside HTML table cells (<td>) near the product image. The name is usually in a <span> or <a> tag near an <img> with kwcdn.com URL. It could be in Spanish or English.
+- In AliExpress emails: Look for text in <td> or <div> near alicdn.com images. Product titles are usually long and descriptive.
+- In Shein emails: Look for item descriptions near ltwebstatic.com images.
+- In Amazon emails: Look for item names near ssl-images-amazon.com images.
+- NEVER return generic names like "Product", "Pedido", "Order", "Item", "Producto". If you truly cannot find the name, use the email subject line.
 
-Return ONLY a valid JSON array. If no real orders found, return [].`;
+HOW TO FIND THE IMAGE URL:
+- Look for <img> tags with src URLs from: kwcdn.com, alicdn.com, ltwebstatic.com, ssl-images-amazon.com, m.media-amazon.com
+- Pick the product thumbnail, not logos or icons
+
+HOW TO DETECT THE STORE:
+- Check the "From" header: @temu.com, @aliexpress.com, @shein.com, @amazon.com
+- Also check email content for store branding
+
+IMPORTANT:
+- Only extract from REAL purchase confirmations, shipping confirmations, or order receipts
+- IGNORE promotional/marketing emails - return [] for those
+- If the email has multiple products, return one object per product
+- isPurchaseConfirmation must be true for real orders, false for marketing
+
+Return ONLY a valid JSON array. No markdown, no explanation.`;
 
 async function refreshAccessToken(refreshToken: string): Promise<string> {
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID')!;
@@ -60,10 +69,10 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
   return data.access_token;
 }
 
-async function getEmails(accessToken: string, dateFrom: string, dateTo: string, maxResults = 20): Promise<any[]> {
-  // Build date filter using Gmail's after/before syntax
+async function getEmails(accessToken: string, dateFrom: string, dateTo: string, maxResults = 30): Promise<any[]> {
+  // Much broader query - just look for emails FROM these stores, no subject filter
   const query = encodeURIComponent(
-    `from:(aliexpress OR shein OR temu OR amazon) subject:(order OR pedido OR shipped OR enviado OR confirmation OR confirmación OR compra OR purchase) after:${dateFrom} before:${dateTo}`
+    `from:(aliexpress OR shein OR temu OR amazon) after:${dateFrom} before:${dateTo}`
   );
 
   console.log('Gmail search query:', decodeURIComponent(query));
@@ -82,11 +91,11 @@ async function getEmails(accessToken: string, dateFrom: string, dateTo: string, 
   const listData = await listRes.json();
   if (!listData.messages?.length) return [];
 
-  console.log(`Found ${listData.messages.length} emails, fetching up to 10...`);
+  console.log(`Found ${listData.messages.length} emails, fetching up to 15...`);
 
-  // Fetch each message with full format to get HTML for images
+  // Fetch each message with full format
   const emails = await Promise.all(
-    listData.messages.slice(0, 10).map(async (msg: any) => {
+    listData.messages.slice(0, 15).map(async (msg: any) => {
       const msgRes = await fetch(
         `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -119,29 +128,63 @@ function extractEmailContent(message: any): { subject: string; from: string; bod
   }
 
   extractText(message.payload);
+
+  return { subject, from, body: body.slice(0, 4000), htmlBody };
+}
+
+async function extractOrdersFromEmail(
+  apiKey: string,
+  email: { subject: string; from: string; body: string; htmlBody: string }
+): Promise<any[]> {
+  // Send a generous chunk of HTML - this is where the product names and images live
+  const htmlChunk = email.htmlBody.slice(0, 12000);
   
-  // Extract image URLs from HTML
-  const imageUrls: string[] = [];
-  const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
-  let match;
-  while ((match = imgRegex.exec(htmlBody)) !== null) {
-    const url = match[1];
-    // Keep product images from known CDNs
-    if (url.includes('alicdn.com') || url.includes('ltwebstatic.com') || 
-        url.includes('kwcdn.com') || url.includes('ssl-images-amazon.com') ||
-        url.includes('m.media-amazon.com') || url.includes('product') || 
-        url.includes('item')) {
-      imageUrls.push(url);
-    }
+  const prompt = `From: ${email.from}
+Subject: ${email.subject}
+
+Plain text:
+${email.body}
+
+HTML content (contains product names and image URLs):
+${htmlChunk}`;
+
+  const aiResponse = await fetch(AI_GATEWAY, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: EXTRACTION_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.1,
+    }),
+  });
+
+  if (!aiResponse.ok) {
+    const errText = await aiResponse.text();
+    console.error(`AI error for "${email.subject}":`, errText);
+    return [];
   }
 
-  // Increase body limit for better extraction
-  body = body.slice(0, 6000);
-  const imageInfo = imageUrls.length > 0 
-    ? `\n\nPRODUCT IMAGE URLs extracted from HTML:\n${imageUrls.slice(0, 15).join('\n')}` 
-    : '';
+  const aiData = await aiResponse.json();
+  const content = aiData.choices?.[0]?.message?.content || '';
 
-  return { subject, from, body: body + imageInfo, htmlBody: htmlBody.slice(0, 5000) };
+  try {
+    // Clean markdown wrappers
+    let cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+    
+    const orders = JSON.parse(jsonMatch[0]);
+    return orders.filter((o: any) => o.isPurchaseConfirmation !== false);
+  } catch {
+    console.error(`Failed to parse AI response for "${email.subject}":`, content.slice(0, 300));
+    return [];
+  }
 }
 
 Deno.serve(async (req) => {
@@ -169,7 +212,6 @@ Deno.serve(async (req) => {
 
     let token = accessToken;
 
-    // Try to use access token, refresh if needed
     const testRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -191,7 +233,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Use provided dates or default to last 7 days
     const now = new Date();
     const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const fromDate = dateFrom || defaultFrom.toISOString().split('T')[0];
@@ -199,7 +240,6 @@ Deno.serve(async (req) => {
 
     console.log(`Scanning emails from ${fromDate} to ${toDate}`);
 
-    // Fetch emails
     const emails = await getEmails(token, fromDate, toDate);
     if (!emails.length) {
       return new Response(
@@ -208,65 +248,31 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Extract content from emails  
+    // Extract content from each email
     const emailContents = emails.map(extractEmailContent);
-    const emailSummary = emailContents
-      .map((e, i) => `--- Email ${i + 1} ---\nFrom: ${e.from}\nSubject: ${e.subject}\n\nPlain text body:\n${e.body}\n\nHTML body (look here for product names and image URLs):\n${e.htmlBody.slice(0, 4000)}`)
-      .join('\n\n');
+    
+    console.log(`Processing ${emailContents.length} emails individually with AI...`);
+    console.log('Email subjects:', emailContents.map(e => `${e.from.slice(0,30)} | ${e.subject.slice(0,60)}`).join('\n'));
 
-    console.log(`Processing ${emails.length} emails with AI...`);
-
-    // Use AI to extract order data
-    const aiResponse = await fetch(AI_GATEWAY, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: EXTRACTION_PROMPT },
-          { role: 'user', content: `Extract orders from these emails:\n\n${emailSummary}` },
-        ],
-        temperature: 0.1,
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      const aiErr = await aiResponse.text();
-      console.error('AI error:', aiErr);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Error al procesar los correos con IA. Intenta de nuevo.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Process each email INDIVIDUALLY for much better extraction
+    const allOrders: any[] = [];
+    for (const email of emailContents) {
+      console.log(`Processing: "${email.subject.slice(0, 80)}" from ${email.from.slice(0, 40)}`);
+      const orders = await extractOrdersFromEmail(apiKey, email);
+      if (orders.length > 0) {
+        console.log(`  → Found ${orders.length} order(s):`, orders.map((o: any) => `${o.productName?.slice(0, 50)} ($${o.pricePaid})`).join(', '));
+        allOrders.push(...orders);
+      } else {
+        console.log(`  → No orders (likely promotional)`);
+      }
     }
 
-    const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content || '';
-
-    let orders = [];
-    try {
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      orders = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-      // Filter only real purchase confirmations
-      orders = orders.filter((o: any) => o.isPurchaseConfirmation !== false);
-      // Log extracted data for debugging
-      console.log('Extracted orders:', JSON.stringify(orders.map((o: any) => ({ name: o.productName, store: o.store, price: o.pricePaid, img: o.productImageUrl?.slice(0, 60) }))));
-    } catch {
-      console.error('Failed to parse AI response:', content.slice(0, 500));
-      return new Response(
-        JSON.stringify({ success: false, error: 'Error al interpretar la respuesta de IA.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`Found ${orders.length} orders`);
+    console.log(`Total orders found: ${allOrders.length}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        orders, 
+        orders: allOrders, 
         newAccessToken: token !== accessToken ? token : undefined,
         dateRange: { from: fromDate, to: toDate }
       }),
