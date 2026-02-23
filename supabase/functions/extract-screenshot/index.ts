@@ -12,6 +12,7 @@ Analiza la imagen y extrae CADA producto visible. Devuelve un JSON array.
 Campos requeridos por producto:
 {
   "productName": "nombre real del producto tal como aparece en la captura",
+  "productImageUrl": "URL completa de la imagen del producto visible en la captura, o null si no se ve",
   "store": "Temu" | "AliExpress" | "Shein" | "Amazon",
   "pricePaid": 12.99,
   "orderNumber": "123456789",
@@ -23,6 +24,7 @@ Campos requeridos por producto:
 
 REGLAS:
 - productName DEBE ser el nombre real del artículo visible en la imagen. NUNCA escribas "Product", "Pedido" u otro texto genérico.
+- productImageUrl DEBE ser la URL completa de la miniatura/imagen del producto que se ve en la captura. Busca URLs que contengan dominios como ae01.alicdn.com, img.ltwebstatic.com, img.kwcdn.com, m.media-amazon.com, etc. Si no puedes leer la URL completa, usa null.
 - Si no puedes leer un campo, usa null.
 - Detecta la tienda por el diseño/logo visible (Temu naranja, AliExpress rojo, Shein negro, Amazon azul).
 - Si hay varios productos en la imagen, crea una entrada por cada uno.
