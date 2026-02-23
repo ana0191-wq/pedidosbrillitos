@@ -7,7 +7,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { Mail, Loader2, Check, X, Plus, CalendarIcon, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import type { Order, Store } from '@/types/orders';
 
@@ -22,7 +21,6 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
   const [connecting, setConnecting] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [foundOrders, setFoundOrders] = useState<any[]>([]);
-  const [tokens, setTokens] = useState<{ accessToken: string; refreshToken: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
   // Date range - default last 7 days
@@ -33,75 +31,67 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
   });
   const [dateTo, setDateTo] = useState<Date>(new Date());
 
-  // Check if Gmail is already connected
+  // Check if Gmail is already connected + handle URL params from callback
   useEffect(() => {
     const checkConnection = async () => {
+      // Check URL params for callback result
+      const params = new URLSearchParams(window.location.search);
+      const gmailSuccess = params.get('gmail_success');
+      const gmailError = params.get('gmail_error');
+      const gmailEmailParam = params.get('gmail_email');
+
+      // Clean URL params
+      if (gmailSuccess || gmailError) {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+
+      if (gmailError) {
+        setErrorMessage(gmailError);
+        toast({ title: 'Error de Gmail', description: gmailError, variant: 'destructive' });
+      }
+
+      if (gmailSuccess && gmailEmailParam) {
+        setGmailConnected(true);
+        setGmailEmail(gmailEmailParam);
+        setErrorMessage('');
+        toast({ title: '✅ Gmail conectado', description: `Cuenta: ${gmailEmailParam}` });
+        return;
+      }
+
+      // Check DB for existing connection
       const { data } = await supabase
         .from('gmail_tokens')
-        .select('email, access_token, refresh_token')
+        .select('email')
         .maybeSingle();
 
       if (data) {
         setGmailConnected(true);
         setGmailEmail(data.email || '');
-        setTokens({ accessToken: data.access_token, refreshToken: data.refresh_token });
       }
     };
     checkConnection();
-  }, []);
-
-  // Listen for OAuth callback
-  useEffect(() => {
-    const handleMessage = async (event: MessageEvent) => {
-      if (event.data?.type === 'gmail-success') {
-        const { accessToken, refreshToken, expiresAt, email } = event.data;
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        await supabase.from('gmail_tokens').upsert({
-          user_id: user.id,
-          access_token: accessToken,
-          refresh_token: refreshToken,
-          expires_at: expiresAt,
-          email,
-        }, { onConflict: 'user_id' });
-
-        setGmailConnected(true);
-        setGmailEmail(email);
-        setTokens({ accessToken, refreshToken });
-        setConnecting(false);
-        setErrorMessage('');
-        toast({ title: '✅ Gmail conectado', description: `Cuenta: ${email}` });
-      } else if (event.data?.type === 'gmail-error') {
-        setConnecting(false);
-        const msg = event.data.message || 'No se pudo conectar Gmail. Intenta de nuevo.';
-        setErrorMessage(msg);
-        toast({ title: 'Error de conexión', description: msg, variant: 'destructive' });
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
   }, [toast]);
 
   const connectGmail = async () => {
     setConnecting(true);
     setErrorMessage('');
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setErrorMessage('Debes iniciar sesión primero');
+        setConnecting(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('gmail-auth', {
-        body: { returnUrl: window.location.origin },
+        body: { returnUrl: window.location.origin, userId: user.id },
       });
 
       if (error) throw error;
       if (data?.url) {
-        const popup = window.open(data.url, 'gmail-auth', 'width=500,height=600,left=200,top=100');
-        // Check if popup was blocked
-        if (!popup) {
-          setConnecting(false);
-          setErrorMessage('El navegador bloqueó la ventana emergente. Permite las ventanas emergentes e intenta de nuevo.');
-          toast({ title: 'Ventana bloqueada', description: 'Permite las ventanas emergentes para conectar Gmail.', variant: 'destructive' });
-        }
+        // Redirect in same window (not popup) for reliable callback
+        window.location.href = data.url;
       }
     } catch (err: any) {
       console.error(err);
@@ -112,26 +102,40 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
   };
 
   const disconnectGmail = async () => {
-    await supabase.from('gmail_tokens').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('gmail_tokens').delete().eq('user_id', user.id);
+    }
     setGmailConnected(false);
     setGmailEmail('');
-    setTokens(null);
     setFoundOrders([]);
     setErrorMessage('');
     toast({ title: 'Gmail desconectado' });
   };
 
   const scanEmails = async () => {
-    if (!tokens) return;
     setScanning(true);
     setFoundOrders([]);
     setErrorMessage('');
 
     try {
+      // Get tokens from DB
+      const { data: tokenData } = await supabase
+        .from('gmail_tokens')
+        .select('access_token, refresh_token')
+        .maybeSingle();
+
+      if (!tokenData) {
+        setGmailConnected(false);
+        setErrorMessage('No hay tokens. Reconecta Gmail.');
+        setScanning(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('gmail-scan', {
         body: {
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
           dateFrom: format(dateFrom, 'yyyy/MM/dd'),
           dateTo: format(dateTo, 'yyyy/MM/dd'),
         },
@@ -141,9 +145,8 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
 
       if (data?.needsReconnect) {
         setGmailConnected(false);
-        setTokens(null);
         setErrorMessage('La sesión de Gmail expiró. Reconecta tu cuenta.');
-        toast({ title: '🔄 Reconecta Gmail', description: 'La sesión expiró, conecta de nuevo.', variant: 'destructive' });
+        toast({ title: '🔄 Reconecta Gmail', description: 'La sesión expiró.', variant: 'destructive' });
         return;
       }
 
@@ -152,7 +155,6 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
       }
 
       if (data?.newAccessToken) {
-        setTokens(prev => prev ? { ...prev, accessToken: data.newAccessToken } : null);
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           await supabase.from('gmail_tokens').update({ access_token: data.newAccessToken }).eq('user_id', user.id);
@@ -161,15 +163,14 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
 
       if (data?.orders?.length) {
         setFoundOrders(data.orders);
-        toast({ title: `📧 ${data.orders.length} pedido(s) encontrado(s)`, description: 'Selecciona los que quieras importar' });
+        toast({ title: `📧 ${data.orders.length} pedido(s) encontrado(s)` });
       } else {
-        toast({ title: '📭 Sin pedidos nuevos', description: `No se encontraron pedidos pagados entre ${format(dateFrom, 'dd/MM/yyyy')} y ${format(dateTo, 'dd/MM/yyyy')}` });
+        toast({ title: '📭 Sin pedidos nuevos', description: `No se encontraron pedidos entre ${format(dateFrom, 'dd/MM/yyyy')} y ${format(dateTo, 'dd/MM/yyyy')}` });
       }
     } catch (err: any) {
       console.error(err);
-      const msg = err.message || 'No se pudieron escanear los correos';
-      setErrorMessage(msg);
-      toast({ title: 'Error', description: msg, variant: 'destructive' });
+      setErrorMessage(err.message || 'No se pudieron escanear los correos');
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setScanning(false);
     }
@@ -231,7 +232,6 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Error message */}
         {errorMessage && (
           <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 text-destructive text-xs">
             <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
@@ -259,7 +259,6 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
               </Button>
             </div>
 
-            {/* Date range pickers */}
             <div className="grid grid-cols-2 gap-2">
               <Popover>
                 <PopoverTrigger asChild>
@@ -297,7 +296,7 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
             {foundOrders.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{foundOrders.length} pedido(s) encontrado(s)</span>
+                  <span className="text-xs text-muted-foreground">{foundOrders.length} pedido(s)</span>
                   <Button variant="secondary" size="sm" onClick={importAll} className="text-xs h-7">
                     <Plus className="h-3 w-3 mr-1" /> Importar todos
                   </Button>
@@ -305,7 +304,6 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
 
                 {foundOrders.map((order, i) => (
                   <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
-                    {/* Product thumbnail */}
                     {order.productImageUrl ? (
                       <img src={order.productImageUrl} alt="" className="h-12 w-12 rounded object-cover flex-shrink-0" />
                     ) : (

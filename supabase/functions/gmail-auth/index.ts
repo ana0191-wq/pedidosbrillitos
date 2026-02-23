@@ -17,8 +17,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { returnUrl } = await req.json();
+    const { returnUrl, userId } = await req.json();
     const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-callback`;
+
+    // Encode returnUrl and userId in state
+    const stateData = JSON.stringify({ returnUrl: returnUrl || '', userId: userId || '' });
+    const state = btoa(stateData);
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -27,7 +31,7 @@ Deno.serve(async (req) => {
       scope: 'https://www.googleapis.com/auth/gmail.readonly',
       access_type: 'offline',
       prompt: 'consent',
-      state: returnUrl || '',
+      state,
     });
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;

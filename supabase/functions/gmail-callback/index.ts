@@ -1,23 +1,39 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state'); // returnUrl
+    const stateParam = url.searchParams.get('state');
     const error = url.searchParams.get('error');
 
+    // Decode state
+    let returnUrl = '';
+    let userId = '';
+    try {
+      if (stateParam) {
+        const stateData = JSON.parse(atob(stateParam));
+        returnUrl = stateData.returnUrl || '';
+        userId = stateData.userId || '';
+      }
+    } catch {
+      console.error('Failed to decode state');
+    }
+
+    // Default returnUrl fallback
+    if (!returnUrl) returnUrl = 'https://lovable.dev';
+
     if (error) {
-      const errorMsg = error === 'access_denied' 
-        ? 'Acceso denegado. Asegúrate de aceptar los permisos de Gmail.'
-        : `Error de Google: ${error}`;
-      return new Response(`<html><body><script>window.opener?.postMessage({type:'gmail-error',error:'${error}',message:'${errorMsg}'},'*');setTimeout(()=>window.close(),3000);</script><p>${errorMsg}</p><p>Puedes cerrar esta ventana.</p></body></html>`, {
-        headers: { 'Content-Type': 'text/html' },
-      });
+      const msg = error === 'access_denied' 
+        ? 'Acceso denegado' 
+        : `Error: ${error}`;
+      const redirectTo = `${returnUrl}?gmail_error=${encodeURIComponent(msg)}`;
+      return Response.redirect(redirectTo, 302);
     }
 
     if (!code) {
-      return new Response('<html><body><script>window.opener?.postMessage({type:"gmail-error",error:"no_code",message:"No se recibió código de autorización"},"*");setTimeout(()=>window.close(),3000);</script><p>Error: No se recibió código. Puedes cerrar esta ventana.</p></body></html>', {
-        headers: { 'Content-Type': 'text/html' },
-      });
+      const redirectTo = `${returnUrl}?gmail_error=${encodeURIComponent('No se recibió código de autorización')}`;
+      return Response.redirect(redirectTo, 302);
     }
 
     const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
@@ -25,15 +41,13 @@ Deno.serve(async (req) => {
     
     if (!clientId || !clientSecret) {
       console.error('Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET');
-      return new Response('<html><body><script>window.opener?.postMessage({type:"gmail-error",error:"config_error",message:"Faltan credenciales de Google. Contacta al administrador."},"*");setTimeout(()=>window.close(),3000);</script><p>Error de configuración. Puedes cerrar esta ventana.</p></body></html>', {
-        headers: { 'Content-Type': 'text/html' },
-      });
+      const redirectTo = `${returnUrl}?gmail_error=${encodeURIComponent('Faltan credenciales de Google')}`;
+      return Response.redirect(redirectTo, 302);
     }
 
     const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-callback`;
 
     console.log('Exchanging code for tokens...');
-    console.log('Redirect URI:', redirectUri);
 
     // Exchange code for tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -51,52 +65,55 @@ Deno.serve(async (req) => {
     const tokens = await tokenRes.json();
     if (!tokenRes.ok) {
       console.error('Token exchange failed:', JSON.stringify(tokens));
-      
       let userMessage = 'Error al obtener tokens de Google.';
       if (tokens.error === 'invalid_grant') {
-        userMessage = 'El código de autorización expiró. Por favor intenta conectar de nuevo.';
+        userMessage = 'El código expiró. Intenta conectar de nuevo.';
       } else if (tokens.error === 'invalid_client') {
-        userMessage = 'Credenciales de Google inválidas. Contacta al administrador.';
-      } else if (tokens.error === 'redirect_uri_mismatch') {
-        userMessage = 'Error de configuración de URI. Contacta al administrador.';
+        userMessage = 'Credenciales inválidas.';
       }
-
-      return new Response(`<html><body><script>window.opener?.postMessage({type:'gmail-error',error:'${tokens.error}',message:'${userMessage}'},'*');setTimeout(()=>window.close(),3000);</script><p>${userMessage}</p><p>Puedes cerrar esta ventana.</p></body></html>`, {
-        headers: { 'Content-Type': 'text/html' },
-      });
+      const redirectTo = `${returnUrl}?gmail_error=${encodeURIComponent(userMessage)}`;
+      return Response.redirect(redirectTo, 302);
     }
 
-    // Get user email from Gmail
+    // Get user email
     const profileRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
     const profile = await profileRes.json();
-
-    const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
     const email = profile.emailAddress || '';
+    const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-    console.log('Gmail connected successfully for:', email);
+    console.log('Gmail connected for:', email);
 
-    // Use JSON.stringify to safely pass data
-    return new Response(`<html><body><script>
-      try {
-        window.opener?.postMessage({
-          type: 'gmail-success',
-          accessToken: ${JSON.stringify(tokens.access_token)},
-          refreshToken: ${JSON.stringify(tokens.refresh_token || '')},
-          expiresAt: ${JSON.stringify(expiresAt)},
-          email: ${JSON.stringify(email)}
-        }, '*');
-        setTimeout(() => window.close(), 1500);
-      } catch(e) {
-        document.body.innerHTML = '<p>Conectado! Puedes cerrar esta ventana manualmente.</p>';
+    // Store tokens server-side using service role
+    if (userId) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
+      const { error: dbError } = await supabase.from('gmail_tokens').upsert({
+        user_id: userId,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token || '',
+        expires_at: expiresAt,
+        email,
+      }, { onConflict: 'user_id' });
+
+      if (dbError) {
+        console.error('DB error:', dbError);
+        const redirectTo = `${returnUrl}?gmail_error=${encodeURIComponent('Error al guardar tokens')}`;
+        return Response.redirect(redirectTo, 302);
       }
-    </script><p>¡Conectado! Esta ventana se cerrará automáticamente...</p></body></html>`, {
-      headers: { 'Content-Type': 'text/html' },
-    });
+    }
+
+    // Redirect back to app with success
+    const redirectTo = `${returnUrl}?gmail_success=true&gmail_email=${encodeURIComponent(email)}`;
+    return Response.redirect(redirectTo, 302);
+
   } catch (error) {
     console.error('Callback error:', error);
-    return new Response(`<html><body><script>window.opener?.postMessage({type:'gmail-error',error:'unknown',message:'Error inesperado. Intenta de nuevo.'},'*');setTimeout(()=>window.close(),3000);</script><p>Error inesperado. Puedes cerrar esta ventana.</p></body></html>`, {
+    return new Response(`<html><body><p>Error inesperado. Puedes cerrar esta ventana.</p></body></html>`, {
       headers: { 'Content-Type': 'text/html' },
     });
   }
