@@ -17,6 +17,7 @@ interface DetectedOrder {
   imageBbox?: [number, number, number, number] | null;
   store?: string;
   pricePaid?: number;
+  pricePerUnit?: number;
   orderNumber?: string;
   orderDate?: string;
   estimatedArrival?: string;
@@ -202,13 +203,15 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
     };
 
     if (d.category === 'merchandise') {
+      const units = d.unitsOrdered || 1;
+      const perUnit = d.pricePerUnit || (d.pricePaid ? d.pricePaid / units : 0);
       return {
         ...base,
         category: 'merchandise',
         status: 'Pedido',
-        unitsOrdered: d.unitsOrdered || 1,
+        unitsOrdered: units,
         unitsReceived: 0,
-        pricePerUnit: d.pricePaid || 0,
+        pricePerUnit: perUnit,
       };
     }
     if (d.category === 'client') {
@@ -247,8 +250,8 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
 
   const hasClientOrders = foundOrders.some(o => o.category === 'client');
 
-  const spendingSummary = foundOrders.reduce((acc, o) => {
-    const price = (o.pricePaid || 0) * (o.category === 'merchandise' ? (o.unitsOrdered || 1) : 1);
+    const spendingSummary = foundOrders.reduce((acc, o) => {
+    const price = o.pricePaid || 0;
     acc.total += price;
     acc[o.category] = (acc[o.category] || 0) + price;
     return acc;
@@ -395,7 +398,7 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
                 </div>
 
                 {/* Editable fields row */}
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5">
                   <Select value={order.store || ''} onValueChange={(v) => updateOrderField(i, 'store', v)}>
                     <SelectTrigger className="h-7 text-xs">
                       <SelectValue placeholder="Tienda" />
@@ -410,19 +413,32 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
                   <Input
                     type="number"
                     step="0.01"
-                    value={order.pricePaid ?? ''}
-                    onChange={(e) => updateOrderField(i, 'pricePaid', e.target.value ? parseFloat(e.target.value) : 0)}
-                    placeholder="Precio $"
+                    value={order.pricePerUnit ?? ''}
+                    onChange={(e) => {
+                      const perUnit = e.target.value ? parseFloat(e.target.value) : 0;
+                      const units = order.unitsOrdered || 1;
+                      updateOrderField(i, 'pricePerUnit', perUnit);
+                      updateOrderField(i, 'pricePaid', parseFloat((perUnit * units).toFixed(2)));
+                    }}
+                    placeholder="P/U $"
                     className="h-7 text-xs"
                   />
                   <Input
                     type="number"
                     min="1"
                     value={order.unitsOrdered ?? 1}
-                    onChange={(e) => updateOrderField(i, 'unitsOrdered', e.target.value ? parseInt(e.target.value) : 1)}
+                    onChange={(e) => {
+                      const units = e.target.value ? parseInt(e.target.value) : 1;
+                      const perUnit = order.pricePerUnit || 0;
+                      updateOrderField(i, 'unitsOrdered', units);
+                      updateOrderField(i, 'pricePaid', parseFloat((perUnit * units).toFixed(2)));
+                    }}
                     placeholder="Uds"
                     className="h-7 text-xs"
                   />
+                  <div className="h-7 flex items-center justify-center text-xs font-semibold text-primary bg-primary/10 rounded-md">
+                    ${(order.pricePaid || 0).toFixed(2)}
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
                   <Input
