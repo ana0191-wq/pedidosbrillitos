@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Camera, Loader2, Plus, X, ImagePlus, Clipboard, Trash2, ShoppingBag, Package, Users } from 'lucide-react';
+import { Camera, Loader2, Plus, X, ImagePlus, Clipboard, Trash2, ShoppingBag, Package, Users, ArrowUp, ArrowDown, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Order, OrderCategory, Store } from '@/types/orders';
 
@@ -164,6 +164,16 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
     setFoundOrders(prev => prev.filter((_, i) => i !== index));
   };
 
+  const moveOrder = (index: number, direction: -1 | 1) => {
+    setFoundOrders(prev => {
+      const next = [...prev];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
   const applyGlobalCategory = (cat: OrderCategory) => {
     setGlobalCategory(cat);
     setFoundOrders(prev => prev.map(o => ({ ...o, category: cat })));
@@ -236,6 +246,13 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
   };
 
   const hasClientOrders = foundOrders.some(o => o.category === 'client');
+
+  const spendingSummary = foundOrders.reduce((acc, o) => {
+    const price = (o.pricePaid || 0) * (o.category === 'merchandise' ? (o.unitsOrdered || 1) : 1);
+    acc.total += price;
+    acc[o.category] = (acc[o.category] || 0) + price;
+    return acc;
+  }, { total: 0, personal: 0, merchandise: 0, client: 0 } as Record<string, number>);
 
   return (
     <Card className="border-border">
@@ -317,6 +334,15 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
               </div>
             </div>
 
+            {/* Spending summary */}
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 flex flex-wrap gap-3 items-center">
+              <DollarSign className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">Total: ${spendingSummary.total.toFixed(2)}</span>
+              {spendingSummary.personal > 0 && <span className="text-xs text-muted-foreground">🛍️ ${spendingSummary.personal.toFixed(2)}</span>}
+              {spendingSummary.merchandise > 0 && <span className="text-xs text-muted-foreground">📦 ${spendingSummary.merchandise.toFixed(2)}</span>}
+              {spendingSummary.client > 0 && <span className="text-xs text-muted-foreground">👤 ${spendingSummary.client.toFixed(2)}</span>}
+            </div>
+
             {/* Header */}
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">{foundOrders.length} producto(s)</span>
@@ -349,6 +375,14 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
                       {order.store || '?'} · ${order.pricePaid?.toFixed(2) || '?'}
                       {(order.unitsOrdered ?? 0) > 1 ? ` · x${order.unitsOrdered}` : ''}
                     </p>
+                  </div>
+                  <div className="flex flex-col gap-0.5 flex-shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => moveOrder(i, -1)} disabled={i === 0} className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground">
+                      <ArrowUp className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => moveOrder(i, 1)} disabled={i === foundOrders.length - 1} className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground">
+                      <ArrowDown className="h-3 w-3" />
+                    </Button>
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     <Button variant="ghost" size="sm" onClick={() => importOrder(i)} className="h-7 w-7 p-0 text-primary">
