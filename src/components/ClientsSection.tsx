@@ -1,0 +1,242 @@
+import { useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Plus, ChevronDown, ChevronUp, Trash2, Package, DollarSign, Phone } from 'lucide-react';
+import type { Client } from '@/hooks/useClients';
+import type { ClientOrder } from '@/hooks/useClientOrders';
+import { useToast } from '@/hooks/use-toast';
+
+const PAYMENT_METHODS = ['Bolívares (tasa euro)', 'PayPal', 'Binance', 'Efectivo'];
+const ORDER_STATUSES = ['Pendiente', 'Pagado', 'En Tránsito', 'Entregado', 'Notificado'];
+
+interface ClientsSectionProps {
+  clients: Client[];
+  clientOrders: ClientOrder[];
+  onAddClient: (name: string, phone?: string, notes?: string) => Promise<string | null>;
+  onDeleteClient: (id: string) => void;
+  onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
+  onUpdateOrder: (id: string, updates: Record<string, any>) => void;
+  onDeleteOrder: (id: string) => void;
+  getOrdersByClient: (clientId: string) => ClientOrder[];
+  exchangeRate: number | null;
+}
+
+export function ClientsSection({
+  clients, clientOrders, onAddClient, onDeleteClient,
+  onAddOrder, onUpdateOrder, onDeleteOrder, getOrdersByClient, exchangeRate
+}: ClientsSectionProps) {
+  const { toast } = useToast();
+  const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [showAddOrder, setShowAddOrder] = useState<string | null>(null);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+
+  // New order form state
+  const [orderPayment, setOrderPayment] = useState('');
+  const [orderPayRef, setOrderPayRef] = useState('');
+  const [orderShipping, setOrderShipping] = useState('');
+  const [orderCharged, setOrderCharged] = useState('');
+  const [orderNotes, setOrderNotes] = useState('');
+
+  const handleAddClient = async () => {
+    if (!newClientName.trim()) return;
+    await onAddClient(newClientName.trim(), newClientPhone.trim());
+    setNewClientName('');
+    setNewClientPhone('');
+    setShowAddClient(false);
+    toast({ title: '✅ Cliente agregado' });
+  };
+
+  const handleAddOrder = async () => {
+    if (!showAddOrder) return;
+    await onAddOrder(showAddOrder, {
+      paymentMethod: orderPayment,
+      paymentReference: orderPayRef,
+      shippingCost: parseFloat(orderShipping) || 0,
+      amountCharged: parseFloat(orderCharged) || 0,
+      notes: orderNotes,
+    });
+    setOrderPayment(''); setOrderPayRef(''); setOrderShipping(''); setOrderCharged(''); setOrderNotes('');
+    setShowAddOrder(null);
+    toast({ title: '✅ Pedido creado' });
+  };
+
+  const fmt = (n: number) => `$${n.toFixed(2)}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-foreground">👤 Clientes</h2>
+        <Button onClick={() => setShowAddClient(true)} size="sm">
+          <Plus className="h-4 w-4 mr-1" /> Nuevo Cliente
+        </Button>
+      </div>
+
+      {exchangeRate && (
+        <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-1.5">
+          💱 Tasa BCV: <span className="font-semibold text-foreground">{exchangeRate.toFixed(2)} Bs/€</span>
+        </div>
+      )}
+
+      {clients.length === 0 ? (
+        <Card><CardContent className="p-6 text-center text-muted-foreground">No hay clientes. ¡Agrega el primero!</CardContent></Card>
+      ) : (
+        clients.map(client => {
+          const orders = getOrdersByClient(client.id);
+          const expanded = expandedClient === client.id;
+          const totalProducts = orders.reduce((sum, o) => sum + o.products.length, 0);
+          const totalCharged = orders.reduce((sum, o) => sum + o.amountCharged, 0);
+          const totalCost = orders.reduce((sum, o) => sum + o.products.reduce((s, p) => s + p.pricePaid, 0) + o.shippingCost, 0);
+
+          return (
+            <Card key={client.id} className="overflow-hidden">
+              <CardContent className="p-0">
+                <button
+                  className="w-full p-4 flex items-center justify-between text-left hover:bg-muted/30 transition-colors"
+                  onClick={() => setExpandedClient(expanded ? null : client.id)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-foreground">{client.name}</p>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                      {client.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{client.phone}</span>}
+                      <span>{orders.length} pedido{orders.length !== 1 ? 's' : ''}</span>
+                      <span>{totalProducts} producto{totalProducts !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-foreground">{fmt(totalCharged)}</p>
+                      <p className={`text-xs font-medium ${(totalCharged - totalCost) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                        {fmt(totalCharged - totalCost)} ganancia
+                      </p>
+                    </div>
+                    {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                  </div>
+                </button>
+
+                {expanded && (
+                  <div className="border-t border-border p-4 space-y-3 bg-muted/10">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Pedidos</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setShowAddOrder(client.id)}>
+                          <Plus className="h-3 w-3 mr-1" /> Pedido
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => onDeleteClient(client.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {orders.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-2">Sin pedidos</p>
+                    ) : (
+                      orders.map(order => (
+                        <Card key={order.id} className="bg-card">
+                          <CardContent className="p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs">{order.status}</Badge>
+                                {order.paymentMethod && <Badge variant="secondary" className="text-xs">{order.paymentMethod}</Badge>}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Select value={order.status} onValueChange={(v) => onUpdateOrder(order.id, { status: v })}>
+                                  <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => onDeleteOrder(order.id)}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Products in this order */}
+                            {order.products.length > 0 ? (
+                              <div className="space-y-1">
+                                {order.products.map(p => (
+                                  <div key={p.id} className="flex items-center gap-2 text-xs">
+                                    <div className="h-6 w-6 rounded bg-muted flex-shrink-0 overflow-hidden">
+                                      {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3 w-3 m-1.5 text-muted-foreground" />}
+                                    </div>
+                                    <span className="flex-1 truncate text-foreground">{p.productName}</span>
+                                    <span className="text-muted-foreground">{p.store}</span>
+                                    <span className="font-medium text-foreground">{fmt(p.pricePaid)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">Sin productos asignados aún</p>
+                            )}
+
+                            {/* Financial summary */}
+                            <div className="flex items-center justify-between text-xs pt-1 border-t border-border">
+                              <span className="text-muted-foreground">
+                                <DollarSign className="h-3 w-3 inline" /> Envío: {fmt(order.shippingCost)} · Cobrado: {fmt(order.amountCharged)}
+                              </span>
+                              {exchangeRate && order.amountCharged > 0 && (
+                                <span className="text-muted-foreground">
+                                  ≈ {(order.amountCharged * exchangeRate).toFixed(2)} Bs
+                                </span>
+                              )}
+                            </div>
+                            {order.notes && <p className="text-xs text-muted-foreground">📝 {order.notes}</p>}
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
+
+      {/* Add Client Dialog */}
+      <Dialog open={showAddClient} onOpenChange={setShowAddClient}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Nuevo Cliente</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Nombre *</Label><Input value={newClientName} onChange={e => setNewClientName(e.target.value)} placeholder="Nombre del cliente" /></div>
+            <div><Label>Teléfono</Label><Input value={newClientPhone} onChange={e => setNewClientPhone(e.target.value)} placeholder="+58..." /></div>
+            <Button onClick={handleAddClient} className="w-full" disabled={!newClientName.trim()}>Agregar Cliente</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Order Dialog */}
+      <Dialog open={!!showAddOrder} onOpenChange={() => setShowAddOrder(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Nuevo Pedido</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Método de pago</Label>
+              <Select value={orderPayment} onValueChange={setOrderPayment}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Referencia de pago</Label><Input value={orderPayRef} onChange={e => setOrderPayRef(e.target.value)} placeholder="N° de transacción..." /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Costo envío ($)</Label><Input type="number" step="0.01" value={orderShipping} onChange={e => setOrderShipping(e.target.value)} /></div>
+              <div><Label>Cobrado ($)</Label><Input type="number" step="0.01" value={orderCharged} onChange={e => setOrderCharged(e.target.value)} /></div>
+            </div>
+            <div><Label>Notas</Label><Textarea value={orderNotes} onChange={e => setOrderNotes(e.target.value)} rows={2} /></div>
+            <Button onClick={handleAddOrder} className="w-full">Crear Pedido</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

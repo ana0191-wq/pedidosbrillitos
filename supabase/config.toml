@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.extract-screenshot]
 verify_jwt = false
+
+[functions.extract-shipping]
+verify_jwt = false
+
+[functions.exchange-rate]
+verify_jwt = false
