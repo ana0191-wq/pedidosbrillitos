@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { Order, MerchandiseOrder, ClientOrder, OrderCategory } from '@/types/orders';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,35 +89,98 @@ export function OrderCard({ order, onUpdate, onDelete }: OrderCardProps) {
     onUpdate(order.id, updates);
   };
 
+  // Suggested price inline edit
+  const [editingSuggested, setEditingSuggested] = useState(false);
+  const [suggestedVal, setSuggestedVal] = useState('');
+  const suggestedInputRef = useRef<HTMLInputElement>(null);
+
+  const isMerch = order.category === 'merchandise';
+  const merchOrder = isMerch ? (order as MerchandiseOrder) : null;
+
+  // Auto-calculate suggested price for merchandise
+  const calcSuggested = () => {
+    if (!merchOrder) return null;
+    const shippingBase = 37;
+    const totalProducts = 20;
+    const marginPercent = 0.35;
+    const actualPricePerUnit = (merchOrder.pricePerUnit > 0 && merchOrder.unitsOrdered > 1 && merchOrder.pricePerUnit === order.pricePaid)
+      ? order.pricePaid / merchOrder.unitsOrdered
+      : (merchOrder.pricePerUnit > 0 ? merchOrder.pricePerUnit : order.pricePaid / (merchOrder.unitsOrdered || 1));
+    const shippingPerUnit = shippingBase / totalProducts;
+    const costPerUnit = actualPricePerUnit + shippingPerUnit;
+    return costPerUnit * (1 + marginPercent);
+  };
+
+  const displaySuggested = merchOrder?.suggestedPrice ?? calcSuggested();
+
+  const startEditSuggested = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSuggestedVal(displaySuggested ? displaySuggested.toFixed(2) : '');
+    setEditingSuggested(true);
+    setTimeout(() => suggestedInputRef.current?.focus(), 50);
+  };
+
+  const saveSuggested = () => {
+    const val = parseFloat(suggestedVal);
+    onUpdate(order.id, { suggestedPrice: isNaN(val) ? null : val } as any);
+    setEditingSuggested(false);
+  };
+
   return (
     <Card className="overflow-hidden transition-shadow hover:shadow-lg">
       <CardContent className="p-0">
         {/* Compact header */}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-3 p-3 text-left hover:bg-muted/30 transition-colors"
-        >
-          <div className="h-14 w-14 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-            {order.productPhoto ? (
-              <img src={order.productPhoto} alt={order.productName} className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <Package className="h-6 w-6 text-muted-foreground" />
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground leading-tight truncate text-sm">{order.productName}</h3>
-            <div className="flex items-center gap-2 mt-0.5">
-              <StoreBadge store={order.store} />
-              <StatusBadge status={order.status} />
+        <div className="flex items-center gap-3 p-3">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-3 flex-1 min-w-0 text-left hover:bg-muted/30 transition-colors rounded-md -m-1 p-1"
+          >
+            <div className="h-14 w-14 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+              {order.productPhoto ? (
+                <img src={order.productPhoto} alt={order.productName} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Package className="h-6 w-6 text-muted-foreground" />
+                </div>
+              )}
             </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <p className="text-lg font-bold text-primary">{formatCurrency(order.pricePaid)}</p>
-            {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-          </div>
-        </button>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-foreground leading-tight truncate text-sm">{order.productName}</h3>
+              <div className="flex items-center gap-2 mt-0.5">
+                <StoreBadge store={order.store} />
+                <StatusBadge status={order.status} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <p className="text-lg font-bold text-primary">{formatCurrency(order.pricePaid)}</p>
+              {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </div>
+          </button>
+
+          {/* Suggested price for merchandise - inline editable */}
+          {isMerch && (
+            <div className="flex-shrink-0 text-center" onClick={startEditSuggested}>
+              {editingSuggested ? (
+                <Input
+                  ref={suggestedInputRef}
+                  type="number"
+                  step="0.01"
+                  value={suggestedVal}
+                  onChange={(e) => setSuggestedVal(e.target.value)}
+                  onBlur={saveSuggested}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveSuggested(); if (e.key === 'Escape') setEditingSuggested(false); }}
+                  className="h-8 w-20 text-center text-sm font-bold"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <div className="cursor-pointer hover:bg-muted/50 rounded-md px-2 py-1 transition-colors" title="Click para editar">
+                  <p className="text-xs text-muted-foreground leading-tight">Vender</p>
+                  <p className="text-lg font-bold text-green-600">{displaySuggested ? formatCurrency(displaySuggested) : '—'}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Expanded details */}
         {expanded && (

@@ -1,0 +1,1 @@
+ALTER TABLE public.orders ADD COLUMN suggested_price numeric NULL DEFAULT NULL;

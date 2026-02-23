@@ -207,11 +207,12 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
       const perUnit = d.pricePerUnit || (d.pricePaid ? d.pricePaid / units : 0);
       return {
         ...base,
-        category: 'merchandise',
-        status: 'Pedido',
+        category: 'merchandise' as const,
+        status: 'Pedido' as const,
         unitsOrdered: units,
         unitsReceived: 0,
         pricePerUnit: perUnit,
+        suggestedPrice: null,
       };
     }
     if (d.category === 'client') {

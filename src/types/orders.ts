@@ -31,6 +31,7 @@ export interface MerchandiseOrder extends BaseOrder {
   unitsOrdered: number;
   unitsReceived: number;
   pricePerUnit: number;
+  suggestedPrice: number | null;
 }
 
 export interface ClientOrder extends BaseOrder {

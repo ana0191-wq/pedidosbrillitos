@@ -149,7 +149,7 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
     if (category === 'personal') {
       order = { ...base, category: 'personal', status: 'Pedido' };
     } else if (category === 'merchandise') {
-      order = { ...base, category: 'merchandise', status: 'Pedido', unitsOrdered: parseInt(unitsOrdered) || 1, unitsReceived: 0, pricePerUnit: parseFloat(pricePerUnit) || parseFloat(pricePaid) || 0 };
+      order = { ...base, category: 'merchandise', status: 'Pedido', unitsOrdered: parseInt(unitsOrdered) || 1, unitsReceived: 0, pricePerUnit: parseFloat(pricePerUnit) || parseFloat(pricePaid) || 0, suggestedPrice: null };
     } else {
       order = { ...base, category: 'client', status: 'Pedido', clientName, shippingCost: parseFloat(shippingCost) || 0, amountCharged: parseFloat(amountCharged) || 0 };
     }
