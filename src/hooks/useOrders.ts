@@ -91,6 +91,12 @@ export function useOrders() {
     const row: any = {};
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.category !== undefined) row.category = updates.category;
+    if ((updates as any).productName !== undefined) row.product_name = (updates as any).productName;
+    if ((updates as any).store !== undefined) row.store = (updates as any).store;
+    if ((updates as any).pricePaid !== undefined) row.price_paid = (updates as any).pricePaid;
+    if ((updates as any).orderDate !== undefined) row.order_date = (updates as any).orderDate || null;
+    if ((updates as any).estimatedArrival !== undefined) row.estimated_arrival = (updates as any).estimatedArrival || null;
+    if ((updates as any).orderNumber !== undefined) row.order_number = (updates as any).orderNumber;
     if ((updates as any).unitsReceived !== undefined) row.units_received = (updates as any).unitsReceived;
     if ((updates as any).unitsOrdered !== undefined) row.units_ordered = (updates as any).unitsOrdered;
     if ((updates as any).pricePerUnit !== undefined) row.price_per_unit = (updates as any).pricePerUnit;

@@ -15,9 +15,10 @@ interface DashboardProps {
   onAddOrder: () => void;
   onAddClientOrder: (clientId: string, data: Partial<ClientOrderType>) => Promise<string | null>;
   onImportOrders: (orders: Order[]) => void;
+  onNavigate: (tab: string) => void;
 }
 
-export function Dashboard({ counts, orders, clients, onAddOrder, onAddClientOrder, onImportOrders }: DashboardProps) {
+export function Dashboard({ counts, orders, clients, onAddOrder, onAddClientOrder, onImportOrders, onNavigate }: DashboardProps) {
   const [showClientOrderDialog, setShowClientOrderDialog] = useState(false);
   const recentOrders = orders.slice(0, 5);
 
@@ -46,10 +47,10 @@ export function Dashboard({ counts, orders, clients, onAddOrder, onAddClientOrde
   }, [orders]);
 
   const summaryCards = [
-    { label: 'Mis Pedidos', count: counts.personal, icon: ShoppingBag, color: 'text-primary' },
-    { label: 'Mercancía', count: counts.merchandise, icon: Package, color: 'text-secondary' },
-    { label: 'Clientes', count: counts.client, icon: Users, color: 'text-accent' },
-    { label: 'Total Pendiente', count: counts.total, icon: TrendingUp, color: 'text-foreground' },
+    { label: 'Mis Pedidos', count: counts.personal, icon: ShoppingBag, color: 'text-primary', tab: 'personal' },
+    { label: 'Mercancía', count: counts.merchandise, icon: Package, color: 'text-secondary', tab: 'merchandise' },
+    { label: 'Clientes', count: clients.length, icon: Users, color: 'text-accent', tab: 'clients' },
+    { label: 'Total Pendiente', count: counts.total, icon: TrendingUp, color: 'text-foreground', tab: 'client-orders' },
   ];
 
   const fmt = (n: number) => `$${n.toFixed(2)}`;
@@ -70,7 +71,11 @@ export function Dashboard({ counts, orders, clients, onAddOrder, onAddClientOrde
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {summaryCards.map(card => (
-          <Card key={card.label} className="hover:shadow-md transition-shadow">
+          <Card
+            key={card.label}
+            className="hover:shadow-md transition-shadow cursor-pointer"
+            onClick={() => onNavigate(card.tab)}
+          >
             <CardContent className="p-4 text-center">
               <card.icon className={`h-8 w-8 mx-auto mb-2 ${card.color}`} />
               <p className="text-3xl font-bold text-foreground">{card.count}</p>

@@ -26,6 +26,7 @@ const Index = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogCategory, setDialogCategory] = useState<OrderCategory>('personal');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   const counts = getCounts();
 
@@ -56,7 +57,7 @@ const Index = () => {
       </header>
 
       <main className="container max-w-4xl mx-auto px-4 py-4 pb-24">
-        <Tabs defaultValue="dashboard">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full grid grid-cols-3 sm:grid-cols-6 mb-6">
             <TabsTrigger value="dashboard" className="gap-1 text-xs">
               <LayoutDashboard className="h-4 w-4" />
@@ -87,7 +88,7 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="dashboard">
-            <Dashboard counts={counts} orders={orders} clients={clients} onAddOrder={() => openDialog()} onAddClientOrder={addClientOrder} onImportOrders={async (imported) => { for (const o of imported) await addOrder(o); }} />
+            <Dashboard counts={counts} orders={orders} clients={clients} onAddOrder={() => openDialog()} onAddClientOrder={addClientOrder} onImportOrders={async (imported) => { for (const o of imported) await addOrder(o); }} onNavigate={setActiveTab} />
           </TabsContent>
 
           <TabsContent value="personal">
