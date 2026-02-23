@@ -30,9 +30,11 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
   const [weightLb, setWeightLb] = useState('');
   const [weightOz, setWeightOz] = useState('');
   const [extras, setExtras] = useState('0');
+  const [airProfitPercent, setAirProfitPercent] = useState('30');
   const [airResult, setAirResult] = useState<AirShippingResult | null>(null);
 
   // Sea
+  const [seaProfitPercent, setSeaProfitPercent] = useState('30');
   const [seaResult, setSeaResult] = useState<SeaShippingResult | null>(null);
 
   // Distribution
@@ -182,6 +184,7 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
             <div><Label className="text-xs">Peso en oz (opc.)</Label><Input type="number" step="0.1" value={weightOz} onChange={e => setWeightOz(e.target.value)} /></div>
           </div>
           <div><Label className="text-xs">Extras (taxi, seguro...)</Label><Input type="number" step="0.01" value={extras} onChange={e => setExtras(e.target.value)} /></div>
+          <div><Label className="text-xs">% ganancia envío al cliente</Label><Input type="number" step="1" value={airProfitPercent} onChange={e => setAirProfitPercent(e.target.value)} /></div>
           <Button onClick={calcAir} className="w-full">✈️ Calcular Aéreo</Button>
 
           {airResult && (
@@ -191,12 +194,14 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
               <ResultRow label="Peso cobrable" value={`${airResult.chargeableWeight} lb`} />
               <ResultRow label="Costo real envío" value={fmt(airResult.realShippingCost)} />
               <ResultRow label="Precio al cliente" value={fmt(airResult.clientShippingPrice)} />
-              <ResultRow label="Ganancia envío" value={fmt(airResult.shippingProfit)} highlight />
+              <ResultRow label={`Cobrar al cliente (+${airProfitPercent}%)`} value={fmt(airResult.realShippingCost * (1 + (parseFloat(airProfitPercent) || 0) / 100))} highlight />
+              <ResultRow label="Ganancia envío" value={fmt(airResult.realShippingCost * (parseFloat(airProfitPercent) || 0) / 100)} />
             </CardContent></Card>
           )}
         </TabsContent>
 
         <TabsContent value="sea" className="space-y-3 pt-3">
+          <div><Label className="text-xs">% ganancia envío al cliente</Label><Input type="number" step="1" value={seaProfitPercent} onChange={e => setSeaProfitPercent(e.target.value)} /></div>
           <Button onClick={calcSea} className="w-full">🚢 Calcular Marítimo</Button>
 
           {seaResult && (
@@ -205,7 +210,8 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
               <ResultRow label="Costo base" value={fmt(seaResult.baseCost)} />
               <ResultRow label="Costo real (con mín.)" value={fmt(seaResult.realCost)} />
               <ResultRow label="Costo total (+ seguro)" value={fmt(seaResult.realCostTotal)} />
-              <ResultRow label="Precio al cliente" value={fmt(seaResult.clientPrice)} highlight />
+              <ResultRow label={`Cobrar al cliente (+${seaProfitPercent}%)`} value={fmt(seaResult.realCostTotal * (1 + (parseFloat(seaProfitPercent) || 0) / 100))} highlight />
+              <ResultRow label="Ganancia envío" value={fmt(seaResult.realCostTotal * (parseFloat(seaProfitPercent) || 0) / 100)} />
             </CardContent></Card>
           )}
         </TabsContent>
