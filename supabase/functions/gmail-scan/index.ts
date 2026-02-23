@@ -5,33 +5,35 @@ const corsHeaders = {
 
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
-const EXTRACTION_PROMPT = `You are an order data extractor analyzing email content. Extract order information and return a JSON array of orders found.
+const EXTRACTION_PROMPT = `You are an expert order data extractor. Analyze email content and extract purchase information.
 
-Each order object should have:
-- productName: string (the specific product name, be descriptive)
-- store: "AliExpress" | "Shein" | "Temu" | "Amazon" | null
-- pricePaid: number | null (total price paid)
-- orderNumber: string | null
-- orderDate: string | null (YYYY-MM-DD)
-- estimatedArrival: string | null (YYYY-MM-DD)
-- unitsOrdered: number | null
-- pricePerUnit: number | null
-- productImageUrl: string | null (extract any product image URL from the email HTML if available)
-- isPurchaseConfirmation: boolean (true ONLY if this is a purchase/order confirmation or shipping notification, false for marketing/ads/promotions)
+Return a JSON array. Each order object MUST have these fields:
+{
+  "productName": "FULL product name as shown in email (be specific and descriptive, e.g. 'Xiaomi Redmi Buds 4 Active TWS Earbuds' not just 'Product')",
+  "store": "AliExpress" | "Shein" | "Temu" | "Amazon",
+  "pricePaid": 12.99,
+  "orderNumber": "8123456789",
+  "orderDate": "2026-02-20",
+  "estimatedArrival": "2026-03-15",
+  "unitsOrdered": 1,
+  "pricePerUnit": 12.99,
+  "productImageUrl": "https://...",
+  "isPurchaseConfirmation": true
+}
 
-IMPORTANT: Only extract REAL orders/purchases. Ignore:
-- Promotional/marketing emails
-- Wishlist notifications
-- Price drop alerts
-- Cart abandonment emails
-- Newsletter emails
+RULES:
+1. productName MUST be the actual product name from the email, NOT generic text like "Pedido" or "Order". Look for item names, descriptions, product titles.
+2. productImageUrl: Look for <img> tags in the email that show the product. Common patterns:
+   - AliExpress: ae01.alicdn.com or img.alicdn.com URLs
+   - Shein: img.ltwebstatic.com URLs  
+   - Temu: img.kwcdn.com URLs
+   - Amazon: images-na.ssl-images-amazon.com or m.media-amazon.com URLs
+   Pick the largest/most relevant product image, skip tiny icons/logos/tracking pixels.
+3. Only extract REAL purchase confirmations or shipping notifications. IGNORE promotional/marketing emails.
+4. If an email contains multiple products, create one entry per product.
+5. Detect the store from the sender email address or email content.
 
-Return ONLY valid JSON array. If no real orders found, return [].
-Detect store from sender email, subject, or content. Common senders:
-- AliExpress: noreply@aliexpress.com, transaction@notice.aliexpress.com
-- Shein: info@shein.com
-- Temu: noreply@temu.com
-- Amazon: auto-confirm@amazon.com, ship-confirm@amazon.com, digital-no-reply@amazon.com`;
+Return ONLY a valid JSON array. If no real orders found, return [].`;
 
 async function refreshAccessToken(refreshToken: string): Promise<string> {
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID')!;
@@ -122,19 +124,22 @@ function extractEmailContent(message: any): { subject: string; from: string; bod
   let match;
   while ((match = imgRegex.exec(htmlBody)) !== null) {
     const url = match[1];
-    // Filter for product images (skip tracking pixels, icons, etc.)
-    if (url.includes('product') || url.includes('item') || url.includes('img') || 
-        (url.includes('http') && !url.includes('tracking') && !url.includes('pixel') && 
-         !url.includes('spacer') && !url.includes('1x1') && !url.includes('beacon'))) {
+    // Keep product images from known CDNs
+    if (url.includes('alicdn.com') || url.includes('ltwebstatic.com') || 
+        url.includes('kwcdn.com') || url.includes('ssl-images-amazon.com') ||
+        url.includes('m.media-amazon.com') || url.includes('product') || 
+        url.includes('item')) {
       imageUrls.push(url);
     }
   }
 
-  // Limit body to prevent token overflow
-  body = body.slice(0, 3000);
-  const imageInfo = imageUrls.length > 0 ? `\nProduct image URLs found: ${imageUrls.slice(0, 5).join(', ')}` : '';
+  // Increase body limit for better extraction
+  body = body.slice(0, 5000);
+  const imageInfo = imageUrls.length > 0 
+    ? `\nProduct image URLs found in HTML: ${imageUrls.slice(0, 10).join('\n')}` 
+    : '';
 
-  return { subject, from, body: body + imageInfo, htmlBody: htmlBody.slice(0, 2000) };
+  return { subject, from, body: body + imageInfo, htmlBody: htmlBody.slice(0, 3000) };
 }
 
 Deno.serve(async (req) => {
@@ -201,10 +206,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Extract content from emails
+    // Extract content from emails  
     const emailContents = emails.map(extractEmailContent);
     const emailSummary = emailContents
-      .map((e, i) => `--- Email ${i + 1} ---\nFrom: ${e.from}\nSubject: ${e.subject}\n${e.body}`)
+      .map((e, i) => `--- Email ${i + 1} ---\nFrom: ${e.from}\nSubject: ${e.subject}\nBody:\n${e.body}\n\nHTML excerpt (for image URLs):\n${e.htmlBody.slice(0, 1500)}`)
       .join('\n\n');
 
     console.log(`Processing ${emails.length} emails with AI...`);
@@ -244,8 +249,10 @@ Deno.serve(async (req) => {
       orders = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
       // Filter only real purchase confirmations
       orders = orders.filter((o: any) => o.isPurchaseConfirmation !== false);
+      // Log extracted data for debugging
+      console.log('Extracted orders:', JSON.stringify(orders.map((o: any) => ({ name: o.productName, store: o.store, price: o.pricePaid, img: o.productImageUrl?.slice(0, 60) }))));
     } catch {
-      console.error('Failed to parse AI response:', content);
+      console.error('Failed to parse AI response:', content.slice(0, 500));
       return new Response(
         JSON.stringify({ success: false, error: 'Error al interpretar la respuesta de IA.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
