@@ -14,12 +14,13 @@ interface ClientOrdersListProps {
   clientOrders: ClientOrder[];
   clients: Client[];
   onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
+  onAddProduct: (order: any, clientOrderId?: string) => Promise<void>;
   onUpdateOrder: (id: string, updates: Record<string, any>) => void;
   onDeleteOrder: (id: string) => void;
   exchangeRate: number | null;
 }
 
-export function ClientOrdersList({ clientOrders, clients, onAddOrder, onUpdateOrder, onDeleteOrder, exchangeRate }: ClientOrdersListProps) {
+export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, exchangeRate }: ClientOrdersListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const fmt = (n: number) => `$${n.toFixed(2)}`;
   const clientMap: Record<string, string> = {};
@@ -39,6 +40,7 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onUpdateOr
         onOpenChange={setShowAddDialog}
         clients={clients}
         onAddOrder={onAddOrder}
+        onAddProduct={onAddProduct}
       />
 
       {clientOrders.length === 0 ? (

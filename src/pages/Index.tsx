@@ -88,7 +88,7 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="dashboard">
-            <Dashboard counts={counts} orders={orders} clients={clients} onAddOrder={() => openDialog()} onAddClientOrder={addClientOrder} onImportOrders={async (imported) => { for (const o of imported) await addOrder(o); }} onNavigate={setActiveTab} />
+            <Dashboard counts={counts} orders={orders} clients={clients} clientOrders={clientOrders} onAddOrder={() => openDialog()} onAddClientOrder={addClientOrder} onAddProduct={async (order, coId) => { await addOrder(order, coId); }} onImportOrders={async (imported) => { for (const o of imported) await addOrder(o); }} onNavigate={setActiveTab} />
           </TabsContent>
 
           <TabsContent value="personal">
@@ -124,6 +124,7 @@ const Index = () => {
               onAddClient={addClient}
               onDeleteClient={deleteClient}
               onAddOrder={addClientOrder}
+              onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
               onUpdateOrder={updateClientOrder}
               onDeleteOrder={deleteClientOrder}
               getOrdersByClient={getByClient}
@@ -136,6 +137,7 @@ const Index = () => {
               clientOrders={clientOrders}
               clients={clients}
               onAddOrder={addClientOrder}
+              onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
               onUpdateOrder={updateClientOrder}
               onDeleteOrder={deleteClientOrder}
               exchangeRate={exchangeRate}

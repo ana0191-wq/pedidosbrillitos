@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShoppingBag, Package, Users, Plus, TrendingUp, DollarSign, ClipboardList } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import type { Order, ClientOrder, MerchandiseOrder } from '@/types/orders';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder as ClientOrderType } from '@/hooks/useClientOrders';
@@ -12,13 +13,15 @@ interface DashboardProps {
   counts: { personal: number; merchandise: number; client: number; total: number };
   orders: Order[];
   clients: Client[];
+  clientOrders: ClientOrderType[];
   onAddOrder: () => void;
   onAddClientOrder: (clientId: string, data: Partial<ClientOrderType>) => Promise<string | null>;
+  onAddProduct: (order: Order, clientOrderId?: string) => Promise<void>;
   onImportOrders: (orders: Order[]) => void;
   onNavigate: (tab: string) => void;
 }
 
-export function Dashboard({ counts, orders, clients, onAddOrder, onAddClientOrder, onImportOrders, onNavigate }: DashboardProps) {
+export function Dashboard({ counts, orders, clients, clientOrders, onAddOrder, onAddClientOrder, onAddProduct, onImportOrders, onNavigate }: DashboardProps) {
   const [showClientOrderDialog, setShowClientOrderDialog] = useState(false);
   const recentOrders = orders.slice(0, 5);
 
@@ -167,11 +170,44 @@ export function Dashboard({ counts, orders, clients, onAddOrder, onAddClientOrde
         )}
       </div>
 
+      {/* Client Orders Summary */}
+      {clientOrders.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">📋 Pedidos de Clientes</h3>
+          <div className="space-y-2">
+            {clientOrders.slice(0, 5).map(co => {
+              const clientName = clients.find(c => c.id === co.clientId)?.name || co.clientName || 'Sin cliente';
+              const totalProductCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
+              return (
+                <Card key={co.id} className="hover:shadow-sm transition-shadow cursor-pointer" onClick={() => onNavigate('client-orders')}>
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{clientName}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Badge variant="outline" className="text-xs">{co.status}</Badge>
+                        <span className="text-xs text-muted-foreground">{co.products.length} producto(s)</span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-foreground">${co.amountCharged.toFixed(2)}</p>
+                      <p className={`text-xs font-medium ${(co.amountCharged - totalProductCost - co.shippingCost) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                        ${(co.amountCharged - totalProductCost - co.shippingCost).toFixed(2)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <AddClientOrderDialog
         open={showClientOrderDialog}
         onOpenChange={setShowClientOrderDialog}
         clients={clients}
         onAddOrder={onAddClientOrder}
+        onAddProduct={onAddProduct}
       />
     </div>
   );
