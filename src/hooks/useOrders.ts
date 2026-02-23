@@ -50,7 +50,7 @@ export function useOrders() {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  const addOrder = useCallback(async (order: Order) => {
+  const addOrder = useCallback(async (order: Order, clientOrderId?: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -78,6 +78,9 @@ export function useOrders() {
       row.client_name = (order as any).clientName;
       row.shipping_cost = (order as any).shippingCost;
       row.amount_charged = (order as any).amountCharged;
+    }
+    if (clientOrderId) {
+      row.client_order_id = clientOrderId;
     }
 
     const { error } = await supabase.from('orders').insert(row);

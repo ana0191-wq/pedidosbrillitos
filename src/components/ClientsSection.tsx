@@ -5,14 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Plus, ChevronDown, ChevronUp, Trash2, Package, DollarSign, Phone } from 'lucide-react';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
+import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { useToast } from '@/hooks/use-toast';
 
-const PAYMENT_METHODS = ['Bolívares (tasa euro)', 'PayPal', 'Binance', 'Efectivo'];
 const ORDER_STATUSES = ['Pendiente', 'Pagado', 'En Tránsito', 'Entregado', 'Notificado'];
 
 interface ClientsSectionProps {
@@ -21,6 +20,7 @@ interface ClientsSectionProps {
   onAddClient: (name: string, phone?: string, notes?: string) => Promise<string | null>;
   onDeleteClient: (id: string) => void;
   onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
+  onAddProduct: (order: any, clientOrderId?: string) => Promise<void>;
   onUpdateOrder: (id: string, updates: Record<string, any>) => void;
   onDeleteOrder: (id: string) => void;
   getOrdersByClient: (clientId: string) => ClientOrder[];
@@ -29,7 +29,7 @@ interface ClientsSectionProps {
 
 export function ClientsSection({
   clients, clientOrders, onAddClient, onDeleteClient,
-  onAddOrder, onUpdateOrder, onDeleteOrder, getOrdersByClient, exchangeRate
+  onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, getOrdersByClient, exchangeRate
 }: ClientsSectionProps) {
   const { toast } = useToast();
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
@@ -38,13 +38,6 @@ export function ClientsSection({
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
 
-  // New order form state
-  const [orderPayment, setOrderPayment] = useState('');
-  const [orderPayRef, setOrderPayRef] = useState('');
-  const [orderShipping, setOrderShipping] = useState('');
-  const [orderCharged, setOrderCharged] = useState('');
-  const [orderNotes, setOrderNotes] = useState('');
-
   const handleAddClient = async () => {
     if (!newClientName.trim()) return;
     await onAddClient(newClientName.trim(), newClientPhone.trim());
@@ -52,20 +45,6 @@ export function ClientsSection({
     setNewClientPhone('');
     setShowAddClient(false);
     toast({ title: '✅ Cliente agregado' });
-  };
-
-  const handleAddOrder = async () => {
-    if (!showAddOrder) return;
-    await onAddOrder(showAddOrder, {
-      paymentMethod: orderPayment,
-      paymentReference: orderPayRef,
-      shippingCost: parseFloat(orderShipping) || 0,
-      amountCharged: parseFloat(orderCharged) || 0,
-      notes: orderNotes,
-    });
-    setOrderPayment(''); setOrderPayRef(''); setOrderShipping(''); setOrderCharged(''); setOrderNotes('');
-    setShowAddOrder(null);
-    toast({ title: '✅ Pedido creado' });
   };
 
   const fmt = (n: number) => `$${n.toFixed(2)}`;
@@ -213,30 +192,15 @@ export function ClientsSection({
         </DialogContent>
       </Dialog>
 
-      {/* Add Order Dialog */}
-      <Dialog open={!!showAddOrder} onOpenChange={() => setShowAddOrder(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Nuevo Pedido</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Método de pago</Label>
-              <Select value={orderPayment} onValueChange={setOrderPayment}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label>Referencia de pago</Label><Input value={orderPayRef} onChange={e => setOrderPayRef(e.target.value)} placeholder="N° de transacción..." /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Costo envío ($)</Label><Input type="number" step="0.01" value={orderShipping} onChange={e => setOrderShipping(e.target.value)} /></div>
-              <div><Label>Cobrado ($)</Label><Input type="number" step="0.01" value={orderCharged} onChange={e => setOrderCharged(e.target.value)} /></div>
-            </div>
-            <div><Label>Notas</Label><Textarea value={orderNotes} onChange={e => setOrderNotes(e.target.value)} rows={2} /></div>
-            <Button onClick={handleAddOrder} className="w-full">Crear Pedido</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Add Order Dialog - uses shared AddClientOrderDialog with screenshot import */}
+      <AddClientOrderDialog
+        open={!!showAddOrder}
+        onOpenChange={(v) => { if (!v) setShowAddOrder(null); }}
+        clients={clients}
+        onAddOrder={onAddOrder}
+        onAddProduct={onAddProduct}
+        defaultClientId={showAddOrder || undefined}
+      />
     </div>
   );
 }
