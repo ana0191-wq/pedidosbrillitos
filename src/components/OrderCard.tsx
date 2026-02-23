@@ -270,18 +270,47 @@ export function OrderCard({ order, onUpdate, onDelete }: OrderCardProps) {
                       <span className="text-muted-foreground">Precio pagado</span>
                       <span className="font-semibold text-foreground">{formatCurrency(order.pricePaid)}</span>
                     </div>
-                    {order.category === 'merchandise' && (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Unidades: {(order as MerchandiseOrder).unitsReceived}/{(order as MerchandiseOrder).unitsOrdered}</span>
-                          <span className="font-medium">{formatCurrency((order as MerchandiseOrder).pricePerUnit * (order as MerchandiseOrder).unitsOrdered)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Precio/unidad</span>
-                          <span>{formatCurrency((order as MerchandiseOrder).pricePerUnit)}</span>
-                        </div>
-                      </>
-                    )}
+                    {order.category === 'merchandise' && (() => {
+                      const m = order as MerchandiseOrder;
+                      const shippingBase = 37;
+                      const totalProducts = 20;
+                      const marginPercent = 0.35;
+                      const shippingPerUnit = shippingBase / totalProducts;
+                      const costPerUnit = m.pricePerUnit + shippingPerUnit;
+                      const suggestedPrice = costPerUnit * (1 + marginPercent);
+                      const profitPerUnit = suggestedPrice - costPerUnit;
+                      return (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Unidades: {m.unitsReceived}/{m.unitsOrdered}</span>
+                            <span className="font-medium">{formatCurrency(m.pricePerUnit * m.unitsOrdered)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Precio/unidad</span>
+                            <span>{formatCurrency(m.pricePerUnit)}</span>
+                          </div>
+                          <div className="border-t border-primary/20 pt-1 mt-1 space-y-1">
+                            <p className="font-medium text-foreground flex items-center gap-1 text-xs">🏷️ Precio sugerido de venta</p>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Envío/ud (${shippingBase}/{totalProducts})</span>
+                              <span>{formatCurrency(shippingPerUnit)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Costo real/ud</span>
+                              <span>{formatCurrency(costPerUnit)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Margen (35%)</span>
+                              <span className="text-green-600">+{formatCurrency(profitPerUnit)}</span>
+                            </div>
+                            <div className="flex justify-between font-bold">
+                              <span className="text-foreground">Vender a</span>
+                              <span className="text-primary">{formatCurrency(suggestedPrice)}</span>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
                     {order.category === 'client' && (
                       <>
                         <div className="flex justify-between">
