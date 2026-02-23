@@ -35,9 +35,17 @@ OTRAS REGLAS:
 - productName DEBE ser el nombre real del artículo. NUNCA escribas texto genérico.
 - Si no puedes leer un campo (excepto imageBbox), usa null.
 - Detecta la tienda por el diseño/logo visible.
-- pricePaid es el precio total pagado por ese producto.
 
-Devuelve SOLO un JSON array válido. Sin markdown, sin explicación. Si no ves ningún pedido, devuelve [].`;
+REGLAS CRÍTICAS DE PRECIOS Y CANTIDADES:
+- "pricePaid" es SIEMPRE el TOTAL pagado por ese producto (precio unitario × cantidad).
+- "pricePerUnit" es el precio de UNA sola unidad.
+- "unitsOrdered" es la cantidad de unidades compradas.
+- Si ves algo como "$2.04 x3 = $6.12", entonces: pricePaid=6.12, pricePerUnit=2.04, unitsOrdered=3.
+- Si ves algo como "Qty: 2" y un precio total de $9.00, entonces: pricePaid=9.00, pricePerUnit=4.50, unitsOrdered=2.
+- Si solo ves UN precio sin cantidad, asume unitsOrdered=1 y pricePerUnit=pricePaid.
+- NUNCA confundas el precio unitario con el total. Busca indicadores como "x2", "×3", "Qty:", "Cantidad:", "Cant.", etc.
+
+Devuelve SOLO un JSON array válido. Sin markdown, sin explicación. Si no ves ningún pedido, devuelve \`[]\`.`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
