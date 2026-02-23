@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Loader2, Plus, X, ImagePlus } from 'lucide-react';
+import { Camera, Loader2, Plus, X, ImagePlus, Clipboard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Order, Store } from '@/types/orders';
 
@@ -16,38 +16,23 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [foundOrders, setFoundOrders] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target?.result as string;
-      setPreview(base64);
-      processScreenshot(base64);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const processScreenshot = async (imageBase64: string) => {
+  const processImage = useCallback(async (base64: string) => {
+    setPreview(base64);
     setProcessing(true);
     setFoundOrders([]);
 
     try {
       const { data, error } = await supabase.functions.invoke('extract-screenshot', {
-        body: { imageBase64 },
+        body: { imageBase64: base64 },
       });
 
       if (error) throw error;
-
-      if (!data?.success) {
-        throw new Error(data?.error || 'Error desconocido');
-      }
+      if (!data?.success) throw new Error(data?.error || 'Error desconocido');
 
       if (data.orders?.length) {
-        setFoundOrders(data.orders);
+        setFoundOrders(prev => [...prev, ...data.orders]);
         toast({ title: `📸 ${data.orders.length} producto(s) detectado(s)` });
       } else {
         toast({ title: '🤔 No se detectaron pedidos', description: 'Intenta con otra captura más clara' });
@@ -58,6 +43,45 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
     } finally {
       setProcessing(false);
     }
+  }, [toast]);
+
+  // Clipboard paste handler
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (!file) continue;
+
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const base64 = ev.target?.result as string;
+            processImage(base64);
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [processImage]);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      processImage(base64);
+    };
+    reader.readAsDataURL(file);
   };
 
   const importOrder = (orderData: any) => {
@@ -68,7 +92,7 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
       id: Math.random().toString(36).substring(2, 15),
       category: 'personal',
       productName: orderData.productName || 'Pedido importado',
-      productPhoto: '',
+      productPhoto: orderData.productImageUrl || '',
       store,
       pricePaid: orderData.pricePaid || 0,
       orderDate: orderData.orderDate || new Date().toISOString().split('T')[0],
@@ -91,7 +115,7 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
       id: Math.random().toString(36).substring(2, 15),
       category: 'personal' as const,
       productName: orderData.productName || 'Pedido importado',
-      productPhoto: '',
+      productPhoto: orderData.productImageUrl || '',
       store: validStores.includes(orderData.store) ? orderData.store : 'AliExpress' as Store,
       pricePaid: orderData.pricePaid || 0,
       orderDate: orderData.orderDate || new Date().toISOString().split('T')[0],
@@ -133,17 +157,20 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
         />
 
         {!preview ? (
-          <Button
+          <div
+            ref={dropZoneRef}
             onClick={() => fileInputRef.current?.click()}
-            variant="outline"
-            className="w-full h-24 flex-col gap-2 border-dashed"
-            disabled={processing}
+            className="w-full h-28 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
           >
-            <ImagePlus className="h-8 w-8 text-muted-foreground" />
+            <div className="flex items-center gap-3 text-muted-foreground">
+              <ImagePlus className="h-7 w-7" />
+              <span className="text-lg font-medium">/</span>
+              <Clipboard className="h-6 w-6" />
+            </div>
             <span className="text-sm text-muted-foreground">
-              Sube una captura de tu pedido
+              Sube una captura o pega con <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono">Ctrl+V</kbd>
             </span>
-          </Button>
+          </div>
         ) : (
           <div className="relative">
             <img src={preview} alt="Captura" className="w-full rounded-lg max-h-48 object-contain bg-muted" />
@@ -176,6 +203,15 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
 
             {foundOrders.map((order, i) => (
               <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
+                <div className="h-10 w-10 rounded-md bg-muted flex-shrink-0 overflow-hidden">
+                  {order.productImageUrl ? (
+                    <img src={order.productImageUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                      <Camera className="h-4 w-4" />
+                    </div>
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{order.productName || 'Sin nombre'}</p>
                   <p className="text-xs text-muted-foreground">
@@ -194,7 +230,6 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
               </div>
             ))}
 
-            {/* Allow adding another screenshot */}
             <Button
               onClick={() => fileInputRef.current?.click()}
               variant="outline"
