@@ -5,46 +5,75 @@ const corsHeaders = {
 
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
-const EXTRACTION_PROMPT = `You are an expert at reading retail purchase confirmation emails and extracting product data.
+const EXTRACTION_PROMPT = `Eres un experto en leer correos de confirmación de compra de tiendas online (Temu, AliExpress, Shein, Amazon).
 
-Your task: From this SINGLE email, extract every product that was purchased. Return a JSON array.
+Tu tarea: Del siguiente correo, extrae CADA producto comprado. Devuelve un JSON array.
 
-Each product object MUST have:
+Campos requeridos por producto:
 {
-  "productName": "the real product name/title as written in the email",
-  "store": "AliExpress" | "Shein" | "Temu" | "Amazon",
+  "productName": "nombre real del producto tal como aparece en el correo",
+  "store": "Temu" | "AliExpress" | "Shein" | "Amazon",
   "pricePaid": 12.99,
-  "orderNumber": "8123456789",
+  "orderNumber": "123456",
   "orderDate": "2026-02-20",
   "estimatedArrival": "2026-03-15",
   "unitsOrdered": 1,
-  "pricePerUnit": 12.99,
-  "productImageUrl": "https://...",
-  "isPurchaseConfirmation": true
+  "productImageUrl": "la URL de imagen del producto si está disponible",
+  "isOrder": true
 }
 
-HOW TO FIND THE PRODUCT NAME:
-- In Temu emails: Look inside HTML table cells (<td>) near the product image. The name is usually in a <span> or <a> tag near an <img> with kwcdn.com URL. It could be in Spanish or English.
-- In AliExpress emails: Look for text in <td> or <div> near alicdn.com images. Product titles are usually long and descriptive.
-- In Shein emails: Look for item descriptions near ltwebstatic.com images.
-- In Amazon emails: Look for item names near ssl-images-amazon.com images.
-- NEVER return generic names like "Product", "Pedido", "Order", "Item", "Producto". If you truly cannot find the name, use the email subject line.
+REGLAS:
+- productName DEBE ser el nombre real del artículo. NUNCA escribas "Product", "Pedido", "Item" u otro texto genérico.
+- Si hay una lista de "IMAGE_URLS" al final, asocia cada imagen con su producto correspondiente (en orden).
+- store: detecta del remitente (@temu.com = Temu, etc.)
+- Si es un correo PROMOCIONAL o de marketing (no una confirmación de compra real), devuelve []
+- isOrder: true para compras reales, false para marketing
 
-HOW TO FIND THE IMAGE URL:
-- Look for <img> tags with src URLs from: kwcdn.com, alicdn.com, ltwebstatic.com, ssl-images-amazon.com, m.media-amazon.com
-- Pick the product thumbnail, not logos or icons
+Devuelve SOLO un JSON array válido. Sin markdown, sin explicación.`;
 
-HOW TO DETECT THE STORE:
-- Check the "From" header: @temu.com, @aliexpress.com, @shein.com, @amazon.com
-- Also check email content for store branding
+// Strip HTML tags to get clean text, preserving structure
+function htmlToText(html: string): string {
+  return html
+    // Replace <br>, <p>, <div>, <tr>, <li> with newlines
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|li|td|h[1-6])>/gi, '\n')
+    .replace(/<(p|div|tr|li|td|h[1-6])[^>]*>/gi, '')
+    // Remove all remaining tags
+    .replace(/<[^>]+>/g, ' ')
+    // Decode common HTML entities
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    // Clean up whitespace
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n/g, '\n')
+    .trim();
+}
 
-IMPORTANT:
-- Only extract from REAL purchase confirmations, shipping confirmations, or order receipts
-- IGNORE promotional/marketing emails - return [] for those
-- If the email has multiple products, return one object per product
-- isPurchaseConfirmation must be true for real orders, false for marketing
-
-Return ONLY a valid JSON array. No markdown, no explanation.`;
+// Extract product image URLs from HTML
+function extractImageUrls(html: string): string[] {
+  const urls: string[] = [];
+  const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  let match;
+  while ((match = imgRegex.exec(html)) !== null) {
+    const url = match[1];
+    // Only keep product images from known CDNs, skip tiny icons/tracking
+    if (
+      (url.includes('kwcdn.com') || url.includes('alicdn.com') ||
+       url.includes('ltwebstatic.com') || url.includes('ssl-images-amazon.com') ||
+       url.includes('m.media-amazon.com')) &&
+      !url.includes('1x1') && !url.includes('pixel') && !url.includes('spacer')
+    ) {
+      urls.push(url);
+    }
+  }
+  // Deduplicate
+  return [...new Set(urls)];
+}
 
 async function refreshAccessToken(refreshToken: string): Promise<string> {
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID')!;
@@ -64,38 +93,37 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
   const data = await res.json();
   if (!res.ok) {
     console.error('Token refresh failed:', JSON.stringify(data));
-    throw new Error('Failed to refresh token. Please reconnect Gmail.');
+    throw new Error('Failed to refresh token.');
   }
   return data.access_token;
 }
 
-async function getEmails(accessToken: string, dateFrom: string, dateTo: string, maxResults = 30): Promise<any[]> {
-  // Much broader query - just look for emails FROM these stores, no subject filter
+async function getEmails(accessToken: string, dateFrom: string, dateTo: string): Promise<any[]> {
+  // Broad query - just FROM these stores, no subject filter
   const query = encodeURIComponent(
     `from:(aliexpress OR shein OR temu OR amazon) after:${dateFrom} before:${dateTo}`
   );
 
-  console.log('Gmail search query:', decodeURIComponent(query));
+  console.log('Gmail query:', decodeURIComponent(query));
 
   const listRes = await fetch(
-    `https://www.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=${maxResults}`,
+    `https://www.googleapis.com/gmail/v1/users/me/messages?q=${query}&maxResults=30`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
 
   if (!listRes.ok) {
     const err = await listRes.json();
     console.error('Gmail list error:', JSON.stringify(err));
-    throw new Error(`Gmail API error: ${err.error?.message || 'Unknown'}`);
+    throw new Error(`Gmail API: ${err.error?.message || 'Unknown'}`);
   }
 
   const listData = await listRes.json();
   if (!listData.messages?.length) return [];
 
-  console.log(`Found ${listData.messages.length} emails, fetching up to 15...`);
+  console.log(`Found ${listData.messages.length} emails, fetching up to 20...`);
 
-  // Fetch each message with full format
   const emails = await Promise.all(
-    listData.messages.slice(0, 15).map(async (msg: any) => {
+    listData.messages.slice(0, 20).map(async (msg: any) => {
       const msgRes = await fetch(
         `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -107,46 +135,47 @@ async function getEmails(accessToken: string, dateFrom: string, dateTo: string, 
   return emails;
 }
 
-function extractEmailContent(message: any): { subject: string; from: string; body: string; htmlBody: string } {
+function extractEmailParts(message: any): { subject: string; from: string; plainText: string; htmlBody: string } {
   const headers = message.payload?.headers || [];
   const subject = headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '';
   const from = headers.find((h: any) => h.name.toLowerCase() === 'from')?.value || '';
 
-  let body = '';
+  let plainText = '';
   let htmlBody = '';
 
-  function extractText(part: any): void {
+  function walk(part: any): void {
     if (part.mimeType === 'text/plain' && part.body?.data) {
-      body += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+      plainText += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
     }
     if (part.mimeType === 'text/html' && part.body?.data) {
       htmlBody += atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
     }
-    if (part.parts) {
-      part.parts.forEach(extractText);
-    }
+    if (part.parts) part.parts.forEach(walk);
   }
 
-  extractText(message.payload);
-
-  return { subject, from, body: body.slice(0, 4000), htmlBody };
+  walk(message.payload);
+  return { subject, from, plainText, htmlBody };
 }
 
 async function extractOrdersFromEmail(
   apiKey: string,
-  email: { subject: string; from: string; body: string; htmlBody: string }
+  email: { subject: string; from: string; plainText: string; htmlBody: string }
 ): Promise<any[]> {
-  // Send a generous chunk of HTML - this is where the product names and images live
-  const htmlChunk = email.htmlBody.slice(0, 12000);
-  
-  const prompt = `From: ${email.from}
-Subject: ${email.subject}
+  // Convert HTML to clean text for the AI
+  const cleanText = htmlToText(email.htmlBody);
+  // Extract image URLs separately
+  const imageUrls = extractImageUrls(email.htmlBody);
 
-Plain text:
-${email.body}
+  const emailContent = `REMITENTE: ${email.from}
+ASUNTO: ${email.subject}
 
-HTML content (contains product names and image URLs):
-${htmlChunk}`;
+CONTENIDO DEL CORREO (texto limpio):
+${cleanText.slice(0, 8000)}
+
+IMAGE_URLS encontradas en el correo (asociar con productos en orden):
+${imageUrls.length > 0 ? imageUrls.slice(0, 10).join('\n') : 'Ninguna encontrada'}`;
+
+  console.log(`  Sending to AI: ${emailContent.length} chars, ${imageUrls.length} images`);
 
   const aiResponse = await fetch(AI_GATEWAY, {
     method: 'POST',
@@ -155,10 +184,10 @@ ${htmlChunk}`;
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
+      model: 'google/gemini-2.5-pro',
       messages: [
         { role: 'system', content: EXTRACTION_PROMPT },
-        { role: 'user', content: prompt },
+        { role: 'user', content: emailContent },
       ],
       temperature: 0.1,
     }),
@@ -174,15 +203,14 @@ ${htmlChunk}`;
   const content = aiData.choices?.[0]?.message?.content || '';
 
   try {
-    // Clean markdown wrappers
     let cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
     const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
     if (!jsonMatch) return [];
-    
+
     const orders = JSON.parse(jsonMatch[0]);
-    return orders.filter((o: any) => o.isPurchaseConfirmation !== false);
+    return orders.filter((o: any) => o.isOrder !== false && o.isPurchaseConfirmation !== false);
   } catch {
-    console.error(`Failed to parse AI response for "${email.subject}":`, content.slice(0, 300));
+    console.error(`Parse error for "${email.subject}":`, content.slice(0, 200));
     return [];
   }
 }
@@ -196,7 +224,7 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get('LOVABLE_API_KEY');
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'AI no configurado. Contacta al administrador.' }),
+        JSON.stringify({ success: false, error: 'AI no configurado.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -205,7 +233,7 @@ Deno.serve(async (req) => {
 
     if (!accessToken) {
       return new Response(
-        JSON.stringify({ success: false, error: 'No se proporcionó token de acceso. Reconecta Gmail.' }),
+        JSON.stringify({ success: false, error: 'No hay token. Reconecta Gmail.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -217,18 +245,18 @@ Deno.serve(async (req) => {
     });
 
     if (!testRes.ok && refreshToken) {
-      console.log('Access token expired, refreshing...');
+      console.log('Refreshing token...');
       try {
         token = await refreshAccessToken(refreshToken);
-      } catch (e) {
+      } catch {
         return new Response(
-          JSON.stringify({ success: false, error: 'Token expirado. Por favor reconecta Gmail.', needsReconnect: true }),
+          JSON.stringify({ success: false, error: 'Token expirado. Reconecta Gmail.', needsReconnect: true }),
           { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     } else if (!testRes.ok) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Token expirado. Por favor reconecta Gmail.', needsReconnect: true }),
+        JSON.stringify({ success: false, error: 'Token expirado. Reconecta Gmail.', needsReconnect: true }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -238,43 +266,42 @@ Deno.serve(async (req) => {
     const fromDate = dateFrom || defaultFrom.toISOString().split('T')[0];
     const toDate = dateTo || now.toISOString().split('T')[0];
 
-    console.log(`Scanning emails from ${fromDate} to ${toDate}`);
+    console.log(`Scanning ${fromDate} to ${toDate}`);
 
     const emails = await getEmails(token, fromDate, toDate);
     if (!emails.length) {
       return new Response(
-        JSON.stringify({ success: true, orders: [], message: `No se encontraron correos de pedidos entre ${fromDate} y ${toDate}` }),
+        JSON.stringify({ success: true, orders: [], message: `Sin correos entre ${fromDate} y ${toDate}` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Extract content from each email
-    const emailContents = emails.map(extractEmailContent);
-    
-    console.log(`Processing ${emailContents.length} emails individually with AI...`);
-    console.log('Email subjects:', emailContents.map(e => `${e.from.slice(0,30)} | ${e.subject.slice(0,60)}`).join('\n'));
+    const emailParts = emails.map(extractEmailParts);
 
-    // Process each email INDIVIDUALLY for much better extraction
+    console.log(`Processing ${emailParts.length} emails individually...`);
+    emailParts.forEach((e, i) => console.log(`  [${i+1}] ${e.from.slice(0, 35)} | ${e.subject.slice(0, 60)}`));
+
+    // Process each email individually with the stronger model
     const allOrders: any[] = [];
-    for (const email of emailContents) {
-      console.log(`Processing: "${email.subject.slice(0, 80)}" from ${email.from.slice(0, 40)}`);
+    for (const email of emailParts) {
+      console.log(`\nProcessing: "${email.subject.slice(0, 70)}"`);
       const orders = await extractOrdersFromEmail(apiKey, email);
       if (orders.length > 0) {
-        console.log(`  → Found ${orders.length} order(s):`, orders.map((o: any) => `${o.productName?.slice(0, 50)} ($${o.pricePaid})`).join(', '));
+        console.log(`  ✓ ${orders.length} producto(s):`, orders.map((o: any) => `"${o.productName?.slice(0, 40)}" $${o.pricePaid}`).join(' | '));
         allOrders.push(...orders);
       } else {
-        console.log(`  → No orders (likely promotional)`);
+        console.log(`  ✗ No es compra / promocional`);
       }
     }
 
-    console.log(`Total orders found: ${allOrders.length}`);
+    console.log(`\nTotal: ${allOrders.length} pedidos extraídos`);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        orders: allOrders, 
+      JSON.stringify({
+        success: true,
+        orders: allOrders,
         newAccessToken: token !== accessToken ? token : undefined,
-        dateRange: { from: fromDate, to: toDate }
+        dateRange: { from: fromDate, to: toDate },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
