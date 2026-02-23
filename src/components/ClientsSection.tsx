@@ -3,13 +3,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ChevronDown, ChevronUp, Trash2, Package, DollarSign, Phone } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Trash2, Package, DollarSign, Phone, Pencil } from 'lucide-react';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
+import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 import { useToast } from '@/hooks/use-toast';
 
 const ORDER_STATUSES = ['Pendiente', 'Pagado', 'En Tránsito', 'Entregado', 'Notificado'];
@@ -35,6 +35,7 @@ export function ClientsSection({
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddOrder, setShowAddOrder] = useState<string | null>(null);
+  const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
 
@@ -118,7 +119,7 @@ export function ClientsSection({
                       <p className="text-sm text-muted-foreground text-center py-2">Sin pedidos</p>
                     ) : (
                       orders.map(order => (
-                        <Card key={order.id} className="bg-card">
+                        <Card key={order.id} className="bg-card cursor-pointer hover:shadow-sm transition-shadow" onClick={() => setEditingOrder(order)}>
                           <CardContent className="p-3 space-y-2">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
@@ -126,19 +127,15 @@ export function ClientsSection({
                                 {order.paymentMethod && <Badge variant="secondary" className="text-xs">{order.paymentMethod}</Badge>}
                               </div>
                               <div className="flex items-center gap-1">
-                                <Select value={order.status} onValueChange={(v) => onUpdateOrder(order.id, { status: v })}>
-                                  <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                  </SelectContent>
-                                </Select>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => onDeleteOrder(order.id)}>
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); onDeleteOrder(order.id); }}>
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
                               </div>
                             </div>
 
-                            {/* Products in this order */}
                             {order.products.length > 0 ? (
                               <div className="space-y-1">
                                 {order.products.map(p => (
@@ -147,6 +144,7 @@ export function ClientsSection({
                                       {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3 w-3 m-1.5 text-muted-foreground" />}
                                     </div>
                                     <span className="flex-1 truncate text-foreground">{p.productName}</span>
+                                    <Badge variant="outline" className="text-[10px] h-4">{p.status}</Badge>
                                     <span className="text-muted-foreground">{p.store}</span>
                                     <span className="font-medium text-foreground">{fmt(p.pricePaid)}</span>
                                   </div>
@@ -156,7 +154,6 @@ export function ClientsSection({
                               <p className="text-xs text-muted-foreground">Sin productos asignados aún</p>
                             )}
 
-                            {/* Financial summary */}
                             <div className="flex items-center justify-between text-xs pt-1 border-t border-border">
                               <span className="text-muted-foreground">
                                 <DollarSign className="h-3 w-3 inline" /> Envío: {fmt(order.shippingCost)} · Cobrado: {fmt(order.amountCharged)}
@@ -192,7 +189,7 @@ export function ClientsSection({
         </DialogContent>
       </Dialog>
 
-      {/* Add Order Dialog - uses shared AddClientOrderDialog with screenshot import */}
+      {/* Add Order Dialog */}
       <AddClientOrderDialog
         open={!!showAddOrder}
         onOpenChange={(v) => { if (!v) setShowAddOrder(null); }}
@@ -200,6 +197,16 @@ export function ClientsSection({
         onAddOrder={onAddOrder}
         onAddProduct={onAddProduct}
         defaultClientId={showAddOrder || undefined}
+      />
+
+      {/* Edit Order Dialog */}
+      <EditClientOrderDialog
+        open={!!editingOrder}
+        onOpenChange={(v) => { if (!v) setEditingOrder(null); }}
+        order={editingOrder}
+        onUpdateOrder={onUpdateOrder}
+        onDeleteOrder={onDeleteOrder}
+        exchangeRate={exchangeRate}
       />
     </div>
   );
