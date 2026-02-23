@@ -359,6 +359,7 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
             {/* Product list */}
             {foundOrders.map((order, i) => (
               <div key={i} className="p-2 rounded-md bg-muted/30 border border-border/50 space-y-2">
+                {/* Header row: thumbnail + actions */}
                 <div className="flex items-center gap-2">
                   <div className="h-12 w-12 rounded-md bg-muted flex-shrink-0 overflow-hidden">
                     {order.croppedImage ? (
@@ -369,13 +370,12 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
                       </div>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{order.productName || 'Sin nombre'}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {order.store || '?'} · ${order.pricePaid?.toFixed(2) || '?'}
-                      {(order.unitsOrdered ?? 0) > 1 ? ` · x${order.unitsOrdered}` : ''}
-                    </p>
-                  </div>
+                  <Input
+                    value={order.productName || ''}
+                    onChange={(e) => updateOrderField(i, 'productName', e.target.value)}
+                    placeholder="Nombre del producto"
+                    className="h-7 text-xs font-medium flex-1"
+                  />
                   <div className="flex flex-col gap-0.5 flex-shrink-0">
                     <Button variant="ghost" size="sm" onClick={() => moveOrder(i, -1)} disabled={i === 0} className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground">
                       <ArrowUp className="h-3 w-3" />
@@ -394,7 +394,59 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
                   </div>
                 </div>
 
-                {/* Per-item category & client */}
+                {/* Editable fields row */}
+                <div className="grid grid-cols-3 gap-1.5">
+                  <Select value={order.store || ''} onValueChange={(v) => updateOrderField(i, 'store', v)}>
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue placeholder="Tienda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AliExpress">AliExpress</SelectItem>
+                      <SelectItem value="Shein">Shein</SelectItem>
+                      <SelectItem value="Temu">Temu</SelectItem>
+                      <SelectItem value="Amazon">Amazon</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={order.pricePaid ?? ''}
+                    onChange={(e) => updateOrderField(i, 'pricePaid', e.target.value ? parseFloat(e.target.value) : 0)}
+                    placeholder="Precio $"
+                    className="h-7 text-xs"
+                  />
+                  <Input
+                    type="number"
+                    min="1"
+                    value={order.unitsOrdered ?? 1}
+                    onChange={(e) => updateOrderField(i, 'unitsOrdered', e.target.value ? parseInt(e.target.value) : 1)}
+                    placeholder="Uds"
+                    className="h-7 text-xs"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <Input
+                    value={order.orderNumber || ''}
+                    onChange={(e) => updateOrderField(i, 'orderNumber', e.target.value)}
+                    placeholder="# Orden"
+                    className="h-7 text-xs"
+                  />
+                  <Input
+                    type="date"
+                    value={order.orderDate || ''}
+                    onChange={(e) => updateOrderField(i, 'orderDate', e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                  <Input
+                    type="date"
+                    value={order.estimatedArrival || ''}
+                    onChange={(e) => updateOrderField(i, 'estimatedArrival', e.target.value)}
+                    placeholder="Llegada"
+                    className="h-7 text-xs"
+                  />
+                </div>
+
+                {/* Category & client */}
                 <div className="flex gap-2 items-center">
                   <Select value={order.category} onValueChange={(v) => updateOrderField(i, 'category', v)}>
                     <SelectTrigger className="h-7 text-xs flex-1">
