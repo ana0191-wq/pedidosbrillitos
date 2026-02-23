@@ -6,6 +6,7 @@ import { useShippingSettings } from '@/hooks/useShippingSettings';
 import { useAuth } from '@/hooks/useAuth';
 import type { OrderCategory } from '@/types/orders';
 import { Dashboard } from '@/components/Dashboard';
+import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { OrderSection } from '@/components/OrderSection';
 import { AddOrderDialog } from '@/components/AddOrderDialog';
 import { ClientsSection } from '@/components/ClientsSection';
@@ -86,7 +87,7 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="dashboard">
-            <Dashboard counts={counts} orders={orders} onAddOrder={() => openDialog()} onImportOrders={async (imported) => { for (const o of imported) await addOrder(o); }} />
+            <Dashboard counts={counts} orders={orders} clients={clients} onAddOrder={() => openDialog()} onAddClientOrder={addClientOrder} onImportOrders={async (imported) => { for (const o of imported) await addOrder(o); }} />
           </TabsContent>
 
           <TabsContent value="personal">
@@ -133,6 +134,7 @@ const Index = () => {
             <ClientOrdersList
               clientOrders={clientOrders}
               clients={clients}
+              onAddOrder={addClientOrder}
               onUpdateOrder={updateClientOrder}
               onDeleteOrder={deleteClientOrder}
               exchangeRate={exchangeRate}

@@ -1,18 +1,24 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShoppingBag, Package, Users, Plus, TrendingUp, DollarSign } from 'lucide-react';
+import { ShoppingBag, Package, Users, Plus, TrendingUp, DollarSign, ClipboardList } from 'lucide-react';
 import type { Order, ClientOrder, MerchandiseOrder } from '@/types/orders';
+import type { Client } from '@/hooks/useClients';
+import type { ClientOrder as ClientOrderType } from '@/hooks/useClientOrders';
 import { ScreenshotImport } from '@/components/ScreenshotImport';
+import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 
 interface DashboardProps {
   counts: { personal: number; merchandise: number; client: number; total: number };
   orders: Order[];
+  clients: Client[];
   onAddOrder: () => void;
+  onAddClientOrder: (clientId: string, data: Partial<ClientOrderType>) => Promise<string | null>;
   onImportOrders: (orders: Order[]) => void;
 }
 
-export function Dashboard({ counts, orders, onAddOrder, onImportOrders }: DashboardProps) {
+export function Dashboard({ counts, orders, clients, onAddOrder, onAddClientOrder, onImportOrders }: DashboardProps) {
+  const [showClientOrderDialog, setShowClientOrderDialog] = useState(false);
   const recentOrders = orders.slice(0, 5);
 
   const spending = useMemo(() => {
@@ -52,9 +58,14 @@ export function Dashboard({ counts, orders, onAddOrder, onImportOrders }: Dashbo
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-foreground">📊 Resumen</h2>
-        <Button onClick={onAddOrder}>
-          <Plus className="h-4 w-4 mr-1" /> Agregar Pedido
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={onAddOrder}>
+            <Plus className="h-4 w-4 mr-1" /> Agregar Pedido
+          </Button>
+          <Button variant="outline" onClick={() => setShowClientOrderDialog(true)}>
+            <ClipboardList className="h-4 w-4 mr-1" /> Pedido Cliente
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -150,6 +161,13 @@ export function Dashboard({ counts, orders, onAddOrder, onImportOrders }: Dashbo
           </div>
         )}
       </div>
+
+      <AddClientOrderDialog
+        open={showClientOrderDialog}
+        onOpenChange={setShowClientOrderDialog}
+        clients={clients}
+        onAddOrder={onAddClientOrder}
+      />
     </div>
   );
 }
