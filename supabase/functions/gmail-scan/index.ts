@@ -5,11 +5,12 @@ const corsHeaders = {
 
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
-const EXTRACTION_PROMPT = `You are an expert order data extractor. Analyze email content and extract purchase information.
+const EXTRACTION_PROMPT = `You are an expert at extracting purchase order data from retail confirmation emails.
 
-Return a JSON array. Each order object MUST have these fields:
+Analyze each email carefully. For EACH product purchased, return a JSON object with these fields:
+
 {
-  "productName": "FULL product name as shown in email (be specific and descriptive, e.g. 'Xiaomi Redmi Buds 4 Active TWS Earbuds' not just 'Product')",
+  "productName": "exact product title/description from the email - NEVER use generic words like 'Product' or 'Pedido'",
   "store": "AliExpress" | "Shein" | "Temu" | "Amazon",
   "pricePaid": 12.99,
   "orderNumber": "8123456789",
@@ -21,17 +22,18 @@ Return a JSON array. Each order object MUST have these fields:
   "isPurchaseConfirmation": true
 }
 
-RULES:
-1. productName MUST be the actual product name from the email, NOT generic text like "Pedido" or "Order". Look for item names, descriptions, product titles.
-2. productImageUrl: Look for <img> tags in the email that show the product. Common patterns:
-   - AliExpress: ae01.alicdn.com or img.alicdn.com URLs
-   - Shein: img.ltwebstatic.com URLs  
-   - Temu: img.kwcdn.com URLs
-   - Amazon: images-na.ssl-images-amazon.com or m.media-amazon.com URLs
-   Pick the largest/most relevant product image, skip tiny icons/logos/tracking pixels.
-3. Only extract REAL purchase confirmations or shipping notifications. IGNORE promotional/marketing emails.
-4. If an email contains multiple products, create one entry per product.
-5. Detect the store from the sender email address or email content.
+CRITICAL RULES:
+1. productName: Extract the ACTUAL item name. Look for text near product images, inside <td> cells with item descriptions, or after labels like "Item:", "Producto:", "Product:". Examples of GOOD names: "Xiaomi Redmi Buds 4 Active", "Vestido largo floral talla M", "Funda silicona iPhone 15 Pro". Examples of BAD names: "Product", "Pedido", "Order", "Item".
+2. productImageUrl: Find <img> tags showing the product. Look for URLs containing:
+   - alicdn.com, img.alicdn.com (AliExpress)
+   - ltwebstatic.com (Shein)
+   - kwcdn.com, aimg.kwcdn.com (Temu)
+   - images-na.ssl-images-amazon.com, m.media-amazon.com (Amazon)
+   Skip logos, icons (< 50px), tracking pixels (1x1), and social media icons.
+3. store: Detect from sender email domain or email content (e.g. @temu.com = Temu, @aliexpress.com = AliExpress).
+4. Only extract REAL purchase confirmations or shipping notifications. IGNORE marketing/promotional emails.
+5. If one email has multiple products, create one entry per product with its own name and image.
+6. pricePaid should be the total amount paid for that item (unit price × quantity if applicable).
 
 Return ONLY a valid JSON array. If no real orders found, return [].`;
 
@@ -134,12 +136,12 @@ function extractEmailContent(message: any): { subject: string; from: string; bod
   }
 
   // Increase body limit for better extraction
-  body = body.slice(0, 5000);
+  body = body.slice(0, 6000);
   const imageInfo = imageUrls.length > 0 
-    ? `\nProduct image URLs found in HTML: ${imageUrls.slice(0, 10).join('\n')}` 
+    ? `\n\nPRODUCT IMAGE URLs extracted from HTML:\n${imageUrls.slice(0, 15).join('\n')}` 
     : '';
 
-  return { subject, from, body: body + imageInfo, htmlBody: htmlBody.slice(0, 3000) };
+  return { subject, from, body: body + imageInfo, htmlBody: htmlBody.slice(0, 5000) };
 }
 
 Deno.serve(async (req) => {
@@ -209,7 +211,7 @@ Deno.serve(async (req) => {
     // Extract content from emails  
     const emailContents = emails.map(extractEmailContent);
     const emailSummary = emailContents
-      .map((e, i) => `--- Email ${i + 1} ---\nFrom: ${e.from}\nSubject: ${e.subject}\nBody:\n${e.body}\n\nHTML excerpt (for image URLs):\n${e.htmlBody.slice(0, 1500)}`)
+      .map((e, i) => `--- Email ${i + 1} ---\nFrom: ${e.from}\nSubject: ${e.subject}\n\nPlain text body:\n${e.body}\n\nHTML body (look here for product names and image URLs):\n${e.htmlBody.slice(0, 4000)}`)
       .join('\n\n');
 
     console.log(`Processing ${emails.length} emails with AI...`);
