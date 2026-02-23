@@ -2,9 +2,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Loader2, Plus, X, ImagePlus, Clipboard } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Camera, Loader2, Plus, X, ImagePlus, Clipboard, Trash2, ShoppingBag, Package, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { Order, Store } from '@/types/orders';
+import type { Order, OrderCategory, Store } from '@/types/orders';
 
 interface ScreenshotImportProps {
   onImportOrders: (orders: Order[]) => void;
@@ -19,7 +21,10 @@ interface DetectedOrder {
   orderDate?: string;
   estimatedArrival?: string;
   unitsOrdered?: number;
-  croppedImage?: string; // base64 cropped thumbnail
+  croppedImage?: string;
+  // User-editable fields
+  category: OrderCategory;
+  clientName: string;
 }
 
 function cropImageFromBbox(
@@ -49,11 +54,19 @@ function cropImageFromBbox(
   });
 }
 
+const categoryIcons: Record<OrderCategory, React.ReactNode> = {
+  personal: <ShoppingBag className="h-3 w-3" />,
+  merchandise: <Package className="h-3 w-3" />,
+  client: <Users className="h-3 w-3" />,
+};
+
 export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
   const { toast } = useToast();
   const [processing, setProcessing] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [foundOrders, setFoundOrders] = useState<DetectedOrder[]>([]);
+  const [globalCategory, setGlobalCategory] = useState<OrderCategory>('personal');
+  const [globalClient, setGlobalClient] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processImage = useCallback(async (base64: string) => {
@@ -69,23 +82,25 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
       if (!data?.success) throw new Error(data?.error || 'Error desconocido');
 
       if (data.orders?.length) {
-        // Crop thumbnails from bounding boxes
         const ordersWithImages: DetectedOrder[] = await Promise.all(
           data.orders.map(async (order: any) => {
             let croppedImage = '';
             if (order.imageBbox && Array.isArray(order.imageBbox) && order.imageBbox.length === 4) {
               try {
                 croppedImage = await cropImageFromBbox(base64, order.imageBbox);
-                console.log('Cropped bbox:', order.imageBbox, 'for:', order.productName?.slice(0, 30));
               } catch (e) {
                 console.warn('Could not crop thumbnail:', e);
-                croppedImage = base64; // fallback: use full screenshot
+                croppedImage = base64;
               }
             } else {
-              console.warn('No imageBbox for:', order.productName, 'bbox:', order.imageBbox);
-              croppedImage = base64; // fallback: use full screenshot
+              croppedImage = base64;
             }
-            return { ...order, croppedImage };
+            return {
+              ...order,
+              croppedImage,
+              category: globalCategory,
+              clientName: globalClient,
+            };
           })
         );
 
@@ -100,7 +115,7 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
     } finally {
       setProcessing(false);
     }
-  }, [toast]);
+  }, [toast, globalCategory, globalClient]);
 
   // Clipboard paste handler
   useEffect(() => {
@@ -141,52 +156,77 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
     reader.readAsDataURL(file);
   };
 
-  const importOrder = (orderData: DetectedOrder) => {
-    const validStores: Store[] = ['AliExpress', 'Shein', 'Temu', 'Amazon'];
-    const store: Store = validStores.includes(orderData.store as Store) ? orderData.store as Store : 'AliExpress';
+  const updateOrderField = (index: number, field: keyof DetectedOrder, value: any) => {
+    setFoundOrders(prev => prev.map((o, i) => i === index ? { ...o, [field]: value } : o));
+  };
 
-    const order: Order = {
+  const removeOrder = (index: number) => {
+    setFoundOrders(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const applyGlobalCategory = (cat: OrderCategory) => {
+    setGlobalCategory(cat);
+    setFoundOrders(prev => prev.map(o => ({ ...o, category: cat })));
+  };
+
+  const applyGlobalClient = (name: string) => {
+    setGlobalClient(name);
+    setFoundOrders(prev => prev.map(o => o.category === 'client' ? { ...o, clientName: name } : o));
+  };
+
+  const buildOrder = (d: DetectedOrder): Order => {
+    const validStores: Store[] = ['AliExpress', 'Shein', 'Temu', 'Amazon'];
+    const store: Store = validStores.includes(d.store as Store) ? d.store as Store : 'AliExpress';
+
+    const base = {
       id: Math.random().toString(36).substring(2, 15),
-      category: 'personal',
-      productName: orderData.productName || 'Pedido importado',
-      productPhoto: orderData.croppedImage || '',
+      productName: d.productName || 'Pedido importado',
+      productPhoto: d.croppedImage || '',
       store,
-      pricePaid: orderData.pricePaid || 0,
-      orderDate: orderData.orderDate || new Date().toISOString().split('T')[0],
-      estimatedArrival: orderData.estimatedArrival || '',
-      orderNumber: orderData.orderNumber || '',
+      pricePaid: d.pricePaid || 0,
+      orderDate: d.orderDate || new Date().toISOString().split('T')[0],
+      estimatedArrival: d.estimatedArrival || '',
+      orderNumber: d.orderNumber || '',
       notes: 'Importado desde captura',
       createdAt: new Date().toISOString(),
-      status: 'Pedido',
     };
 
-    onImportOrders([order]);
-    setFoundOrders(prev => prev.filter(o => o !== orderData));
-    toast({ title: '✅ Pedido importado', description: order.productName });
+    if (d.category === 'merchandise') {
+      return {
+        ...base,
+        category: 'merchandise',
+        status: 'Pedido',
+        unitsOrdered: d.unitsOrdered || 1,
+        unitsReceived: 0,
+        pricePerUnit: d.pricePaid || 0,
+      };
+    }
+    if (d.category === 'client') {
+      return {
+        ...base,
+        category: 'client',
+        status: 'Pedido',
+        clientName: d.clientName || '',
+        shippingCost: 0,
+        amountCharged: 0,
+      };
+    }
+    return { ...base, category: 'personal', status: 'Pedido' };
+  };
+
+  const importOrder = (index: number) => {
+    const d = foundOrders[index];
+    onImportOrders([buildOrder(d)]);
+    removeOrder(index);
+    toast({ title: '✅ Pedido importado', description: d.productName });
   };
 
   const importAll = () => {
-    const validStores: Store[] = ['AliExpress', 'Shein', 'Temu', 'Amazon'];
-
-    const ordersToImport: Order[] = foundOrders.map(orderData => ({
-      id: Math.random().toString(36).substring(2, 15),
-      category: 'personal' as const,
-      productName: orderData.productName || 'Pedido importado',
-      productPhoto: orderData.croppedImage || '',
-      store: validStores.includes(orderData.store as Store) ? orderData.store as Store : 'AliExpress' as Store,
-      pricePaid: orderData.pricePaid || 0,
-      orderDate: orderData.orderDate || new Date().toISOString().split('T')[0],
-      estimatedArrival: orderData.estimatedArrival || '',
-      orderNumber: orderData.orderNumber || '',
-      notes: 'Importado desde captura',
-      createdAt: new Date().toISOString(),
-      status: 'Pedido' as const,
-    }));
-
-    onImportOrders(ordersToImport);
+    const orders = foundOrders.map(buildOrder);
+    onImportOrders(orders);
     setFoundOrders([]);
     setPreview(null);
-    toast({ title: `✅ ${ordersToImport.length} pedido(s) importado(s)` });
+    toast({ title: `✅ ${orders.length} pedido(s) importado(s)` });
   };
 
   const reset = () => {
@@ -194,6 +234,8 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
     setFoundOrders([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  const hasClientOrders = foundOrders.some(o => o.category === 'client');
 
   return (
     <Card className="border-border">
@@ -249,39 +291,95 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
         )}
 
         {foundOrders.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{foundOrders.length} producto(s) detectado(s)</span>
-              <Button variant="secondary" size="sm" onClick={importAll} className="text-xs h-7">
-                <Plus className="h-3 w-3 mr-1" /> Importar todos
-              </Button>
+          <div className="space-y-3">
+            {/* Global controls */}
+            <div className="p-3 rounded-lg bg-muted/50 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Aplicar a todos:</p>
+              <div className="flex gap-2">
+                <Select value={globalCategory} onValueChange={(v) => applyGlobalCategory(v as OrderCategory)}>
+                  <SelectTrigger className="h-8 text-xs flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="personal">🛍️ Mis Pedidos</SelectItem>
+                    <SelectItem value="merchandise">📦 Mercancía</SelectItem>
+                    <SelectItem value="client">👤 Clientes</SelectItem>
+                  </SelectContent>
+                </Select>
+                {globalCategory === 'client' && (
+                  <Input
+                    placeholder="Nombre del cliente"
+                    value={globalClient}
+                    onChange={(e) => applyGlobalClient(e.target.value)}
+                    className="h-8 text-xs flex-1"
+                  />
+                )}
+              </div>
             </div>
 
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{foundOrders.length} producto(s)</span>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => setFoundOrders([])} className="text-xs h-7 text-destructive">
+                  <Trash2 className="h-3 w-3 mr-1" /> Borrar todos
+                </Button>
+                <Button variant="secondary" size="sm" onClick={importAll} className="text-xs h-7">
+                  <Plus className="h-3 w-3 mr-1" /> Importar todos
+                </Button>
+              </div>
+            </div>
+
+            {/* Product list */}
             {foundOrders.map((order, i) => (
-              <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
-                <div className="h-10 w-10 rounded-md bg-muted flex-shrink-0 overflow-hidden">
-                  {order.croppedImage ? (
-                    <img src={order.croppedImage} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                      <Camera className="h-4 w-4" />
-                    </div>
+              <div key={i} className="p-2 rounded-md bg-muted/30 border border-border/50 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-12 w-12 rounded-md bg-muted flex-shrink-0 overflow-hidden">
+                    {order.croppedImage ? (
+                      <img src={order.croppedImage} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                        <Camera className="h-4 w-4" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{order.productName || 'Sin nombre'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {order.store || '?'} · ${order.pricePaid?.toFixed(2) || '?'}
+                      {(order.unitsOrdered ?? 0) > 1 ? ` · x${order.unitsOrdered}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => importOrder(i)} className="h-7 w-7 p-0 text-primary">
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => removeOrder(i)} className="h-7 w-7 p-0 text-destructive">
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Per-item category & client */}
+                <div className="flex gap-2 items-center">
+                  <Select value={order.category} onValueChange={(v) => updateOrderField(i, 'category', v)}>
+                    <SelectTrigger className="h-7 text-xs flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="personal">🛍️ Personal</SelectItem>
+                      <SelectItem value="merchandise">📦 Mercancía</SelectItem>
+                      <SelectItem value="client">👤 Cliente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {order.category === 'client' && (
+                    <Input
+                      placeholder="Cliente..."
+                      value={order.clientName}
+                      onChange={(e) => updateOrderField(i, 'clientName', e.target.value)}
+                      className="h-7 text-xs flex-1"
+                    />
                   )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{order.productName || 'Sin nombre'}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {order.store || '?'} · ${order.pricePaid?.toFixed(2) || '?'}
-                    {(order.unitsOrdered ?? 0) > 1 ? ` · x${order.unitsOrdered}` : ''}
-                  </p>
-                </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => importOrder(order)} className="h-7 w-7 p-0">
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setFoundOrders(prev => prev.filter((_, j) => j !== i))} className="h-7 w-7 p-0 text-muted-foreground">
-                    <X className="h-3 w-3" />
-                  </Button>
                 </div>
               </div>
             ))}
