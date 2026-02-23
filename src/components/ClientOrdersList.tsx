@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Package, DollarSign, Plus } from 'lucide-react';
+import { Trash2, Package, DollarSign, Plus, Pencil } from 'lucide-react';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { Client } from '@/hooks/useClients';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
-
-const ORDER_STATUSES = ['Pendiente', 'Pagado', 'En Tránsito', 'Entregado', 'Notificado'];
+import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 
 interface ClientOrdersListProps {
   clientOrders: ClientOrder[];
@@ -22,6 +20,7 @@ interface ClientOrdersListProps {
 
 export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, exchangeRate }: ClientOrdersListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
   const fmt = (n: number) => `$${n.toFixed(2)}`;
   const clientMap: Record<string, string> = {};
   clients.forEach(c => { clientMap[c.id] = c.name; });
@@ -43,6 +42,15 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
         onAddProduct={onAddProduct}
       />
 
+      <EditClientOrderDialog
+        open={!!editingOrder}
+        onOpenChange={(v) => { if (!v) setEditingOrder(null); }}
+        order={editingOrder}
+        onUpdateOrder={onUpdateOrder}
+        onDeleteOrder={onDeleteOrder}
+        exchangeRate={exchangeRate}
+      />
+
       {clientOrders.length === 0 ? (
         <Card><CardContent className="p-6 text-center text-muted-foreground">No hay pedidos. ¡Crea uno!</CardContent></Card>
       ) : (
@@ -51,7 +59,7 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
           const profit = order.amountCharged - totalProductCost - order.shippingCost;
 
           return (
-            <Card key={order.id}>
+            <Card key={order.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setEditingOrder(order)}>
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -62,13 +70,10 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Select value={order.status} onValueChange={v => onUpdateOrder(order.id, { status: v })}>
-                      <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => onDeleteOrder(order.id)}>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); onDeleteOrder(order.id); }}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -82,6 +87,7 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
                           {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3 w-3 m-1.5 text-muted-foreground" />}
                         </div>
                         <span className="flex-1 truncate text-foreground">{p.productName}</span>
+                        <Badge variant="outline" className="text-[10px] h-4">{p.status}</Badge>
                         <span className="text-muted-foreground">{p.store}</span>
                         <span className="font-medium text-foreground">{fmt(p.pricePaid)}</span>
                       </div>
