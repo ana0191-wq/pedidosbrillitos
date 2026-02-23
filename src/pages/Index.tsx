@@ -9,9 +9,10 @@ import { Dashboard } from '@/components/Dashboard';
 import { OrderSection } from '@/components/OrderSection';
 import { AddOrderDialog } from '@/components/AddOrderDialog';
 import { ClientsSection } from '@/components/ClientsSection';
+import { ClientOrdersList } from '@/components/ClientOrdersList';
 import { ShippingCalculator } from '@/components/ShippingCalculator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator } from 'lucide-react';
+import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -55,26 +56,30 @@ const Index = () => {
 
       <main className="container max-w-4xl mx-auto px-4 py-4 pb-24">
         <Tabs defaultValue="dashboard">
-          <TabsList className="w-full grid grid-cols-5 mb-6">
-            <TabsTrigger value="dashboard" className="gap-1 text-xs sm:text-sm">
+          <TabsList className="w-full grid grid-cols-3 sm:grid-cols-6 mb-6">
+            <TabsTrigger value="dashboard" className="gap-1 text-xs">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Inicio</span>
             </TabsTrigger>
-            <TabsTrigger value="personal" className="gap-1 text-xs sm:text-sm">
+            <TabsTrigger value="personal" className="gap-1 text-xs">
               <ShoppingBag className="h-4 w-4" />
               <span className="hidden sm:inline">Pedidos</span>
               {counts.personal > 0 && <span className="ml-1 text-xs bg-primary text-primary-foreground rounded-full px-1.5">{counts.personal}</span>}
             </TabsTrigger>
-            <TabsTrigger value="merchandise" className="gap-1 text-xs sm:text-sm">
+            <TabsTrigger value="merchandise" className="gap-1 text-xs">
               <Package className="h-4 w-4" />
               <span className="hidden sm:inline">Mercancía</span>
               {counts.merchandise > 0 && <span className="ml-1 text-xs bg-secondary text-secondary-foreground rounded-full px-1.5">{counts.merchandise}</span>}
             </TabsTrigger>
-            <TabsTrigger value="clients" className="gap-1 text-xs sm:text-sm">
+            <TabsTrigger value="clients" className="gap-1 text-xs">
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Clientes</span>
             </TabsTrigger>
-            <TabsTrigger value="shipping" className="gap-1 text-xs sm:text-sm">
+            <TabsTrigger value="client-orders" className="gap-1 text-xs">
+              <ClipboardList className="h-4 w-4" />
+              <span className="hidden sm:inline">Pedidos C.</span>
+            </TabsTrigger>
+            <TabsTrigger value="shipping" className="gap-1 text-xs">
               <Calculator className="h-4 w-4" />
               <span className="hidden sm:inline">Envíos</span>
             </TabsTrigger>
@@ -120,6 +125,16 @@ const Index = () => {
               onUpdateOrder={updateClientOrder}
               onDeleteOrder={deleteClientOrder}
               getOrdersByClient={getByClient}
+              exchangeRate={exchangeRate}
+            />
+          </TabsContent>
+
+          <TabsContent value="client-orders">
+            <ClientOrdersList
+              clientOrders={clientOrders}
+              clients={clients}
+              onUpdateOrder={updateClientOrder}
+              onDeleteOrder={deleteClientOrder}
               exchangeRate={exchangeRate}
             />
           </TabsContent>
