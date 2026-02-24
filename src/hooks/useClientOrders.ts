@@ -10,6 +10,7 @@ export interface ClientOrderProduct {
   pricePaid: number;
   orderNumber: string;
   status: string;
+  arrived: boolean;
 }
 
 export interface ClientOrder {
@@ -70,6 +71,7 @@ export function useClientOrders() {
           pricePaid: Number(p.price_paid),
           orderNumber: p.order_number || '',
           status: p.status,
+          arrived: !!p.arrived,
         });
       });
     }
