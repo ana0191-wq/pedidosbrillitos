@@ -171,11 +171,11 @@ export function Dashboard({ counts, orders, clients, clientOrders, onAddOrder, o
             {recentOrders.map(order => (
               <Card key={order.id} className="hover:shadow-sm transition-shadow">
                 <CardContent className="p-3 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
                     {order.productPhoto ? (
                       <img src={order.productPhoto} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <Package className="h-5 w-5 text-muted-foreground" />
+                      <Package className="h-6 w-6 text-muted-foreground" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">

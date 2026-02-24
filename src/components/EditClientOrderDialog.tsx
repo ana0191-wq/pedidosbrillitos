@@ -166,8 +166,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                     onCheckedChange={(checked) => updateLocalProduct(p.id, 'arrived', !!checked)}
                     className="flex-shrink-0"
                   />
-                  <div className="h-8 w-8 rounded bg-muted flex-shrink-0 overflow-hidden">
-                    {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3 w-3 m-2.5 text-muted-foreground" />}
+                  <div className="h-12 w-12 rounded bg-muted flex-shrink-0 overflow-hidden">
+                    {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-5 w-5 m-3.5 text-muted-foreground" />}
                   </div>
                   <Input value={p.productName} onChange={e => updateLocalProduct(p.id, 'productName', e.target.value)} className={`h-7 text-xs flex-1 ${p.arrived ? 'line-through opacity-60' : ''}`} />
                   <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(p.id)} className="h-7 w-7 p-0 text-destructive flex-shrink-0">
