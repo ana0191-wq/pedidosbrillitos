@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Package } from 'lucide-react';
+import { Trash2, Package, CheckCircle2, Circle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import { useOrders } from '@/hooks/useOrders';
 
-const ORDER_STATUSES = ['Pendiente', 'Pagado', 'En Tránsito', 'Entregado', 'Notificado'];
+const ORDER_STATUSES = ['Pagado sin comprar', 'Comprado', 'En Tránsito', 'Recibido'];
 const PAYMENT_METHODS = ['Bolívares (tasa euro)', 'PayPal', 'Binance', 'Efectivo'];
 const STORES = ['AliExpress', 'Shein', 'Temu', 'Amazon'];
 const PRODUCT_STATUSES = ['Pedido', 'En Tránsito', 'Entregado'];
@@ -79,6 +80,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       if (p.pricePaid !== orig.pricePaid) updates.pricePaid = p.pricePaid;
       if (p.orderNumber !== orig.orderNumber) updates.orderNumber = p.orderNumber;
       if (p.status !== orig.status) updates.status = p.status;
+      if (p.arrived !== orig.arrived) updates.arrived = p.arrived;
       if (Object.keys(updates).length > 0) {
         updateProduct(p.id, updates);
       }
@@ -159,10 +161,15 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             {products.map(p => (
               <div key={p.id} className="p-2 rounded-md bg-muted/30 border border-border/50 space-y-1">
                 <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={!!p.arrived}
+                    onCheckedChange={(checked) => updateLocalProduct(p.id, 'arrived', !!checked)}
+                    className="flex-shrink-0"
+                  />
                   <div className="h-8 w-8 rounded bg-muted flex-shrink-0 overflow-hidden">
                     {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3 w-3 m-2.5 text-muted-foreground" />}
                   </div>
-                  <Input value={p.productName} onChange={e => updateLocalProduct(p.id, 'productName', e.target.value)} className="h-7 text-xs flex-1" />
+                  <Input value={p.productName} onChange={e => updateLocalProduct(p.id, 'productName', e.target.value)} className={`h-7 text-xs flex-1 ${p.arrived ? 'line-through opacity-60' : ''}`} />
                   <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(p.id)} className="h-7 w-7 p-0 text-destructive flex-shrink-0">
                     <Trash2 className="h-3 w-3" />
                   </Button>

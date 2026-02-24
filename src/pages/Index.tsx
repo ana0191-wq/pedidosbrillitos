@@ -13,7 +13,8 @@ import { ClientsSection } from '@/components/ClientsSection';
 import { ClientOrdersList } from '@/components/ClientOrdersList';
 import { ShippingCalculator } from '@/components/ShippingCalculator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList } from 'lucide-react';
+import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, RefreshCw } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -26,6 +27,7 @@ const Index = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogCategory, setDialogCategory] = useState<OrderCategory>('personal');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+  const [manualRate, setManualRate] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const counts = getCounts();
@@ -33,9 +35,18 @@ const Index = () => {
   // Fetch exchange rate on mount
   useEffect(() => {
     supabase.functions.invoke('exchange-rate').then(({ data }) => {
-      if (data?.success) setExchangeRate(data.rate);
+      if (data?.success) {
+        setExchangeRate(data.rate);
+        setManualRate(String(data.rate));
+      }
     });
   }, []);
+
+  const handleRateChange = (val: string) => {
+    setManualRate(val);
+    const num = parseFloat(val);
+    if (num > 0) setExchangeRate(num);
+  };
 
   const openDialog = (cat: OrderCategory = 'personal') => {
     setDialogCategory(cat);
@@ -50,9 +61,23 @@ const Index = () => {
             <h1 className="text-xl font-bold text-foreground">✨ Pedidos Brillitos Store</h1>
             <p className="text-xs text-muted-foreground">AliExpress · Shein · Temu · Amazon</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={signOut}>
-            <LogOut className="h-4 w-4 mr-1" /> Salir
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-muted/50 rounded-md px-2 py-1">
+              <span className="text-xs text-muted-foreground">💱</span>
+              <Input
+                type="number"
+                step="0.01"
+                value={manualRate}
+                onChange={e => handleRateChange(e.target.value)}
+                className="h-6 w-20 text-xs border-0 bg-transparent p-0 text-center font-semibold"
+                placeholder="Tasa"
+              />
+              <span className="text-xs text-muted-foreground">Bs/$</span>
+            </div>
+            <Button variant="ghost" size="sm" onClick={signOut}>
+              <LogOut className="h-4 w-4 mr-1" /> Salir
+            </Button>
+          </div>
         </div>
       </header>
 

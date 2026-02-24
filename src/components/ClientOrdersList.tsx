@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Package, DollarSign, Plus, Pencil } from 'lucide-react';
+import { Trash2, Package, DollarSign, Plus, Pencil, CheckCircle2, Circle } from 'lucide-react';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { Client } from '@/hooks/useClients';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
@@ -83,10 +83,11 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
                   <div className="space-y-1">
                     {order.products.map(p => (
                       <div key={p.id} className="flex items-center gap-2 text-xs">
+                        {p.arrived ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600 flex-shrink-0" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
                         <div className="h-6 w-6 rounded bg-muted flex-shrink-0 overflow-hidden">
                           {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3 w-3 m-1.5 text-muted-foreground" />}
                         </div>
-                        <span className="flex-1 truncate text-foreground">{p.productName}</span>
+                        <span className={`flex-1 truncate text-foreground ${p.arrived ? 'line-through opacity-60' : ''}`}>{p.productName}</span>
                         <Badge variant="outline" className="text-[10px] h-4">{p.status}</Badge>
                         <span className="text-muted-foreground">{p.store}</span>
                         <span className="font-medium text-foreground">{fmt(p.pricePaid)}</span>

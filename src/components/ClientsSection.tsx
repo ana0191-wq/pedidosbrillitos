@@ -5,14 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ChevronDown, ChevronUp, Trash2, Package, DollarSign, Phone, Pencil } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Trash2, Package, DollarSign, Phone, Pencil, CheckCircle2, Circle } from 'lucide-react';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 import { useToast } from '@/hooks/use-toast';
 
-const ORDER_STATUSES = ['Pendiente', 'Pagado', 'En Tránsito', 'Entregado', 'Notificado'];
+const ORDER_STATUSES = ['Pagado sin comprar', 'Comprado', 'En Tránsito', 'Recibido'];
 
 interface ClientsSectionProps {
   clients: Client[];
@@ -140,10 +140,11 @@ export function ClientsSection({
                               <div className="space-y-1">
                                 {order.products.map(p => (
                                   <div key={p.id} className="flex items-center gap-2 text-xs">
+                                    {p.arrived ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600 flex-shrink-0" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
                                     <div className="h-6 w-6 rounded bg-muted flex-shrink-0 overflow-hidden">
                                       {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3 w-3 m-1.5 text-muted-foreground" />}
                                     </div>
-                                    <span className="flex-1 truncate text-foreground">{p.productName}</span>
+                                    <span className={`flex-1 truncate text-foreground ${p.arrived ? 'line-through opacity-60' : ''}`}>{p.productName}</span>
                                     <Badge variant="outline" className="text-[10px] h-4">{p.status}</Badge>
                                     <span className="text-muted-foreground">{p.store}</span>
                                     <span className="font-medium text-foreground">{fmt(p.pricePaid)}</span>

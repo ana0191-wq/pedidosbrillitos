@@ -109,6 +109,7 @@ export function useOrders() {
     if ((updates as any).amountCharged !== undefined) row.amount_charged = (updates as any).amountCharged;
     if (updates.notes !== undefined) row.notes = updates.notes;
     if ((updates as any).suggestedPrice !== undefined) row.suggested_price = (updates as any).suggestedPrice;
+    if ((updates as any).arrived !== undefined) row.arrived = (updates as any).arrived;
 
     const { error } = await supabase.from('orders').update(row).eq('id', id);
     if (error) {

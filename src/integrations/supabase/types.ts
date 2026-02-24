@@ -142,6 +142,7 @@ export type Database = {
       orders: {
         Row: {
           amount_charged: number | null
+          arrived: boolean
           category: string
           client_name: string | null
           client_order_id: string | null
@@ -166,6 +167,7 @@ export type Database = {
         }
         Insert: {
           amount_charged?: number | null
+          arrived?: boolean
           category: string
           client_name?: string | null
           client_order_id?: string | null
@@ -190,6 +192,7 @@ export type Database = {
         }
         Update: {
           amount_charged?: number | null
+          arrived?: boolean
           category?: string
           client_name?: string | null
           client_order_id?: string | null
