@@ -137,17 +137,21 @@ export function ClientsSection({
                             </div>
 
                             {order.products.length > 0 ? (
-                              <div className="space-y-1">
+                              <div className="space-y-2">
                                 {order.products.map(p => (
-                                  <div key={p.id} className="flex items-center gap-2 text-xs">
-                                    {p.arrived ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600 flex-shrink-0" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
-                                    <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden">
-                                      {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-3 text-muted-foreground" />}
+                                  <div key={p.id} className="flex items-center gap-3 text-sm">
+                                    {p.arrived ? <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" /> : <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
+                                    <div className="h-16 w-16 rounded-md bg-muted flex-shrink-0 overflow-hidden">
+                                      {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-6 w-6 m-5 text-muted-foreground" />}
                                     </div>
-                                    <span className={`flex-1 truncate text-foreground ${p.arrived ? 'line-through opacity-60' : ''}`}>{p.productName}</span>
-                                    <Badge variant="outline" className="text-[10px] h-4">{p.status}</Badge>
-                                    <span className="text-muted-foreground">{p.store}</span>
-                                    <span className="font-medium text-foreground">{fmt(p.pricePaid)}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <span className={`block truncate text-foreground font-medium ${p.arrived ? 'line-through opacity-60' : ''}`}>{p.productName}</span>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <Badge variant="outline" className="text-[10px] h-4">{p.status}</Badge>
+                                        <span className="text-xs text-muted-foreground">{p.store}</span>
+                                      </div>
+                                    </div>
+                                    <span className="font-semibold text-foreground">{fmt(p.pricePaid)}</span>
                                   </div>
                                 ))}
                               </div>
