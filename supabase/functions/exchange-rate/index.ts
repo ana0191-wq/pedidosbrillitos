@@ -4,13 +4,15 @@ const corsHeaders = {
 };
 
 async function fetchFromPyDolarVe(): Promise<{ rate: number; updated: string }> {
-  const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+  // Use Euro BCV rate (tasa euro oficial)
+  const res = await fetch('https://ve.dolarapi.com/v1/euros');
   if (!res.ok) throw new Error(`dolarapi status ${res.status}`);
   const data = await res.json();
-  // { fuente: "oficial", nombre: "Oficial", compra: XX.XX, venta: XX.XX, promedio: XX.XX, fechaActualizacion: "..." }
-  const rate = data?.promedio || data?.venta;
-  if (!rate || rate <= 0) throw new Error('No rate from dolarapi');
-  return { rate: Number(rate), updated: data?.fechaActualizacion || new Date().toISOString() };
+  // Find the official euro rate
+  const oficial = Array.isArray(data) ? data.find((d: any) => d.fuente === 'oficial') : data;
+  const rate = oficial?.promedio || oficial?.venta;
+  if (!rate || rate <= 0) throw new Error('No euro rate from dolarapi');
+  return { rate: Number(rate), updated: oficial?.fechaActualizacion || new Date().toISOString() };
 }
 
 async function fetchFromAlternative(): Promise<{ rate: number; updated: string }> {
