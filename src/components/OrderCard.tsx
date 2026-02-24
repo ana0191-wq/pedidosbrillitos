@@ -135,12 +135,12 @@ export function OrderCard({ order, onUpdate, onDelete }: OrderCardProps) {
             onClick={() => setExpanded(!expanded)}
             className="flex items-center gap-3 flex-1 min-w-0 text-left hover:bg-muted/30 transition-colors rounded-md -m-1 p-1"
           >
-            <div className="h-14 w-14 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+            <div className="h-20 w-20 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
               {order.productPhoto ? (
                 <img src={order.productPhoto} alt={order.productName} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <Package className="h-6 w-6 text-muted-foreground" />
+                  <Package className="h-8 w-8 text-muted-foreground" />
                 </div>
               )}
             </div>
