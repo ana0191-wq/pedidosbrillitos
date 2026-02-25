@@ -106,19 +106,19 @@ Deno.serve(async (req) => {
       if (aiResponse.status === 429) {
         return new Response(
           JSON.stringify({ success: false, error: 'Demasiadas solicitudes. Espera un momento.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       if (aiResponse.status === 402) {
         return new Response(
-          JSON.stringify({ success: false, error: 'Créditos agotados.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ success: false, error: 'Créditos de IA agotados. Intenta más tarde.' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
       return new Response(
         JSON.stringify({ success: false, error: 'Error al procesar la imagen.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
