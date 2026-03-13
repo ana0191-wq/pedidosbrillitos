@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        const apiKey = 'AIzaSyBIyrNbJD4LKivEn_-n1Y7UChO_S0IGEjk';
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: EXTRACTION_PROMPT },
           {
