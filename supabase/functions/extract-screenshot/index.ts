@@ -3,7 +3,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+const AI_GATEWAY = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
 const EXTRACTION_PROMPT = `Eres un experto en leer capturas de pantalla de pedidos de tiendas online (Temu, AliExpress, Shein, Amazon).
 
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get('LOVABLE_API_KEY');
+    const apiKey = Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) {
       return new Response(
         JSON.stringify({ success: false, error: 'AI no configurado.' }),
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'gemini-2.5-flash',
         messages: [
           { role: 'system', content: EXTRACTION_PROMPT },
           {
