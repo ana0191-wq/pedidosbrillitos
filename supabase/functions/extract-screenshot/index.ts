@@ -3,7 +3,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+const AI_GATEWAY = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
 const EXTRACTION_PROMPT = `Eres un experto en leer capturas de pantalla de pedidos de tiendas online (Temu, AliExpress, Shein, Amazon).
 
