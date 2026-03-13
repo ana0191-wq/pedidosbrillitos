@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = 'AIzaSyBIyrNbJD4LKivEn_-n1Y7UChO_S0IGEjk';
+    const apiKey = Deno.env.get('LOVABLE_API_KEY');
     if (!apiKey) {
       return new Response(
         JSON.stringify({ success: false, error: 'AI no configurado.' }),
