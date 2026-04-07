@@ -131,16 +131,19 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="merchandise">
-            <OrderSection
-              title="Mercancía"
-              emoji="📦"
-              category="merchandise"
-              orders={getByCategory('merchandise')}
-              statusOptions={['Pedido', 'En Tránsito', 'Parcialmente Recibido', 'Completo']}
-              onUpdate={updateOrder}
-              onDelete={deleteOrder}
-              onAdd={() => openDialog('merchandise')}
-            />
+            <div className="space-y-6">
+              <OrderSection
+                title="Mercancía"
+                emoji="📦"
+                category="merchandise"
+                orders={getByCategory('merchandise')}
+                statusOptions={['Pedido', 'En Tránsito', 'Parcialmente Recibido', 'Completo']}
+                onUpdate={updateOrder}
+                onDelete={deleteOrder}
+                onAdd={() => openDialog('merchandise')}
+              />
+              <AIPricingCalculator exchangeRate={exchangeRate} />
+            </div>
           </TabsContent>
 
           <TabsContent value="clients">
