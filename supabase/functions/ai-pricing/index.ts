@@ -20,13 +20,12 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { type } = body;
 
-    let prompt = '';
-    const parts: any[] = [];
+    let requestBody: any;
 
     if (type === 'merchandise') {
       const { productName, costUSD, exchangeRate, profitPercent, extraCosts, imageBase64 } = body;
 
-      prompt = `Eres el asistente de precios de Brillitos Store, una tienda de reventa venezolana.
+      const textPrompt = `Eres el asistente de precios de Brillitos Store, una tienda de reventa venezolana.
 Responde SOLO con JSON válido, sin markdown ni explicaciones.
 
 ${imageBase64 ? 'Analiza la imagen del producto y lee el precio si es visible.' : ''}
@@ -46,18 +45,30 @@ Calcula:
 
 Formato exacto: {"costUSD":0,"salePriceUSD":0,"salePriceVES":0,"profitUSD":0,"profitPercent":0,"suggestion":"..."}`;
 
+      const parts: any[] = [];
+
       if (imageBase64) {
-        const base64Data = imageBase64.startsWith('data:') 
-          ? imageBase64.split(',')[1] 
+        // Strip data URI prefix if present
+        const base64Data = imageBase64.startsWith('data:')
+          ? imageBase64.split(',')[1]
           : imageBase64;
-        parts.push({ inlineData: { mimeType: 'image/jpeg', data: base64Data } });
+        parts.push({ inline_data: { mime_type: 'image/jpeg', data: base64Data } });
       }
-      parts.push({ text: prompt });
+
+      parts.push({ text: textPrompt });
+
+      requestBody = {
+        contents: [{ parts }],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.3,
+        },
+      };
 
     } else if (type === 'shipping') {
       const { weight, destination, shippingType, exchangeRate } = body;
 
-      prompt = `Eres el asistente de envíos de Brillitos Store, una tienda venezolana.
+      const textPrompt = `Eres el asistente de envíos de Brillitos Store, una tienda venezolana.
 Responde SOLO con JSON válido, sin markdown ni explicaciones.
 
 Peso: ${weight} kg
@@ -73,7 +84,14 @@ Estima:
 
 Formato exacto: {"shippingUSD":0,"shippingVES":0,"estimatedDays":0,"suggestion":"..."}`;
 
-      parts.push({ text: prompt });
+      requestBody = {
+        contents: [{ parts: [{ text: textPrompt }] }],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.3,
+        },
+      };
+
     } else {
       return new Response(
         JSON.stringify({ success: false, error: 'Tipo no válido. Usa "merchandise" o "shipping".' }),
@@ -86,10 +104,7 @@ Formato exacto: {"shippingUSD":0,"shippingVES":0,"estimatedDays":0,"suggestion":
     const geminiResponse = await fetch(geminiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { temperature: 0.3 },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!geminiResponse.ok) {
