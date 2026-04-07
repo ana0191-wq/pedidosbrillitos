@@ -212,7 +212,7 @@ export function AIPricingCalculator({ exchangeRate }: AIPricingCalculatorProps) 
                   </div>
                   <div>
                     <span className="text-muted-foreground">Ganancia:</span>
-                    <span className="ml-1 font-semibold text-green-600">${merchResult.profitUSD?.toFixed(2)} ({merchResult.profitPercent?.toFixed(0)}%)</span>
+                    <span className="ml-1 font-semibold text-emerald-600 dark:text-emerald-400">${merchResult.profitUSD?.toFixed(2)} ({merchResult.profitPercent?.toFixed(0)}%)</span>
                   </div>
                 </div>
                 {merchResult.suggestion && (
