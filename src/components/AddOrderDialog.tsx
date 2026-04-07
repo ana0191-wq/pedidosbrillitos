@@ -78,19 +78,12 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
     }
   };
 
-  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleReceiptExtract = async () => {
+    if (!receiptImage) return;
     setLoading(true);
     try {
-      const reader = new FileReader();
-      const base64 = await new Promise<string>((resolve) => {
-        reader.onload = (ev) => resolve(ev.target?.result as string);
-        reader.readAsDataURL(file);
-      });
-
       const { data, error } = await supabase.functions.invoke('extract-order', {
-        body: { receiptImage: base64 },
+        body: { receiptImage },
       });
       if (error) throw error;
       if (data?.success && data.data) {
@@ -124,6 +117,7 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
     setShippingCost('');
     setAmountCharged('');
     setCategory(defaultCategory);
+    setReceiptImage(null);
   };
 
   const handleSubmit = () => {
