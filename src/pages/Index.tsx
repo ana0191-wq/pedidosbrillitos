@@ -12,6 +12,7 @@ import { AddOrderDialog } from '@/components/AddOrderDialog';
 import { ClientsSection } from '@/components/ClientsSection';
 import { ClientOrdersList } from '@/components/ClientOrdersList';
 import { ShippingCalculator } from '@/components/ShippingCalculator';
+import { AIPricingCalculator } from '@/components/AIPricingCalculator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -130,16 +131,19 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="merchandise">
-            <OrderSection
-              title="Mercancía"
-              emoji="📦"
-              category="merchandise"
-              orders={getByCategory('merchandise')}
-              statusOptions={['Pedido', 'En Tránsito', 'Parcialmente Recibido', 'Completo']}
-              onUpdate={updateOrder}
-              onDelete={deleteOrder}
-              onAdd={() => openDialog('merchandise')}
-            />
+            <div className="space-y-6">
+              <OrderSection
+                title="Mercancía"
+                emoji="📦"
+                category="merchandise"
+                orders={getByCategory('merchandise')}
+                statusOptions={['Pedido', 'En Tránsito', 'Parcialmente Recibido', 'Completo']}
+                onUpdate={updateOrder}
+                onDelete={deleteOrder}
+                onAdd={() => openDialog('merchandise')}
+              />
+              <AIPricingCalculator exchangeRate={exchangeRate} />
+            </div>
           </TabsContent>
 
           <TabsContent value="clients">

@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.exchange-rate]
 verify_jwt = false
+
+[functions.ai-pricing]
+verify_jwt = false
