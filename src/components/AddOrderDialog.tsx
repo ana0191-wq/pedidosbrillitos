@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Order, OrderCategory, Store } from '@/types/orders';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,23 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
   const [tab, setTab] = useState<'auto' | 'manual'>('auto');
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith("image/"));
+      if (!item) return;
+      const file = item.getAsFile();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => setReceiptImage(reader.result as string);
+      reader.readAsDataURL(file);
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [open]);
 
   // Manual form state
   const [category, setCategory] = useState<OrderCategory>(defaultCategory);
@@ -78,19 +95,12 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
     }
   };
 
-  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleReceiptExtract = async () => {
+    if (!receiptImage) return;
     setLoading(true);
     try {
-      const reader = new FileReader();
-      const base64 = await new Promise<string>((resolve) => {
-        reader.onload = (ev) => resolve(ev.target?.result as string);
-        reader.readAsDataURL(file);
-      });
-
       const { data, error } = await supabase.functions.invoke('extract-order', {
-        body: { receiptImage: base64 },
+        body: { receiptImage },
       });
       if (error) throw error;
       if (data?.success && data.data) {
@@ -124,6 +134,7 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
     setShippingCost('');
     setAmountCharged('');
     setCategory(defaultCategory);
+    setReceiptImage(null);
   };
 
   const handleSubmit = () => {
@@ -201,17 +212,37 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
               <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">o</span></div>
             </div>
 
-            {/* Receipt upload */}
+            {/* Receipt paste/upload zone */}
             <div>
-              <Label className="flex items-center gap-1"><Camera className="h-4 w-4" /> Subir recibo / captura de pantalla</Label>
-              <Input
+              <Label className="flex items-center gap-1"><Camera className="h-4 w-4" /> Captura de pantalla / recibo</Label>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-muted/50 transition mt-1"
+              >
+                {receiptImage
+                  ? <img src={receiptImage} className="max-h-40 mx-auto rounded" alt="Preview" />
+                  : <p className="text-sm text-muted-foreground">📋 Pega con Ctrl+V o haz clic para subir imagen</p>
+                }
+              </div>
+              <input
+                ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                onChange={handleReceiptUpload}
-                disabled={loading}
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => setReceiptImage(reader.result as string);
+                  reader.readAsDataURL(file);
+                }}
               />
-              <p className="text-xs text-muted-foreground mt-1">Sube una foto del recibo o captura de confirmación de pedido</p>
             </div>
+            {receiptImage && (
+              <Button onClick={handleReceiptExtract} disabled={loading} className="w-full">
+                {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Extrayendo...</> : <><Sparkles className="h-4 w-4 mr-2" /> Extraer Datos del Recibo</>}
+              </Button>
+            )}
 
             {loading && (
               <div className="flex items-center justify-center py-4 text-muted-foreground text-sm">
