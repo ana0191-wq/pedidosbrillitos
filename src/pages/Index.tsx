@@ -12,6 +12,7 @@ import { AddOrderDialog } from '@/components/AddOrderDialog';
 import { ClientsSection } from '@/components/ClientsSection';
 import { ClientOrdersList } from '@/components/ClientOrdersList';
 import { ShippingCalculator } from '@/components/ShippingCalculator';
+import { AIPricingCalculator } from '@/components/AIPricingCalculator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
