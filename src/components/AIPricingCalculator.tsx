@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Sparkles, DollarSign, Truck, ImageIcon } from 'lucide-react';
+import { Loader2, Sparkles, DollarSign, Truck, ImageIcon, Upload, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -16,10 +16,10 @@ interface AIPricingCalculatorProps {
 export function AIPricingCalculator({ exchangeRate }: AIPricingCalculatorProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Merchandise
   const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [productName, setProductName] = useState('');
   const [costUSD, setCostUSD] = useState('');
   const [profitPercent, setProfitPercent] = useState('30');
@@ -32,23 +32,34 @@ export function AIPricingCalculator({ exchangeRate }: AIPricingCalculatorProps) 
   const [shippingType, setShippingType] = useState('aereo');
   const [shipResult, setShipResult] = useState<any>(null);
 
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          setImageBase64(result);
-          setImagePreview(result);
-        };
-        reader.readAsDataURL(file);
-        return;
-      }
-    }
+  // Global paste listener
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith("image/"));
+      if (!item) return;
+      const file = item.getAsFile();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        setImageBase64(result.split(",")[1]);
+      };
+      reader.readAsDataURL(file);
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setImageBase64(result.split(",")[1]);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const calculate = async (type: 'merchandise' | 'shipping') => {
@@ -119,28 +130,39 @@ export function AIPricingCalculator({ exchangeRate }: AIPricingCalculatorProps) 
           </TabsList>
 
           <TabsContent value="merchandise" className="space-y-3">
-            {/* Paste zone */}
+            {/* Image zone */}
             <div
-              onPaste={handlePaste}
-              className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors focus-within:border-primary"
-              tabIndex={0}
+              onClick={() => !imageBase64 && fileInputRef.current?.click()}
+              className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
             >
-              {imagePreview ? (
+              {imageBase64 ? (
                 <div className="flex flex-col items-center gap-2">
-                  <img src={imagePreview} alt="Preview" className="max-h-32 rounded-md object-contain" />
+                  <img
+                    src={`data:image/jpeg;base64,${imageBase64}`}
+                    alt="Preview"
+                    className="max-h-40 rounded-md object-contain"
+                  />
                   <button
-                    onClick={() => { setImageBase64(null); setImagePreview(null); }}
-                    className="text-xs text-muted-foreground hover:text-destructive"
+                    onClick={(e) => { e.stopPropagation(); setImageBase64(null); }}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
                   >
-                    Quitar imagen
+                    <X className="h-3 w-3" /> Quitar imagen
                   </button>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-1 text-muted-foreground">
                   <ImageIcon className="h-8 w-8" />
-                  <p className="text-sm">Pega una captura aquí (Ctrl+V)</p>
+                  <p className="text-sm">Pega una captura (Ctrl+V) o haz clic para subir</p>
+                  <Upload className="h-4 w-4 mt-1" />
                 </div>
               )}
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
