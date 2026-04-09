@@ -165,6 +165,7 @@ const Index = () => {
               onDeleteOrder={deleteClientOrder}
               getOrdersByClient={getByClient}
               exchangeRate={exchangeRate}
+              shippingSettings={shippingSettings}
             />
           </TabsContent>
 
