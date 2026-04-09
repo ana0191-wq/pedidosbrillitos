@@ -11,6 +11,14 @@ export interface ClientOrderProduct {
   orderNumber: string;
   status: string;
   arrived: boolean;
+  weightLb: number | null;
+  lengthIn: number | null;
+  widthIn: number | null;
+  heightIn: number | null;
+  salePriceUsd: number | null;
+  salePriceVes: number | null;
+  shippingChargeClient: number | null;
+  pricesConfirmed: boolean;
 }
 
 export interface ClientOrder {
@@ -72,6 +80,14 @@ export function useClientOrders() {
           orderNumber: p.order_number || '',
           status: p.status,
           arrived: !!p.arrived,
+          weightLb: p.weight_lb != null ? Number(p.weight_lb) : null,
+          lengthIn: p.length_in != null ? Number(p.length_in) : null,
+          widthIn: p.width_in != null ? Number(p.width_in) : null,
+          heightIn: p.height_in != null ? Number(p.height_in) : null,
+          salePriceUsd: p.sale_price_usd != null ? Number(p.sale_price_usd) : null,
+          salePriceVes: p.sale_price_ves != null ? Number(p.sale_price_ves) : null,
+          shippingChargeClient: p.shipping_charge_client != null ? Number(p.shipping_charge_client) : null,
+          pricesConfirmed: !!p.prices_confirmed,
         });
       });
     }

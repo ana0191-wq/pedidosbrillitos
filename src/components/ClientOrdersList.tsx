@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Trash2, Package, DollarSign, Plus, Pencil, CheckCircle2, Circle } from 'lucide-react';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { Client } from '@/hooks/useClients';
+import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 
@@ -16,9 +17,10 @@ interface ClientOrdersListProps {
   onUpdateOrder: (id: string, updates: Record<string, any>) => void;
   onDeleteOrder: (id: string) => void;
   exchangeRate: number | null;
+  shippingSettings?: ShippingSettings;
 }
 
-export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, exchangeRate }: ClientOrdersListProps) {
+export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings }: ClientOrdersListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
   const fmt = (n: number) => `$${n.toFixed(2)}`;
@@ -49,6 +51,7 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
         onUpdateOrder={onUpdateOrder}
         onDeleteOrder={onDeleteOrder}
         exchangeRate={exchangeRate}
+        shippingSettings={shippingSettings}
       />
 
       {clientOrders.length === 0 ? (
