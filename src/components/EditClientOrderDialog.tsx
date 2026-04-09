@@ -132,6 +132,21 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     return { totalSaleUsd, totalShippingClient, totalChargeClient, totalChargeVes, totalCostUsd, totalShippingMy, profit };
   }, [products, productDims, productCalcs, exchangeRate]);
 
+  if (!order) return null;
+
+  const updateDim = (id: string, field: keyof ProductDims, value: any) => {
+    setProductDims(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  };
+
+  const updateLocalProduct = (id: string, field: keyof ClientOrderProduct, value: any) => {
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
+  const handleDeleteProduct = (productId: string) => {
+    deleteProduct(productId);
+    setProducts(prev => prev.filter(p => p.id !== productId));
+  };
+
   const confirmPrices = async (productId: string) => {
     const d = productDims[productId];
     const calc = productCalcs[productId];
