@@ -20,7 +20,7 @@ interface ClientOrdersListProps {
   shippingSettings?: ShippingSettings;
 }
 
-export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, exchangeRate }: ClientOrdersListProps) {
+export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings }: ClientOrdersListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
   const fmt = (n: number) => `$${n.toFixed(2)}`;
