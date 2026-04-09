@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, ChevronDown, ChevronUp, Trash2, Package, DollarSign, Phone, Pencil, CheckCircle2, Circle } from 'lucide-react';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
+import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +26,7 @@ interface ClientsSectionProps {
   onDeleteOrder: (id: string) => void;
   getOrdersByClient: (clientId: string) => ClientOrder[];
   exchangeRate: number | null;
+  shippingSettings?: ShippingSettings;
 }
 
 export function ClientsSection({
