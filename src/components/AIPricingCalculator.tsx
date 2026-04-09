@@ -219,6 +219,11 @@ export function AIPricingCalculator({ exchangeRate }: AIPricingCalculatorProps) 
 
             {merchResult && (
               <div className="bg-card rounded-lg p-4 border space-y-2">
+                {merchResult.productName && (
+                  <p className="font-semibold text-sm">{merchResult.productName}
+                    {merchResult.isSet && <span className="ml-1 text-xs text-primary">(Set de {merchResult.setQuantity})</span>}
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Costo:</span>
@@ -236,6 +241,18 @@ export function AIPricingCalculator({ exchangeRate }: AIPricingCalculatorProps) 
                     <span className="text-muted-foreground">Ganancia:</span>
                     <span className="ml-1 font-semibold text-emerald-600 dark:text-emerald-400">${merchResult.profitUSD?.toFixed(2)} ({merchResult.profitPercent?.toFixed(0)}%)</span>
                   </div>
+                  {merchResult.isSet && (
+                    <>
+                      <div>
+                        <span className="text-muted-foreground">c/u USD:</span>
+                        <span className="ml-1 font-semibold">${merchResult.salePricePerUnitUSD?.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">c/u Bs:</span>
+                        <span className="ml-1 font-semibold">Bs {merchResult.salePricePerUnitVES?.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
                 {merchResult.suggestion && (
                   <p className="text-xs italic text-muted-foreground border-t pt-2 mt-2">💡 {merchResult.suggestion}</p>
