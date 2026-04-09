@@ -177,6 +177,7 @@ const Index = () => {
               onUpdateOrder={updateClientOrder}
               onDeleteOrder={deleteClientOrder}
               exchangeRate={exchangeRate}
+              shippingSettings={shippingSettings}
             />
           </TabsContent>
 
