@@ -152,7 +152,9 @@ export type Database = {
           delivery_notes: string | null
           estimated_arrival: string | null
           euro_rate: number | null
+          height_in: number | null
           id: string
+          length_in: number | null
           notes: string | null
           order_date: string | null
           order_number: string | null
@@ -160,8 +162,12 @@ export type Database = {
           payment_method: string | null
           price_paid: number
           price_per_unit: number | null
+          prices_confirmed: boolean
           product_name: string
           product_photo: string | null
+          sale_price_usd: number | null
+          sale_price_ves: number | null
+          shipping_charge_client: number | null
           shipping_cost: number | null
           status: string
           store: string
@@ -170,6 +176,8 @@ export type Database = {
           units_received: number | null
           updated_at: string
           user_id: string
+          weight_lb: number | null
+          width_in: number | null
         }
         Insert: {
           amount_charged?: number | null
@@ -183,7 +191,9 @@ export type Database = {
           delivery_notes?: string | null
           estimated_arrival?: string | null
           euro_rate?: number | null
+          height_in?: number | null
           id?: string
+          length_in?: number | null
           notes?: string | null
           order_date?: string | null
           order_number?: string | null
@@ -191,8 +201,12 @@ export type Database = {
           payment_method?: string | null
           price_paid?: number
           price_per_unit?: number | null
+          prices_confirmed?: boolean
           product_name: string
           product_photo?: string | null
+          sale_price_usd?: number | null
+          sale_price_ves?: number | null
+          shipping_charge_client?: number | null
           shipping_cost?: number | null
           status?: string
           store: string
@@ -201,6 +215,8 @@ export type Database = {
           units_received?: number | null
           updated_at?: string
           user_id: string
+          weight_lb?: number | null
+          width_in?: number | null
         }
         Update: {
           amount_charged?: number | null
@@ -214,7 +230,9 @@ export type Database = {
           delivery_notes?: string | null
           estimated_arrival?: string | null
           euro_rate?: number | null
+          height_in?: number | null
           id?: string
+          length_in?: number | null
           notes?: string | null
           order_date?: string | null
           order_number?: string | null
@@ -222,8 +240,12 @@ export type Database = {
           payment_method?: string | null
           price_paid?: number
           price_per_unit?: number | null
+          prices_confirmed?: boolean
           product_name?: string
           product_photo?: string | null
+          sale_price_usd?: number | null
+          sale_price_ves?: number | null
+          shipping_charge_client?: number | null
           shipping_cost?: number | null
           status?: string
           store?: string
@@ -232,6 +254,8 @@ export type Database = {
           units_received?: number | null
           updated_at?: string
           user_id?: string
+          weight_lb?: number | null
+          width_in?: number | null
         }
         Relationships: [
           {
