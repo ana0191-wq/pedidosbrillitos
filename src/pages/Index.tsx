@@ -87,7 +87,7 @@ const Index = () => {
 
       <main className="container max-w-4xl mx-auto px-4 py-4 pb-24">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full grid grid-cols-3 sm:grid-cols-6 mb-6">
+          <TabsList className="w-full grid grid-cols-4 sm:grid-cols-7 mb-6">
             <TabsTrigger value="dashboard" className="gap-1 text-xs">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Inicio</span>
@@ -109,6 +109,10 @@ const Index = () => {
             <TabsTrigger value="client-orders" className="gap-1 text-xs">
               <ClipboardList className="h-4 w-4" />
               <span className="hidden sm:inline">Pedidos C.</span>
+            </TabsTrigger>
+            <TabsTrigger value="catalog" className="gap-1 text-xs">
+              <Store className="h-4 w-4" />
+              <span className="hidden sm:inline">Catálogo</span>
             </TabsTrigger>
             <TabsTrigger value="shipping" className="gap-1 text-xs">
               <Calculator className="h-4 w-4" />
