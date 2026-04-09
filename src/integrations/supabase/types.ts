@@ -142,16 +142,22 @@ export type Database = {
       orders: {
         Row: {
           amount_charged: number | null
+          amount_paid: number | null
           arrived: boolean
           category: string
           client_name: string | null
           client_order_id: string | null
           created_at: string
+          delivered_at: string | null
+          delivery_notes: string | null
           estimated_arrival: string | null
+          euro_rate: number | null
           id: string
           notes: string | null
           order_date: string | null
           order_number: string | null
+          payment_currency: string | null
+          payment_method: string | null
           price_paid: number
           price_per_unit: number | null
           product_name: string
@@ -167,16 +173,22 @@ export type Database = {
         }
         Insert: {
           amount_charged?: number | null
+          amount_paid?: number | null
           arrived?: boolean
           category: string
           client_name?: string | null
           client_order_id?: string | null
           created_at?: string
+          delivered_at?: string | null
+          delivery_notes?: string | null
           estimated_arrival?: string | null
+          euro_rate?: number | null
           id?: string
           notes?: string | null
           order_date?: string | null
           order_number?: string | null
+          payment_currency?: string | null
+          payment_method?: string | null
           price_paid?: number
           price_per_unit?: number | null
           product_name: string
@@ -192,16 +204,22 @@ export type Database = {
         }
         Update: {
           amount_charged?: number | null
+          amount_paid?: number | null
           arrived?: boolean
           category?: string
           client_name?: string | null
           client_order_id?: string | null
           created_at?: string
+          delivered_at?: string | null
+          delivery_notes?: string | null
           estimated_arrival?: string | null
+          euro_rate?: number | null
           id?: string
           notes?: string | null
           order_date?: string | null
           order_number?: string | null
+          payment_currency?: string | null
+          payment_method?: string | null
           price_paid?: number
           price_per_unit?: number | null
           product_name?: string
@@ -224,6 +242,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      products: {
+        Row: {
+          cost_usd: number | null
+          created_at: string
+          description: string | null
+          id: string
+          images: string[] | null
+          is_published: boolean | null
+          is_set: boolean | null
+          name: string
+          sale_price_usd: number | null
+          sale_price_ves: number | null
+          set_quantity: number | null
+          stock: number | null
+          store: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cost_usd?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          images?: string[] | null
+          is_published?: boolean | null
+          is_set?: boolean | null
+          name: string
+          sale_price_usd?: number | null
+          sale_price_ves?: number | null
+          set_quantity?: number | null
+          stock?: number | null
+          store?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cost_usd?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          images?: string[] | null
+          is_published?: boolean | null
+          is_set?: boolean | null
+          name?: string
+          sale_price_usd?: number | null
+          sale_price_ves?: number | null
+          set_quantity?: number | null
+          stock?: number | null
+          store?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       shipping_settings: {
         Row: {

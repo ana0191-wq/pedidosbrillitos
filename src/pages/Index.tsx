@@ -3,6 +3,7 @@ import { useOrders } from '@/hooks/useOrders';
 import { useClients } from '@/hooks/useClients';
 import { useClientOrders } from '@/hooks/useClientOrders';
 import { useShippingSettings } from '@/hooks/useShippingSettings';
+import { useProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/hooks/useAuth';
 import type { OrderCategory } from '@/types/orders';
 import { Dashboard } from '@/components/Dashboard';
@@ -13,8 +14,9 @@ import { ClientsSection } from '@/components/ClientsSection';
 import { ClientOrdersList } from '@/components/ClientOrdersList';
 import { ShippingCalculator } from '@/components/ShippingCalculator';
 import { AIPricingCalculator } from '@/components/AIPricingCalculator';
+import { CatalogSection } from '@/components/CatalogSection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, RefreshCw } from 'lucide-react';
+import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, Store } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,6 +26,7 @@ const Index = () => {
   const { clients, addClient, deleteClient } = useClients();
   const { clientOrders, addClientOrder, updateClientOrder, deleteClientOrder, getByClient } = useClientOrders();
   const { settings: shippingSettings, saveSettings } = useShippingSettings();
+  const { products, addProduct, updateProduct, deleteProduct } = useProducts();
   const { signOut } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogCategory, setDialogCategory] = useState<OrderCategory>('personal');
@@ -84,7 +87,7 @@ const Index = () => {
 
       <main className="container max-w-4xl mx-auto px-4 py-4 pb-24">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full grid grid-cols-3 sm:grid-cols-6 mb-6">
+          <TabsList className="w-full grid grid-cols-4 sm:grid-cols-7 mb-6">
             <TabsTrigger value="dashboard" className="gap-1 text-xs">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Inicio</span>
@@ -106,6 +109,10 @@ const Index = () => {
             <TabsTrigger value="client-orders" className="gap-1 text-xs">
               <ClipboardList className="h-4 w-4" />
               <span className="hidden sm:inline">Pedidos C.</span>
+            </TabsTrigger>
+            <TabsTrigger value="catalog" className="gap-1 text-xs">
+              <Store className="h-4 w-4" />
+              <span className="hidden sm:inline">Catálogo</span>
             </TabsTrigger>
             <TabsTrigger value="shipping" className="gap-1 text-xs">
               <Calculator className="h-4 w-4" />
@@ -169,6 +176,16 @@ const Index = () => {
               onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
               onUpdateOrder={updateClientOrder}
               onDeleteOrder={deleteClientOrder}
+              exchangeRate={exchangeRate}
+            />
+          </TabsContent>
+
+          <TabsContent value="catalog">
+            <CatalogSection
+              products={products}
+              onAdd={addProduct}
+              onUpdate={updateProduct}
+              onDelete={deleteProduct}
               exchangeRate={exchangeRate}
             />
           </TabsContent>

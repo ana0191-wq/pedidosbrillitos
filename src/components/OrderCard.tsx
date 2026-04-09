@@ -1,12 +1,13 @@
 import { useState, useRef } from 'react';
-import type { Order, MerchandiseOrder, ClientOrder, OrderCategory } from '@/types/orders';
+import type { Order, MerchandiseOrder, ClientOrder, OrderCategory, PaymentMethod, PaymentCurrency } from '@/types/orders';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
-import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X } from 'lucide-react';
+import { PaymentMethodSelector, CurrencySelector } from '@/components/PaymentMethodSelector';
+import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign } from 'lucide-react';
 
 interface OrderCardProps {
   order: Order;
@@ -408,6 +409,32 @@ export function OrderCard({ order, onUpdate, onDelete }: OrderCardProps) {
                   </div>
 
                   {order.notes && <p className="text-sm text-muted-foreground italic">"{order.notes}"</p>}
+
+                  {/* Payment tracking */}
+                  <div className="rounded-md bg-muted/30 border border-border p-3 space-y-2">
+                    <p className="text-xs font-semibold text-foreground flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Pago</p>
+                    <PaymentMethodSelector
+                      selected={order.paymentMethod as PaymentMethod || null}
+                      onSelect={(m) => onUpdate(order.id, { paymentMethod: m } as any)}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Monto pagado"
+                        defaultValue={order.amountPaid ?? ''}
+                        onBlur={(e) => onUpdate(order.id, { amountPaid: parseFloat(e.target.value) || null } as any)}
+                        className="h-7 text-xs w-28"
+                      />
+                      <CurrencySelector
+                        selected={order.paymentCurrency as PaymentCurrency || null}
+                        onSelect={(c) => onUpdate(order.id, { paymentCurrency: c } as any)}
+                      />
+                    </div>
+                    {order.deliveredAt && (
+                      <p className="text-xs text-muted-foreground">✅ Entregado: {new Date(order.deliveredAt).toLocaleDateString('es-ES')}</p>
+                    )}
+                  </div>
                 </>
               )}
 
