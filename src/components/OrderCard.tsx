@@ -1,12 +1,13 @@
 import { useState, useRef } from 'react';
-import type { Order, MerchandiseOrder, ClientOrder, OrderCategory } from '@/types/orders';
+import type { Order, MerchandiseOrder, ClientOrder, OrderCategory, PaymentMethod, PaymentCurrency } from '@/types/orders';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
-import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X } from 'lucide-react';
+import { PaymentMethodSelector, CurrencySelector } from '@/components/PaymentMethodSelector';
+import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign } from 'lucide-react';
 
 interface OrderCardProps {
   order: Order;
