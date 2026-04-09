@@ -11,6 +11,14 @@ export interface ClientOrderProduct {
   orderNumber: string;
   status: string;
   arrived: boolean;
+  weightLb: number | null;
+  lengthIn: number | null;
+  widthIn: number | null;
+  heightIn: number | null;
+  salePriceUsd: number | null;
+  salePriceVes: number | null;
+  shippingChargeClient: number | null;
+  pricesConfirmed: boolean;
 }
 
 export interface ClientOrder {
