@@ -51,6 +51,7 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
         onUpdateOrder={onUpdateOrder}
         onDeleteOrder={onDeleteOrder}
         exchangeRate={exchangeRate}
+        shippingSettings={shippingSettings}
       />
 
       {clientOrders.length === 0 ? (
