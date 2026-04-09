@@ -180,6 +180,16 @@ const Index = () => {
             />
           </TabsContent>
 
+          <TabsContent value="catalog">
+            <CatalogSection
+              products={products}
+              onAdd={addProduct}
+              onUpdate={updateProduct}
+              onDelete={deleteProduct}
+              exchangeRate={exchangeRate}
+            />
+          </TabsContent>
+
           <TabsContent value="shipping">
             <ShippingCalculator settings={shippingSettings} onSaveSettings={saveSettings} />
           </TabsContent>
