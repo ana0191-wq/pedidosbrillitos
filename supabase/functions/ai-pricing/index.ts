@@ -28,27 +28,36 @@ Deno.serve(async (req) => {
       const textPrompt = `Eres el asistente de precios de Brillitos Store, una tienda de reventa venezolana.
 Responde SOLO con JSON válido, sin markdown ni explicaciones.
 
-${imageBase64 ? 'Analiza la imagen del producto y lee el precio si es visible.' : ''}
+${imageBase64 ? 'Analiza la imagen del producto y lee el precio y nombre si son visibles.' : ''}
 ${productName ? `Producto: ${productName}` : ''}
 ${costUSD ? `Costo en USD: $${costUSD}` : 'Lee el costo de la imagen si está disponible.'}
 Tasa de cambio: ${exchangeRate} Bs/$
 Porcentaje de ganancia deseado: ${profitPercent}%
 Costos extra (envío, etc.): $${extraCosts || 0}
 
-Calcula:
-1. costUSD: costo real del producto en USD
-2. salePriceUSD: precio de venta en USD (costo + extras + margen)
-3. salePriceVES: precio de venta en Bs (salePriceUSD × tasa)
-4. profitUSD: ganancia neta en USD
-5. profitPercent: porcentaje de ganancia real
-6. suggestion: recomendación breve en español (max 100 chars)
+IMPORTANTE: Detecta si el producto es un set o paquete. Busca palabras como "set of", "pack of", "pcs", "unidades", "x2", "x3", "2 pcs", "3 pack", "set de 2", etc.
+Si es un set, calcula también el precio por unidad.
 
-Formato exacto: {"costUSD":0,"salePriceUSD":0,"salePriceVES":0,"profitUSD":0,"profitPercent":0,"suggestion":"..."}`;
+Calcula:
+1. productName: nombre del producto detectado
+2. isSet: true si es un set/pack/bundle, false si es unidad individual
+3. setQuantity: cantidad de unidades en el set (1 si no es set)
+4. costUSD: costo total del producto en USD
+5. costPerUnitUSD: costo por unidad (costUSD / setQuantity)
+6. salePriceUSD: precio de venta total en USD (costo + extras + margen)
+7. salePriceVES: precio de venta total en Bs
+8. salePricePerUnitUSD: precio de venta por unidad en USD
+9. salePricePerUnitVES: precio de venta por unidad en Bs
+10. profitUSD: ganancia neta total en USD
+11. profitPercent: porcentaje de ganancia real
+12. suggestion: recomendación breve en español (max 100 chars)
+
+Formato exacto:
+{"productName":"...","isSet":false,"setQuantity":1,"costUSD":0,"costPerUnitUSD":0,"salePriceUSD":0,"salePriceVES":0,"salePricePerUnitUSD":0,"salePricePerUnitVES":0,"profitUSD":0,"profitPercent":0,"suggestion":"..."}`;
 
       const parts: any[] = [];
 
       if (imageBase64) {
-        // Strip data URI prefix if present
         const base64Data = imageBase64.startsWith('data:')
           ? imageBase64.split(',')[1]
           : imageBase64;
