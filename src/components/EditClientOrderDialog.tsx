@@ -89,22 +89,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     }
   }, [order, open]);
 
-  if (!order) return null;
-
-  const updateDim = (id: string, field: keyof ProductDims, value: any) => {
-    setProductDims(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
-  };
-
-  const updateLocalProduct = (id: string, field: keyof ClientOrderProduct, value: any) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
-  };
-
-  const handleDeleteProduct = (productId: string) => {
-    deleteProduct(productId);
-    setProducts(prev => prev.filter(p => p.id !== productId));
-  };
-
-  // Per-product calcs
+  // Per-product calcs - must be before early return
   const productCalcs = useMemo(() => {
     const calcs: Record<string, ReturnType<typeof calcProductShipping> & { suggestedSaleUsd: number }> = {};
     products.forEach(p => {
