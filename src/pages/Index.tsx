@@ -26,6 +26,7 @@ const Index = () => {
   const { clients, addClient, deleteClient } = useClients();
   const { clientOrders, addClientOrder, updateClientOrder, deleteClientOrder, getByClient } = useClientOrders();
   const { settings: shippingSettings, saveSettings } = useShippingSettings();
+  const { products, addProduct, updateProduct, deleteProduct } = useProducts();
   const { signOut } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogCategory, setDialogCategory] = useState<OrderCategory>('personal');
