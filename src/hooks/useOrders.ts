@@ -33,6 +33,12 @@ export function useOrders() {
         createdAt: row.created_at,
         status: row.status,
         category: row.category as OrderCategory,
+        amountPaid: row.amount_paid != null ? Number(row.amount_paid) : null,
+        paymentMethod: row.payment_method || null,
+        paymentCurrency: row.payment_currency || null,
+        euroRate: row.euro_rate != null ? Number(row.euro_rate) : null,
+        deliveryNotes: row.delivery_notes || null,
+        deliveredAt: row.delivered_at || null,
       };
 
       if (row.category === 'merchandise') {
@@ -59,7 +65,7 @@ export function useOrders() {
       category: order.category,
       product_name: order.productName,
       product_photo: order.productPhoto,
-      store: order.store,
+      store: order.store.toLowerCase(),
       price_paid: order.pricePaid,
       order_date: order.orderDate || null,
       estimated_arrival: order.estimatedArrival || null,
@@ -96,7 +102,7 @@ export function useOrders() {
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.category !== undefined) row.category = updates.category;
     if ((updates as any).productName !== undefined) row.product_name = (updates as any).productName;
-    if ((updates as any).store !== undefined) row.store = (updates as any).store;
+    if ((updates as any).store !== undefined) row.store = String((updates as any).store).toLowerCase();
     if ((updates as any).pricePaid !== undefined) row.price_paid = (updates as any).pricePaid;
     if ((updates as any).orderDate !== undefined) row.order_date = (updates as any).orderDate || null;
     if ((updates as any).estimatedArrival !== undefined) row.estimated_arrival = (updates as any).estimatedArrival || null;
@@ -110,6 +116,18 @@ export function useOrders() {
     if (updates.notes !== undefined) row.notes = updates.notes;
     if ((updates as any).suggestedPrice !== undefined) row.suggested_price = (updates as any).suggestedPrice;
     if ((updates as any).arrived !== undefined) row.arrived = (updates as any).arrived;
+    // Payment fields
+    if ((updates as any).amountPaid !== undefined) row.amount_paid = (updates as any).amountPaid;
+    if ((updates as any).paymentMethod !== undefined) row.payment_method = (updates as any).paymentMethod;
+    if ((updates as any).paymentCurrency !== undefined) row.payment_currency = (updates as any).paymentCurrency;
+    if ((updates as any).euroRate !== undefined) row.euro_rate = (updates as any).euroRate;
+    if ((updates as any).deliveryNotes !== undefined) row.delivery_notes = (updates as any).deliveryNotes;
+    if ((updates as any).deliveredAt !== undefined) row.delivered_at = (updates as any).deliveredAt;
+
+    // Auto-set delivered_at when status changes to Entregado
+    if (updates.status === 'Entregado' && !row.delivered_at) {
+      row.delivered_at = new Date().toISOString();
+    }
 
     const { error } = await supabase.from('orders').update(row).eq('id', id);
     if (error) {
