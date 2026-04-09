@@ -214,6 +214,7 @@ export function ClientsSection({
         onUpdateOrder={onUpdateOrder}
         onDeleteOrder={onDeleteOrder}
         exchangeRate={exchangeRate}
+        shippingSettings={shippingSettings}
       />
     </div>
   );
