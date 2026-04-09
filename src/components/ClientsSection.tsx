@@ -31,7 +31,7 @@ interface ClientsSectionProps {
 
 export function ClientsSection({
   clients, clientOrders, onAddClient, onDeleteClient,
-  onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, getOrdersByClient, exchangeRate
+  onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, getOrdersByClient, exchangeRate, shippingSettings
 }: ClientsSectionProps) {
   const { toast } = useToast();
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
