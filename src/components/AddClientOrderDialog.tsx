@@ -263,6 +263,9 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [manualPrice, setManualPrice] = useState('');
   const [manualLink, setManualLink] = useState('');
   const [manualNotes, setManualNotes] = useState('');
+  const [manualImage, setManualImage] = useState('');
+  const [manualAIStatus, setManualAIStatus] = useState<'idle' | 'loading' | 'success' | 'partial'>('idle');
+  const manualFileRef = useRef<HTMLInputElement>(null);
 
   const totalProducts = products.reduce((s, p) => s + p.pricePaid, 0);
 
@@ -313,6 +316,121 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
               </Button>
             ) : (
               <div className="p-3 rounded-md border border-border space-y-2 bg-muted/20">
+                {/* Image upload zone */}
+                <div>
+                  <input
+                    ref={manualFileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = async (ev) => {
+                        const base64 = ev.target?.result as string;
+                        const compressed = await compressImage(base64, 1200);
+                        setManualImage(compressed);
+                        // Try AI extraction
+                        setManualAIStatus('loading');
+                        try {
+                          const { data, error } = await supabase.functions.invoke('ai-pricing', {
+                            body: { type: 'product-extract', imageBase64: compressed },
+                          });
+                          if (!error && data?.success && data?.data) {
+                            const d = data.data;
+                            let filled = 0;
+                            if (d.product_name) { setManualName(d.product_name); filled++; }
+                            if (d.price != null && d.price > 0) { setManualPrice(String(d.price)); filled++; }
+                            if (d.store) {
+                              const storeMap: Record<string, string> = { amazon: 'Amazon', shein: 'Shein', temu: 'Temu', aliexpress: 'AliExpress' };
+                              setManualStore(storeMap[d.store.toLowerCase()] || 'Otra');
+                              filled++;
+                            }
+                            setManualAIStatus(filled >= 2 ? 'success' : 'partial');
+                          } else {
+                            setManualAIStatus('partial');
+                          }
+                        } catch {
+                          setManualAIStatus('partial');
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  {!manualImage ? (
+                    <div
+                      onClick={() => manualFileRef.current?.click()}
+                      onPaste={async (e) => {
+                        const items = e.clipboardData?.items;
+                        if (!items) return;
+                        for (const item of Array.from(items)) {
+                          if (item.type.startsWith('image/')) {
+                            e.preventDefault();
+                            const file = item.getAsFile();
+                            if (!file) continue;
+                            const reader = new FileReader();
+                            reader.onload = async (ev) => {
+                              const base64 = ev.target?.result as string;
+                              const compressed = await compressImage(base64, 1200);
+                              setManualImage(compressed);
+                              setManualAIStatus('loading');
+                              try {
+                                const { data, error } = await supabase.functions.invoke('ai-pricing', {
+                                  body: { type: 'product-extract', imageBase64: compressed },
+                                });
+                                if (!error && data?.success && data?.data) {
+                                  const d = data.data;
+                                  let filled = 0;
+                                  if (d.product_name) { setManualName(d.product_name); filled++; }
+                                  if (d.price != null && d.price > 0) { setManualPrice(String(d.price)); filled++; }
+                                  if (d.store) {
+                                    const storeMap: Record<string, string> = { amazon: 'Amazon', shein: 'Shein', temu: 'Temu', aliexpress: 'AliExpress' };
+                                    setManualStore(storeMap[d.store.toLowerCase()] || 'Otra');
+                                    filled++;
+                                  }
+                                  setManualAIStatus(filled >= 2 ? 'success' : 'partial');
+                                } else {
+                                  setManualAIStatus('partial');
+                                }
+                              } catch {
+                                setManualAIStatus('partial');
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                            return;
+                          }
+                        }
+                      }}
+                      tabIndex={0}
+                      className="w-full h-16 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-md cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                    >
+                      <span className="text-xs text-muted-foreground">📎 Pega imagen (Ctrl+V) o haz clic para subir</span>
+                      <span className="text-[10px] text-muted-foreground/60">Acepta: PNG, JPG, WEBP, screenshots</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="h-12 w-12 rounded bg-muted overflow-hidden flex-shrink-0">
+                        <img src={manualImage} alt="" className="h-full w-full object-cover" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {manualAIStatus === 'loading' && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Analizando imagen...</p>
+                        )}
+                        {manualAIStatus === 'success' && (
+                          <p className="text-xs text-green-600">✅ Detectado automáticamente — revisa y ajusta si es necesario</p>
+                        )}
+                        {manualAIStatus === 'partial' && (
+                          <p className="text-xs text-amber-600">⚠️ No pude leer todos los datos — completa manualmente</p>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive flex-shrink-0" onClick={() => { setManualImage(''); setManualAIStatus('idle'); }}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <Input
                     value={manualName}
@@ -354,7 +472,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
                   className="h-7 text-xs"
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" className="h-7 text-xs flex-1" onClick={() => {
+                  <Button size="sm" className="h-7 text-xs flex-1" disabled={manualAIStatus === 'loading'} onClick={() => {
                     if (!manualName.trim()) return;
                     setProducts(prev => [...prev, {
                       productName: manualName.trim(),
@@ -363,18 +481,20 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
                       pricePerUnit: parseFloat(manualPrice) || 0,
                       unitsOrdered: 1,
                       orderNumber: '',
-                      croppedImage: '',
+                      croppedImage: manualImage,
                     }]);
                     setManualName('');
                     setManualStore('Amazon');
                     setManualPrice('');
                     setManualLink('');
                     setManualNotes('');
+                    setManualImage('');
+                    setManualAIStatus('idle');
                     setShowManualForm(false);
                   }}>
                     <Plus className="h-3 w-3 mr-1" /> Agregar
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowManualForm(false)}>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowManualForm(false); setManualImage(''); setManualAIStatus('idle'); }}>
                     Cancelar
                   </Button>
                 </div>
