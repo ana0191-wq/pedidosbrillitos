@@ -54,6 +54,7 @@ function Pill({ label, active, onClick }: { label: string; active: boolean; onCl
 export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings }: EditClientOrderDialogProps) {
   const { updateOrder: updateProduct, deleteOrder: deleteProduct } = useOrders();
   const [status, setStatus] = useState('');
+  const [quotationData, setQuotationData] = useState<any>(null);
   const [notes, setNotes] = useState('');
   const [products, setProducts] = useState<ClientOrderProduct[]>([]);
   const [productDims, setProductDims] = useState<Record<string, ProductDims>>({});
