@@ -162,12 +162,7 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
     reader.readAsDataURL(file);
   };
 
-  const recalcBulk = (weightPerUnit: number, qty: number) => {
-    const clientRate = settings.airPricePerLb;
-    const totalWeight = weightPerUnit * qty;
-    const totalShipping = totalWeight * clientRate;
-    return { totalShipping, perUnit: totalShipping / qty };
-  };
+
 
   const calcAir = () => {
     const result = calcAirShipping({
