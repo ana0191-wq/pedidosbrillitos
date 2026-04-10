@@ -4,16 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Package, Check, Save } from 'lucide-react';
+import { Trash2, Package, Check, Save, DollarSign, Truck } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { useOrders } from '@/hooks/useOrders';
 import { supabase } from '@/integrations/supabase/client';
 
-const ORDER_STATUSES = ['Pendiente', 'En Tránsito', 'Listo', 'Entregado'];
 const PAYMENT_METHODS = ['PayPal', 'Binance', 'PagoMóvil', 'Zelle', 'Efectivo', 'Otro'];
-const CURRENCIES = ['USD', 'EUR', 'Bs'];
 
 interface ProductDims {
   weightLb: string;
@@ -65,27 +63,41 @@ function Pill({ label, active, onClick }: { label: string; active: boolean; onCl
 export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings }: EditClientOrderDialogProps) {
   const { updateOrder: updateProduct, deleteOrder: deleteProduct } = useOrders();
   const [status, setStatus] = useState('');
-  const [payment, setPayment] = useState('');
-  const [payRef, setPayRef] = useState('');
-  const [currency, setCurrency] = useState('USD');
-  const [amountPaid, setAmountPaid] = useState('');
   const [notes, setNotes] = useState('');
   const [products, setProducts] = useState<ClientOrderProduct[]>([]);
   const [productDims, setProductDims] = useState<Record<string, ProductDims>>({});
 
+  // Stage 1 payment state
+  const [prodPayStatus, setProdPayStatus] = useState('Pendiente');
+  const [prodPayMethod, setProdPayMethod] = useState('');
+  const [prodPayAmount, setProdPayAmount] = useState('');
+
+  // Stage 2 payment state
+  const [shipPayStatus, setShipPayStatus] = useState('Pendiente');
+  const [shipPayMethod, setShipPayMethod] = useState('');
+  const [shipPayAmount, setShipPayAmount] = useState('');
+  const [shipCostCompany, setShipCostCompany] = useState('');
+  const [shipChargeClient, setShipChargeClient] = useState('');
+
   const myRate = shippingSettings?.airRatePerLb ?? 6.50;
-  const clientRate = shippingSettings?.airPricePerLb ?? 10;
+  const clientRate = shippingSettings?.airPricePerLb ?? 12;
   const profitPercent = shippingSettings?.defaultMarginPercent ?? 0.30;
 
   useEffect(() => {
     if (order && open) {
       setStatus(order.status);
-      setPayment(order.paymentMethod);
-      setPayRef(order.paymentReference);
       setNotes(order.notes);
       setProducts([...order.products]);
-      setCurrency('USD');
-      setAmountPaid('');
+
+      setProdPayStatus(order.productPaymentStatus || 'Pendiente');
+      setProdPayMethod(order.productPaymentMethod || '');
+      setProdPayAmount(order.productPaymentAmount != null ? String(order.productPaymentAmount) : '');
+
+      setShipPayStatus(order.shippingPaymentStatus || 'Pendiente');
+      setShipPayMethod(order.shippingPaymentMethod || '');
+      setShipPayAmount(order.shippingPaymentAmount != null ? String(order.shippingPaymentAmount) : '');
+      setShipCostCompany(order.shippingCostCompany != null ? String(order.shippingCostCompany) : '');
+      setShipChargeClient(order.shippingChargeToClient != null ? String(order.shippingChargeToClient) : '');
 
       const dims: Record<string, ProductDims> = {};
       order.products.forEach(p => {
@@ -106,14 +118,49 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     }
   }, [order, open]);
 
+  // Compute totals
+  const totals = useMemo(() => {
+    let totalProductCost = 0;
+    let totalSalePrice = 0;
+    let totalShippingClient = 0;
+    let totalShippingCompany = 0;
+
+    products.forEach(p => {
+      const d = productDims[p.id];
+      if (!d) return;
+      totalProductCost += p.pricePaid;
+
+      const weight = parseFloat(d.weightLb) || 0;
+      const l = parseFloat(d.lengthIn) || 0;
+      const w = parseFloat(d.widthIn) || 0;
+      const h = parseFloat(d.heightIn) || 0;
+      const calc = weight > 0 ? calcShipping(weight, l, w, h, myRate, clientRate) : null;
+
+      const extraCompany = d.hasExtraCharge ? (parseFloat(d.extraChargeCompany) || 0) : 0;
+      const extraClient = d.hasExtraCharge ? (parseFloat(d.extraChargeClient) || 0) : 0;
+      const suggestedSale = p.pricePaid * (1 + profitPercent);
+      const saleUsd = parseFloat(d.salePriceUsd) || suggestedSale;
+      const shippingClient = (parseFloat(d.shippingChargeClient) || calc?.clientCharge || 0) + extraClient;
+      const myShippingCost = (calc?.myCost || 0) + extraCompany;
+
+      totalSalePrice += saleUsd;
+      totalShippingClient += shippingClient;
+      totalShippingCompany += myShippingCost;
+    });
+
+    const totalToChargeProduct = totalSalePrice;
+    const totalToChargeShipping = totalShippingClient;
+    const shippingProfit = totalShippingClient - totalShippingCompany;
+    const productProfit = totalSalePrice - totalProductCost;
+    const totalProfit = productProfit + shippingProfit;
+
+    return { totalProductCost, totalSalePrice, totalShippingClient, totalShippingCompany, totalToChargeProduct, totalToChargeShipping, shippingProfit, productProfit, totalProfit };
+  }, [products, productDims, myRate, clientRate, profitPercent]);
+
   if (!order) return null;
 
   const updateDim = (id: string, field: keyof ProductDims, value: any) => {
     setProductDims(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
-  };
-
-  const updateLocalProduct = (id: string, field: keyof ClientOrderProduct, value: any) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
   };
 
   const handleDeleteProduct = (productId: string) => {
@@ -152,12 +199,37 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     updateDim(productId, 'shippingChargeClient', String(shippingClient));
   };
 
+  const handleRegisterProductPayment = () => {
+    setProdPayStatus('Pagado');
+  };
+
+  const handleRegisterShippingPayment = () => {
+    setShipPayStatus('Pagado');
+  };
+
+  const deriveStatus = (pPay: string, sPay: string) => {
+    if (pPay === 'Pagado' && sPay === 'Pagado') return 'Listo';
+    if (pPay === 'Pagado') return 'En Tránsito';
+    return 'Pendiente';
+  };
+
   const handleSave = () => {
+    const finalStatus = status === 'Entregado' ? 'Entregado' : deriveStatus(prodPayStatus, shipPayStatus);
+
     onUpdateOrder(order.id, {
-      status,
-      paymentMethod: payment,
-      paymentReference: payRef,
+      status: finalStatus,
       notes,
+      productPaymentStatus: prodPayStatus,
+      productPaymentAmount: prodPayAmount ? parseFloat(prodPayAmount) : null,
+      productPaymentMethod: prodPayMethod || null,
+      productPaymentDate: prodPayStatus === 'Pagado' ? (order.productPaymentDate || new Date().toISOString()) : null,
+      shippingPaymentStatus: shipPayStatus,
+      shippingPaymentAmount: shipPayAmount ? parseFloat(shipPayAmount) : null,
+      shippingPaymentMethod: shipPayMethod || null,
+      shippingPaymentDate: shipPayStatus === 'Pagado' ? (order.shippingPaymentDate || new Date().toISOString()) : null,
+      shippingCostCompany: shipCostCompany ? parseFloat(shipCostCompany) : totals.totalShippingCompany || null,
+      shippingChargeToClient: shipChargeClient ? parseFloat(shipChargeClient) : totals.totalShippingClient || null,
+      amountCharged: totals.totalToChargeProduct + totals.totalToChargeShipping,
     });
 
     for (const p of products) {
@@ -167,7 +239,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       if (p.productName !== orig.productName) dbUpdates.product_name = p.productName;
       if (p.store !== orig.store) dbUpdates.store = p.store;
       if (p.pricePaid !== orig.pricePaid) dbUpdates.price_paid = p.pricePaid;
-      if (p.status !== orig.status) dbUpdates.status = p.status;
       if (p.arrived !== orig.arrived) dbUpdates.arrived = p.arrived;
 
       const d = productDims[p.id];
@@ -192,42 +263,62 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
 
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
+  const bothPaid = prodPayStatus === 'Pagado' && shipPayStatus === 'Pagado';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-5 pt-4 pb-3 border-b border-border">
-          <DialogTitle className="text-base">Editar Pedido — {order.clientName}</DialogTitle>
-        </DialogHeader>
-
-        <div className="px-5 py-3 space-y-3 max-h-[80vh] overflow-y-auto">
-          {/* STATUS + PAYMENT row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Estado</Label>
-              <div className="flex flex-wrap gap-1">
-                {ORDER_STATUSES.map(s => <Pill key={s} label={s} active={status === s} onClick={() => setStatus(s)} />)}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Pago</Label>
-              <div className="flex flex-wrap gap-1">
-                {PAYMENT_METHODS.map(m => <Pill key={m} label={m} active={payment === m} onClick={() => setPayment(m)} />)}
-              </div>
-              <div className="flex gap-1.5 items-center mt-1">
-                <Input
-                  value={amountPaid}
-                  onChange={e => setAmountPaid(e.target.value)}
-                  placeholder="Monto"
-                  type="number"
-                  step="0.01"
-                  className="h-7 text-xs w-24"
-                />
-                {CURRENCIES.map(c => <Pill key={c} label={c} active={currency === c} onClick={() => setCurrency(c)} />)}
-              </div>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-base">Editar Pedido — {order.clientName}</DialogTitle>
+            <div className="flex items-center gap-2">
+              {prodPayStatus === 'Pagado' && shipPayStatus === 'Pagado' && status !== 'Entregado' && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setStatus('Entregado')}>
+                  📦 Marcar Entregado
+                </Button>
+              )}
             </div>
           </div>
+        </DialogHeader>
 
-          {/* PRODUCTS */}
+        <div className="px-5 py-3 space-y-4 max-h-[85vh] overflow-y-auto">
+          {/* ═══ STAGE 1: PRODUCT PAYMENT ═══ */}
+          <div className={`rounded-lg border-2 p-3 space-y-2 ${prodPayStatus === 'Pagado' ? 'border-green-500/30 bg-green-50 dark:bg-green-950/20' : 'border-amber-500/30 bg-amber-50 dark:bg-amber-950/20'}`}>
+            <div className="flex items-center gap-2">
+              <DollarSign className={`h-4 w-4 ${prodPayStatus === 'Pagado' ? 'text-green-600' : 'text-amber-600'}`} />
+              <span className="text-sm font-bold">ETAPA 1 — Pago del Producto</span>
+              {prodPayStatus === 'Pagado' ? (
+                <span className="ml-auto text-xs font-semibold text-green-600">✅ Pagado</span>
+              ) : (
+                <span className="ml-auto text-xs font-semibold text-amber-600">⏳ Pendiente</span>
+              )}
+            </div>
+
+            {prodPayStatus === 'Pagado' ? (
+              <div className="text-xs space-y-1 pl-6">
+                <p><span className="text-muted-foreground">Monto:</span> <strong>{fmt(parseFloat(prodPayAmount) || 0)}</strong> via <strong>{prodPayMethod || '—'}</strong></p>
+                <Button size="sm" variant="ghost" className="h-5 text-[10px] p-1" onClick={() => setProdPayStatus('Pendiente')}>✏️ Editar</Button>
+              </div>
+            ) : (
+              <div className="pl-6 space-y-2">
+                <div className="text-xs text-muted-foreground">
+                  Cliente paga: costo productos ({fmt(totals.totalProductCost)}) + ganancia ({(profitPercent * 100).toFixed(0)}%) = <strong>{fmt(totals.totalToChargeProduct)}</strong>
+                  {exchangeRate && <span> ≈ {(totals.totalToChargeProduct * exchangeRate).toFixed(2)} Bs</span>}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {PAYMENT_METHODS.map(m => <Pill key={m} label={m} active={prodPayMethod === m} onClick={() => setProdPayMethod(m)} />)}
+                </div>
+                <div className="flex gap-2 items-center">
+                  <Input value={prodPayAmount} onChange={e => setProdPayAmount(e.target.value)} placeholder={totals.totalToChargeProduct.toFixed(2)} type="number" step="0.01" className="h-7 text-xs w-28" />
+                  <Button size="sm" className="h-7 text-xs" onClick={handleRegisterProductPayment} disabled={!prodPayMethod}>
+                    <Check className="h-3 w-3 mr-1" /> Registrar pago
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ═══ PRODUCTS (price calculator) ═══ */}
           {products.map((p) => {
             const d = productDims[p.id] || { weightLb: '', lengthIn: '', widthIn: '', heightIn: '', salePriceUsd: '', shippingChargeClient: '', pricesConfirmed: false, hasExtraCharge: false, extraChargeCompany: '', extraChargeClient: '' };
             const weight = parseFloat(d.weightLb) || 0;
@@ -242,16 +333,16 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             const saleUsd = parseFloat(d.salePriceUsd) || suggestedSale;
             const shippingClient = (parseFloat(d.shippingChargeClient) || calc?.clientCharge || 0) + extraClient;
             const myShippingCost = (calc?.myCost || 0) + extraCompany;
-            const profitAmount = saleUsd + shippingClient - p.pricePaid - myShippingCost;
+            const profitProduct = saleUsd - p.pricePaid;
+            const profitShipping = shippingClient - myShippingCost;
 
             return (
               <div key={p.id} className="border border-border rounded-lg overflow-hidden">
-                {/* Product header bar */}
                 <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b border-border">
                   <div className="h-8 w-8 rounded bg-muted flex-shrink-0 overflow-hidden">
                     {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-2 text-muted-foreground" />}
                   </div>
-                  <span className="text-sm font-semibold flex-1 truncate">PRODUCTO: {p.productName}</span>
+                  <span className="text-sm font-semibold flex-1 truncate">{p.productName}</span>
                   <span className="text-sm font-bold text-foreground">{fmt(p.pricePaid)}</span>
                   <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(p.id)} className="h-6 w-6 p-0 text-destructive">
                     <Trash2 className="h-3 w-3" />
@@ -260,14 +351,12 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
 
                 {d.pricesConfirmed ? (
                   <div className="p-3 bg-green-50 dark:bg-green-950/20 text-xs space-y-1">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Precio venta:</span><span className="font-bold text-green-700 dark:text-green-400">{fmt(parseFloat(d.salePriceUsd) || 0)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Vender:</span><span className="font-bold text-green-700 dark:text-green-400">{fmt(parseFloat(d.salePriceUsd) || 0)}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Envío al cliente:</span><span className="font-semibold">{fmt(parseFloat(d.shippingChargeClient) || 0)}</span></div>
-                    {exchangeRate && <div className="flex justify-between"><span className="text-muted-foreground">Total Bs:</span><span>{(((parseFloat(d.salePriceUsd) || 0) + (parseFloat(d.shippingChargeClient) || 0)) * exchangeRate).toFixed(2)} Bs</span></div>}
                     <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full mt-1" onClick={() => updateDim(p.id, 'pricesConfirmed', false)}>✏️ Editar precios</Button>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 divide-x divide-border">
-                    {/* LEFT: inputs */}
                     <div className="p-3 space-y-2.5">
                       <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Peso y medidas</p>
                       <div className="grid grid-cols-2 gap-1.5">
@@ -291,7 +380,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
 
                       <div className="space-y-1.5 pt-1">
                         <div className="flex items-center gap-2">
-                          <label className="text-[10px] text-muted-foreground">¿Cargo adicional de la empresa?</label>
+                          <label className="text-[10px] text-muted-foreground">¿Cargo adicional?</label>
                           <div className="flex gap-1">
                             <Pill label="NO" active={!d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', false)} />
                             <Pill label="SÍ" active={d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', true)} />
@@ -301,17 +390,16 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                           <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <label className="text-[9px] text-muted-foreground">Empresa cobra $</label>
-                              <Input type="number" step="0.01" value={d.extraChargeCompany} onChange={e => updateDim(p.id, 'extraChargeCompany', e.target.value)} className="h-7 text-xs" placeholder="0" />
+                              <Input type="number" step="0.01" value={d.extraChargeCompany} onChange={e => updateDim(p.id, 'extraChargeCompany', e.target.value)} className="h-7 text-xs" />
                             </div>
                             <div>
                               <label className="text-[9px] text-muted-foreground">Cliente paga $</label>
-                              <Input type="number" step="0.01" value={d.extraChargeClient} onChange={e => updateDim(p.id, 'extraChargeClient', e.target.value)} className="h-7 text-xs" placeholder="0" />
+                              <Input type="number" step="0.01" value={d.extraChargeClient} onChange={e => updateDim(p.id, 'extraChargeClient', e.target.value)} className="h-7 text-xs" />
                             </div>
                           </div>
                         )}
                       </div>
 
-                      {/* Editable overrides */}
                       <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border">
                         <div>
                           <label className="text-[9px] text-muted-foreground">Precio venta $</label>
@@ -328,7 +416,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                       </Button>
                     </div>
 
-                    {/* RIGHT: results */}
                     <div className="p-3 space-y-1.5 text-xs">
                       <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Resultado</p>
                       {calc ? (
@@ -341,9 +428,13 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                           <div className="border-t border-border my-1" />
                           <Row label="Envío al cliente:" value={fmt(shippingClient)} />
                           <div className="border-t border-border my-1" />
-                          <div className="flex justify-between font-bold text-green-600 dark:text-green-400 pt-1">
+                          <div className="text-[10px] text-muted-foreground space-y-0.5">
+                            <div className="flex justify-between"><span>Ganancia producto:</span><span>{fmt(profitProduct)}</span></div>
+                            <div className="flex justify-between"><span>Ganancia envío:</span><span>{fmt(profitShipping)}</span></div>
+                          </div>
+                          <div className="flex justify-between font-bold text-green-600 dark:text-green-400 pt-1 border-t border-border">
                             <span>MI GANANCIA:</span>
-                            <span>{fmt(profitAmount)} ✅</span>
+                            <span>{fmt(profitProduct + profitShipping)} ✅</span>
                           </div>
                         </div>
                       ) : (
@@ -355,6 +446,78 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
               </div>
             );
           })}
+
+          {/* ═══ STAGE 2: SHIPPING PAYMENT ═══ */}
+          <div className={`rounded-lg border-2 p-3 space-y-2 ${shipPayStatus === 'Pagado' ? 'border-green-500/30 bg-green-50 dark:bg-green-950/20' : 'border-blue-500/30 bg-blue-50 dark:bg-blue-950/20'}`}>
+            <div className="flex items-center gap-2">
+              <Truck className={`h-4 w-4 ${shipPayStatus === 'Pagado' ? 'text-green-600' : 'text-blue-600'}`} />
+              <span className="text-sm font-bold">ETAPA 2 — Pago del Envío</span>
+              {shipPayStatus === 'Pagado' ? (
+                <span className="ml-auto text-xs font-semibold text-green-600">✅ Pagado</span>
+              ) : (
+                <span className="ml-auto text-xs font-semibold text-blue-600">⏳ Pendiente</span>
+              )}
+            </div>
+
+            {shipPayStatus === 'Pagado' ? (
+              <div className="text-xs space-y-1 pl-6">
+                <p><span className="text-muted-foreground">Cliente pagó:</span> <strong>{fmt(parseFloat(shipPayAmount) || 0)}</strong> via <strong>{shipPayMethod || '—'}</strong></p>
+                <p className="text-muted-foreground">Yo pagué a empresa: {fmt(parseFloat(shipCostCompany) || totals.totalShippingCompany)}</p>
+                <p className="text-green-600 font-semibold">Mi ganancia envío: {fmt((parseFloat(shipPayAmount) || 0) - (parseFloat(shipCostCompany) || totals.totalShippingCompany))} ✅</p>
+                <Button size="sm" variant="ghost" className="h-5 text-[10px] p-1" onClick={() => setShipPayStatus('Pendiente')}>✏️ Editar</Button>
+              </div>
+            ) : (
+              <div className="pl-6 space-y-2">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">Yo pago a empresa:</p>
+                    <Input value={shipCostCompany} onChange={e => setShipCostCompany(e.target.value)} placeholder={totals.totalShippingCompany.toFixed(2)} type="number" step="0.01" className="h-7 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">Cobro al cliente:</p>
+                    <Input value={shipChargeClient} onChange={e => setShipChargeClient(e.target.value)} placeholder={totals.totalShippingClient.toFixed(2)} type="number" step="0.01" className="h-7 text-xs" />
+                  </div>
+                </div>
+
+                {(() => {
+                  const co = parseFloat(shipCostCompany) || totals.totalShippingCompany;
+                  const ch = parseFloat(shipChargeClient) || totals.totalShippingClient;
+                  return (
+                    <p className="text-xs font-semibold text-green-600">
+                      Mi ganancia envío: {fmt(ch - co)} ✅
+                      {exchangeRate && <span className="text-muted-foreground font-normal"> ≈ {((ch - co) * exchangeRate).toFixed(2)} Bs</span>}
+                    </p>
+                  );
+                })()}
+
+                <div className="flex flex-wrap gap-1">
+                  {PAYMENT_METHODS.map(m => <Pill key={m} label={m} active={shipPayMethod === m} onClick={() => setShipPayMethod(m)} />)}
+                </div>
+                <div className="flex gap-2 items-center">
+                  <Input value={shipPayAmount} onChange={e => setShipPayAmount(e.target.value)} placeholder={(parseFloat(shipChargeClient) || totals.totalShippingClient).toFixed(2)} type="number" step="0.01" className="h-7 text-xs w-28" />
+                  <Button size="sm" className="h-7 text-xs" onClick={handleRegisterShippingPayment} disabled={!shipPayMethod}>
+                    <Check className="h-3 w-3 mr-1" /> 💰 Registrar pago de envío
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ═══ ORDER STATUS ═══ */}
+          {bothPaid && status !== 'Entregado' && (
+            <div className="rounded-lg border-2 border-green-500/50 bg-green-50 dark:bg-green-950/20 p-3 text-center space-y-2">
+              <p className="text-sm font-bold text-green-700 dark:text-green-400">🎉 Ambos pagos completados — Listo para entregar</p>
+              <Button size="sm" onClick={() => setStatus('Entregado')} className="bg-green-600 hover:bg-green-700 text-white">
+                📦 Marcar como Entregado
+              </Button>
+            </div>
+          )}
+
+          {status === 'Entregado' && (
+            <div className="rounded-lg border-2 border-green-500/50 bg-green-50 dark:bg-green-950/20 p-3 text-center">
+              <p className="text-sm font-bold text-green-700 dark:text-green-400">📦 Entregado ✅</p>
+            </div>
+          )}
 
           {/* Notes + Save */}
           <div className="space-y-2 pt-1">
