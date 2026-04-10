@@ -105,14 +105,11 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
     setAiAnalysis(null);
 
     try {
-      const clientRate = settings.airPricePerLb;
-      
-      // Send image to ai-pricing with a custom shipping-estimation prompt
       const { data, error } = await supabase.functions.invoke('ai-pricing', {
         body: {
           type: 'shipping-estimate',
           imageBase64: base64,
-          clientRate,
+          clientRate: settings.airPricePerLb,
         }
       });
 
@@ -120,21 +117,18 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
 
       if (data?.success && data.data) {
         const d = data.data;
-        const avgWeight = ((d.weight_min_lbs || 0.5) + (d.weight_max_lbs || 0.5)) / 2;
+        const weight = d.estimated_weight_lbs || 0.5;
         
         setAiAnalysis({
-          productType: d.product_type || 'Producto',
-          weightMinLbs: d.weight_min_lbs || 0.3,
-          weightMaxLbs: d.weight_max_lbs || 0.8,
-          estimates: d.estimates || [1, 5, 10, 20].map(qty => ({
-            qty,
-            totalShipping: avgWeight * qty * clientRate,
-            perUnitShipping: avgWeight * clientRate,
-          })),
+          productName: d.product_name || 'Producto',
+          description: d.description || '',
+          estimatedWeightLbs: weight,
+          weightReasoning: d.weight_reasoning || '',
+          confidence: d.confidence || 'medium',
         });
 
-        // Pre-fill weight with average estimate
-        setWeightLb(String(avgWeight.toFixed(2)));
+        // Pre-fill weight input
+        setWeightLb(String(weight.toFixed(2)));
       } else {
         toast({ title: 'No se pudo analizar', description: data?.error, variant: 'destructive' });
       }
