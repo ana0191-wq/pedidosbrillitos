@@ -19,7 +19,6 @@ interface ClientOrdersListProps {
   onDeleteOrder: (id: string) => void;
   exchangeRate: number | null;
   shippingSettings?: ShippingSettings;
-  clients: Client[];
 }
 
 function calcShippingFromOrder(order: ClientOrder, settings?: ShippingSettings) {
