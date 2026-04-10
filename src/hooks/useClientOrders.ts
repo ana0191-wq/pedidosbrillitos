@@ -37,6 +37,17 @@ export interface ClientOrder {
   notes: string;
   createdAt: string;
   products: ClientOrderProduct[];
+  // Two-stage payment
+  productPaymentStatus: string;
+  productPaymentAmount: number | null;
+  productPaymentMethod: string | null;
+  productPaymentDate: string | null;
+  shippingPaymentStatus: string;
+  shippingPaymentAmount: number | null;
+  shippingPaymentMethod: string | null;
+  shippingPaymentDate: string | null;
+  shippingCostCompany: number | null;
+  shippingChargeToClient: number | null;
 }
 
 export function useClientOrders() {
@@ -108,6 +119,16 @@ export function useClientOrders() {
       notes: r.notes || '',
       createdAt: r.created_at,
       products: productsMap[r.id] || [],
+      productPaymentStatus: r.product_payment_status || 'Pendiente',
+      productPaymentAmount: r.product_payment_amount != null ? Number(r.product_payment_amount) : null,
+      productPaymentMethod: r.product_payment_method || null,
+      productPaymentDate: r.product_payment_date || null,
+      shippingPaymentStatus: r.shipping_payment_status || 'Pendiente',
+      shippingPaymentAmount: r.shipping_payment_amount != null ? Number(r.shipping_payment_amount) : null,
+      shippingPaymentMethod: r.shipping_payment_method || null,
+      shippingPaymentDate: r.shipping_payment_date || null,
+      shippingCostCompany: r.shipping_cost_company != null ? Number(r.shipping_cost_company) : null,
+      shippingChargeToClient: r.shipping_charge_to_client != null ? Number(r.shipping_charge_to_client) : null,
     })));
     setLoading(false);
   }, []);
@@ -150,6 +171,16 @@ export function useClientOrders() {
     if (updates.shippingVolumeFt3 !== undefined) row.shipping_volume_ft3 = updates.shippingVolumeFt3;
     if (updates.shippingDimensions !== undefined) row.shipping_dimensions = updates.shippingDimensions;
     if (updates.notes !== undefined) row.notes = updates.notes;
+    if (updates.productPaymentStatus !== undefined) row.product_payment_status = updates.productPaymentStatus;
+    if (updates.productPaymentAmount !== undefined) row.product_payment_amount = updates.productPaymentAmount;
+    if (updates.productPaymentMethod !== undefined) row.product_payment_method = updates.productPaymentMethod;
+    if (updates.productPaymentDate !== undefined) row.product_payment_date = updates.productPaymentDate;
+    if (updates.shippingPaymentStatus !== undefined) row.shipping_payment_status = updates.shippingPaymentStatus;
+    if (updates.shippingPaymentAmount !== undefined) row.shipping_payment_amount = updates.shippingPaymentAmount;
+    if (updates.shippingPaymentMethod !== undefined) row.shipping_payment_method = updates.shippingPaymentMethod;
+    if (updates.shippingPaymentDate !== undefined) row.shipping_payment_date = updates.shippingPaymentDate;
+    if (updates.shippingCostCompany !== undefined) row.shipping_cost_company = updates.shippingCostCompany;
+    if (updates.shippingChargeToClient !== undefined) row.shipping_charge_to_client = updates.shippingChargeToClient;
 
     const { error } = await supabase.from('client_orders').update(row).eq('id', id);
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
