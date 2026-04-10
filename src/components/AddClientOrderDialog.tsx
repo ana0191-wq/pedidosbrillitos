@@ -263,6 +263,9 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [manualPrice, setManualPrice] = useState('');
   const [manualLink, setManualLink] = useState('');
   const [manualNotes, setManualNotes] = useState('');
+  const [manualImage, setManualImage] = useState('');
+  const [manualAIStatus, setManualAIStatus] = useState<'idle' | 'loading' | 'success' | 'partial'>('idle');
+  const manualFileRef = useRef<HTMLInputElement>(null);
 
   const totalProducts = products.reduce((s, p) => s + p.pricePaid, 0);
 

@@ -124,9 +124,29 @@ Format: {"product_name":"...","description":"...","estimated_weight_lbs":1.2,"we
         },
       };
 
+    } else if (type === 'product-extract') {
+      const { imageBase64 } = body;
+
+      const textPrompt = `This is a product screenshot. Extract: product name, price (as a number), and store name (Amazon/Shein/Temu/AliExpress/other). If you can't read a field clearly, return null for that field. Respond ONLY with valid JSON, no markdown: {"product_name":"...","price":0,"store":"..."}`;
+
+      const parts: any[] = [];
+      if (imageBase64) {
+        const base64Data = imageBase64.startsWith('data:') ? imageBase64.split(',')[1] : imageBase64;
+        parts.push({ inline_data: { mime_type: 'image/jpeg', data: base64Data } });
+      }
+      parts.push({ text: textPrompt });
+
+      requestBody = {
+        contents: [{ parts }],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.3,
+        },
+      };
+
     } else {
       return new Response(
-        JSON.stringify({ success: false, error: 'Tipo no válido. Usa "merchandise", "shipping" o "shipping-estimate".' }),
+        JSON.stringify({ success: false, error: 'Tipo no válido.' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
