@@ -15,7 +15,7 @@ export interface ShippingSettings {
 
 const DEFAULTS: ShippingSettings = {
   airRatePerLb: 5.50,
-  airPricePerLb: 8.00,
+  airPricePerLb: 12.00,
   seaRatePerFt3: 12.00,
   seaMinimum: 15.00,
   seaInsurance: 3.00,

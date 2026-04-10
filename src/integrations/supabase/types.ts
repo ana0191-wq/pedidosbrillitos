@@ -23,8 +23,18 @@ export type Database = {
           notes: string | null
           payment_method: string | null
           payment_reference: string | null
+          product_payment_amount: number | null
+          product_payment_date: string | null
+          product_payment_method: string | null
+          product_payment_status: string
+          shipping_charge_to_client: number | null
           shipping_cost: number | null
+          shipping_cost_company: number | null
           shipping_dimensions: string | null
+          shipping_payment_amount: number | null
+          shipping_payment_date: string | null
+          shipping_payment_method: string | null
+          shipping_payment_status: string
           shipping_type: string | null
           shipping_volume_ft3: number | null
           shipping_weight_lb: number | null
@@ -40,8 +50,18 @@ export type Database = {
           notes?: string | null
           payment_method?: string | null
           payment_reference?: string | null
+          product_payment_amount?: number | null
+          product_payment_date?: string | null
+          product_payment_method?: string | null
+          product_payment_status?: string
+          shipping_charge_to_client?: number | null
           shipping_cost?: number | null
+          shipping_cost_company?: number | null
           shipping_dimensions?: string | null
+          shipping_payment_amount?: number | null
+          shipping_payment_date?: string | null
+          shipping_payment_method?: string | null
+          shipping_payment_status?: string
           shipping_type?: string | null
           shipping_volume_ft3?: number | null
           shipping_weight_lb?: number | null
@@ -57,8 +77,18 @@ export type Database = {
           notes?: string | null
           payment_method?: string | null
           payment_reference?: string | null
+          product_payment_amount?: number | null
+          product_payment_date?: string | null
+          product_payment_method?: string | null
+          product_payment_status?: string
+          shipping_charge_to_client?: number | null
           shipping_cost?: number | null
+          shipping_cost_company?: number | null
           shipping_dimensions?: string | null
+          shipping_payment_amount?: number | null
+          shipping_payment_date?: string | null
+          shipping_payment_method?: string | null
+          shipping_payment_status?: string
           shipping_type?: string | null
           shipping_volume_ft3?: number | null
           shipping_weight_lb?: number | null
