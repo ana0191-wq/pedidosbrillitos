@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Camera, Plane, Ship, Package, Settings2 } from 'lucide-react';
+import { Loader2, Camera, Plane, Ship, Package, Settings2, Image as ImageIcon } from 'lucide-react';
 import { calcAirShipping, calcSeaShipping, calcUnitDistribution, type AirShippingResult, type SeaShippingResult, type UnitDistributionResult } from '@/lib/shipping-calc';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +14,13 @@ import { useToast } from '@/hooks/use-toast';
 interface ShippingCalculatorProps {
   settings: ShippingSettings;
   onSaveSettings: (s: ShippingSettings) => void;
+}
+
+interface AIAnalysis {
+  productName: string;
+  estimatedWeightLb: number;
+  estimatedDimensions: { length: number; width: number; height: number };
+  bulkTable: { units: number; totalShipping: number; perUnit: number }[];
 }
 
 export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalculatorProps) {
@@ -51,6 +58,12 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
   // AI extraction
   const [textInput, setTextInput] = useState('');
 
+  // AI image analysis
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
+  const [customQty, setCustomQty] = useState('');
+  const [pastedImage, setPastedImage] = useState<string | null>(null);
+
   const handleAIExtract = async (source: 'text' | 'image', value: string) => {
     setLoading(true);
     try {
@@ -83,6 +96,87 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
     const reader = new FileReader();
     reader.onload = (ev) => handleAIExtract('image', ev.target?.result as string);
     reader.readAsDataURL(file);
+  };
+
+  const handleImageForAI = useCallback(async (base64: string) => {
+    setPastedImage(base64);
+    setAiLoading(true);
+    setAiAnalysis(null);
+
+    try {
+      const freightRate = settings.airRatePerLb;
+      const clientRate = settings.airPricePerLb;
+
+      const { data, error } = await supabase.functions.invoke('ai-pricing', {
+        body: {
+          type: 'merchandise',
+          imageBase64: base64,
+          exchangeRate: 1,
+          profitPercent: 0,
+          extraCosts: 0,
+        }
+      });
+
+      if (error) throw error;
+
+      const productName = data?.data?.productName || 'Producto';
+      // Use a reasonable estimated weight
+      const estWeight = 0.5; // default estimate in lbs
+
+      // Build bulk table
+      const quantities = [1, 5, 10, 20];
+      const bulkTable = quantities.map(units => {
+        const totalWeight = estWeight * units;
+        const billable = Math.max(totalWeight, 0);
+        const totalShipping = billable * clientRate;
+        return { units, totalShipping, perUnit: totalShipping / units };
+      });
+
+      setAiAnalysis({
+        productName,
+        estimatedWeightLb: estWeight,
+        estimatedDimensions: { length: 10, width: 8, height: 4 },
+        bulkTable,
+      });
+
+      // Auto-fill weight
+      setWeightLb(String(estWeight));
+    } catch {
+      toast({ title: 'Error', description: 'No se pudo analizar la imagen', variant: 'destructive' });
+    } finally {
+      setAiLoading(false);
+    }
+  }, [settings, toast]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onload = (ev) => handleImageForAI(ev.target?.result as string);
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
+  }, [handleImageForAI]);
+
+  const handleImageUploadForAI = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => handleImageForAI(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const recalcBulk = (weightPerUnit: number, qty: number) => {
+    const clientRate = settings.airPricePerLb;
+    const totalWeight = weightPerUnit * qty;
+    const totalShipping = totalWeight * clientRate;
+    return { totalShipping, perUnit: totalShipping / qty };
   };
 
   const calcAir = () => {
@@ -137,10 +231,112 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
     <div className="space-y-4">
       <h2 className="text-xl font-bold text-foreground">📦 Calculadora de Envíos</h2>
 
-      {/* AI Input */}
+      {/* AI Image Analysis Zone */}
+      <Card className="border-primary/30 border-dashed">
+        <CardContent className="p-4 space-y-3">
+          <p className="text-sm font-medium text-foreground">🤖 Análisis IA del producto</p>
+          <div
+            className="border-2 border-dashed border-muted-foreground/30 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors relative"
+            onPaste={handlePaste}
+            tabIndex={0}
+          >
+            {pastedImage ? (
+              <img src={pastedImage} alt="Producto" className="max-h-32 mx-auto rounded-lg" />
+            ) : (
+              <>
+                <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">📋 Pega una imagen del producto (Ctrl+V) o haz clic para subir</p>
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageUploadForAI}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+          </div>
+
+          {aiLoading && (
+            <div className="flex items-center justify-center gap-2 py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">Analizando producto con IA...</span>
+            </div>
+          )}
+
+          {aiAnalysis && (
+            <Card className="bg-muted/30 border-primary/20">
+              <CardContent className="p-4 space-y-3">
+                <p className="text-sm font-bold">🤖 Análisis IA: {aiAnalysis.productName}</p>
+                <p className="text-xs text-muted-foreground">Peso estimado por pieza: ~{aiAnalysis.estimatedWeightLb} lbs</p>
+
+                <div className="overflow-x-auto">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">COSTO DE ENVÍO POR PIEZA según cantidad:</p>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-1 px-2">Prendas</th>
+                        <th className="text-right py-1 px-2">Total envío</th>
+                        <th className="text-right py-1 px-2">Por pieza</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aiAnalysis.bulkTable.map(row => (
+                        <tr key={row.units} className="border-b border-border/50">
+                          <td className="py-1 px-2 font-medium">{row.units}</td>
+                          <td className="py-1 px-2 text-right">{fmt(row.totalShipping)}</td>
+                          <td className="py-1 px-2 text-right font-semibold text-primary">{fmt(row.perUnit)}</td>
+                        </tr>
+                      ))}
+                      {customQty && parseInt(customQty) > 0 && (() => {
+                        const qty = parseInt(customQty);
+                        const r = recalcBulk(aiAnalysis.estimatedWeightLb, qty);
+                        return (
+                          <tr className="border-b border-border/50 bg-primary/5">
+                            <td className="py-1 px-2 font-medium">{qty}</td>
+                            <td className="py-1 px-2 text-right">{fmt(r.totalShipping)}</td>
+                            <td className="py-1 px-2 text-right font-semibold text-primary">{fmt(r.perUnit)}</td>
+                          </tr>
+                        );
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs whitespace-nowrap">Cantidad personalizada:</Label>
+                  <Input
+                    type="number"
+                    value={customQty}
+                    onChange={e => setCustomQty(e.target.value)}
+                    placeholder="ej: 15"
+                    className="h-8 text-sm w-24"
+                  />
+                </div>
+
+                <p className="text-[10px] text-amber-600">⚠️ Estimado — peso real puede variar</p>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setPastedImage(null);
+                    setAiAnalysis(null);
+                    setCustomQty('');
+                  }}
+                  className="text-xs"
+                >
+                  Limpiar análisis
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* AI Text/Photo Input */}
       <Card className="border-primary/20">
         <CardContent className="p-4 space-y-3">
-          <p className="text-sm font-medium text-foreground">🤖 Extracción automática</p>
+          <p className="text-sm font-medium text-foreground">📄 Extracción de datos de envío</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">📄 Texto manual</Label>
