@@ -54,7 +54,26 @@ export function useOrders() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  // Backfill: ensure all orders have created_at
+  const backfillDates = useCallback(async () => {
+    const { data } = await supabase
+      .from('orders')
+      .select('id')
+      .is('created_at', null);
+    
+    if (data && data.length > 0) {
+      const ids = data.map(r => r.id);
+      await supabase
+        .from('orders')
+        .update({ created_at: new Date().toISOString() })
+        .in('id', ids);
+      console.log(`Backfilled created_at for ${ids.length} orders`);
+    }
+  }, []);
+
+  useEffect(() => { 
+    backfillDates().then(() => fetchOrders()); 
+  }, [fetchOrders, backfillDates]);
 
   const addOrder = useCallback(async (order: Order, clientOrderId?: string) => {
     const { data: { user } } = await supabase.auth.getUser();

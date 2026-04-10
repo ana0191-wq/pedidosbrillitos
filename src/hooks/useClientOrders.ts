@@ -19,6 +19,8 @@ export interface ClientOrderProduct {
   salePriceVes: number | null;
   shippingChargeClient: number | null;
   pricesConfirmed: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ClientOrder {
@@ -99,6 +101,8 @@ export function useClientOrders() {
           salePriceVes: p.sale_price_ves != null ? Number(p.sale_price_ves) : null,
           shippingChargeClient: p.shipping_charge_client != null ? Number(p.shipping_charge_client) : null,
           pricesConfirmed: !!p.prices_confirmed,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at,
         });
       });
     }
