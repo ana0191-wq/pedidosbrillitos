@@ -262,30 +262,31 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
           {aiAnalysis && (
             <Card className="bg-muted/30 border-primary/20">
               <CardContent className="p-4 space-y-3">
-                <p className="text-sm font-bold">🤖 Análisis IA: {aiAnalysis.productName}</p>
-                <p className="text-xs text-muted-foreground">Peso estimado por pieza: ~{aiAnalysis.estimatedWeightLb} lbs</p>
+                <p className="text-sm font-bold">🤖 Análisis IA: {aiAnalysis.productType} (estimado)</p>
+                <p className="text-xs text-muted-foreground">Peso aprox por pieza: {aiAnalysis.weightMinLbs.toFixed(1)} – {aiAnalysis.weightMaxLbs.toFixed(1)} lbs</p>
 
                 <div className="overflow-x-auto">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">COSTO DE ENVÍO POR PIEZA según cantidad:</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">ENVÍO ESTIMADO POR PIEZA:</p>
                   <table className="w-full text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="text-left py-1 px-2">Prendas</th>
+                        <th className="text-left py-1 px-2">Piezas</th>
                         <th className="text-right py-1 px-2">Total envío</th>
                         <th className="text-right py-1 px-2">Por pieza</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {aiAnalysis.bulkTable.map(row => (
-                        <tr key={row.units} className="border-b border-border/50">
-                          <td className="py-1 px-2 font-medium">{row.units}</td>
+                      {aiAnalysis.estimates.map(row => (
+                        <tr key={row.qty} className="border-b border-border/50">
+                          <td className="py-1 px-2 font-medium">{row.qty}</td>
                           <td className="py-1 px-2 text-right">{fmt(row.totalShipping)}</td>
-                          <td className="py-1 px-2 text-right font-semibold text-primary">{fmt(row.perUnit)}</td>
+                          <td className="py-1 px-2 text-right font-semibold text-primary">{fmt(row.perUnitShipping)}</td>
                         </tr>
                       ))}
                       {customQty && parseInt(customQty) > 0 && (() => {
                         const qty = parseInt(customQty);
-                        const r = recalcBulk(aiAnalysis.estimatedWeightLb, qty);
+                        const avgWeight = (aiAnalysis.weightMinLbs + aiAnalysis.weightMaxLbs) / 2;
+                        const r = recalcBulk(avgWeight, qty);
                         return (
                           <tr className="border-b border-border/50 bg-primary/5">
                             <td className="py-1 px-2 font-medium">{qty}</td>
@@ -309,7 +310,7 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
                   />
                 </div>
 
-                <p className="text-[10px] text-amber-600">⚠️ Estimado — peso real puede variar</p>
+                <p className="text-[10px] text-muted-foreground">⚠️ Estimado tentativo — el precio final depende del peso real del paquete.</p>
 
                 <Button
                   size="sm"
