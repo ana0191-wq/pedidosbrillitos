@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Package, Check, Save, DollarSign, Truck } from 'lucide-react';
+import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle } from 'lucide-react';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { useOrders } from '@/hooks/useOrders';
@@ -106,7 +106,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     }
   }, [order, open, shippingSettings]);
 
-  // Compute shipping per product
   const calcProduct = (p: ClientOrderProduct, d: ProductDims) => {
     const weight = parseFloat(d.weightLb) || 0;
     const l = parseFloat(d.lengthIn) || 0;
@@ -127,7 +126,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     return { volWeight, billable, anaPaysFreight, clientPaysShipping, anaShippingProfit, extraCo, extraCl };
   };
 
-  // Aggregated totals
   const totals = useMemo(() => {
     let totalProductCost = 0;
     let totalAnaPaysFreight = 0;
@@ -168,7 +166,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       length_in: parseFloat(d.lengthIn) || null,
       width_in: parseFloat(d.widthIn) || null,
       height_in: parseFloat(d.heightIn) || null,
-      sale_price_usd: p.pricePaid, // pass-through, no markup
+      sale_price_usd: p.pricePaid,
       sale_price_ves: exchangeRate ? p.pricePaid * exchangeRate : 0,
       shipping_charge_client: c.clientPaysShipping,
       prices_confirmed: true,
@@ -203,7 +201,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       amountCharged: totals.totalProductCost + totals.totalClientPaysShipping,
     });
 
-    // Save per-product dims
     for (const p of products) {
       const d = productDims[p.id];
       if (!d) continue;
@@ -227,6 +224,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
 
   const fmt = (n: number) => `$${n.toFixed(2)}`;
   const bothPaid = prodPayStatus === 'Pagado' && shipPayStatus === 'Pagado';
+  const myRate = parseFloat(freightRate) || 6.50;
+  const cRate = parseFloat(clientShipRate) || 12;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -289,6 +288,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             const d = productDims[p.id] || { weightLb: '', lengthIn: '', widthIn: '', heightIn: '', hasExtraCharge: false, extraChargeCompany: '', extraChargeClient: '', pricesConfirmed: false, shippingChargeClient: '' };
             const c = calcProduct(p, d);
             const hasWeight = (parseFloat(d.weightLb) || 0) > 0;
+            const isNegative = c.anaShippingProfit < 0 && hasWeight;
 
             return (
               <div key={p.id} className="mx-4 mt-4 border border-border rounded-lg overflow-hidden">
@@ -310,7 +310,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                 {d.pricesConfirmed ? (
                   <div className="p-4 bg-green-50 dark:bg-green-950/20 flex items-center justify-between">
                     <div className="text-sm space-y-0.5">
-                      <p>Envío al cliente: <strong className="text-green-700 dark:text-green-400">{fmt(parseFloat(d.shippingChargeClient) || 0)}</strong></p>
+                      <p>Cobrar envío: <strong className="text-green-700 dark:text-green-400">{fmt(parseFloat(d.shippingChargeClient) || 0)}</strong></p>
                       <p className="text-xs text-muted-foreground">Precios confirmados ✅</p>
                     </div>
                     <Button size="sm" variant="ghost" className="text-xs" onClick={() => updateDim(p.id, 'pricesConfirmed', false)}>✏️ Editar</Button>
@@ -343,7 +343,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                       {/* Extra charges */}
                       <div className="space-y-2 pt-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">¿Cargo adicional de la empresa?</span>
+                          <span className="text-xs text-muted-foreground">¿Cargo extra de la empresa?</span>
                           <div className="flex gap-1">
                             <Pill label="NO" active={!d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', false)} />
                             <Pill label="SÍ" active={d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', true)} />
@@ -356,7 +356,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                               <Input type="number" step="0.01" value={d.extraChargeCompany} onChange={e => updateDim(p.id, 'extraChargeCompany', e.target.value)} className="h-8 text-sm" />
                             </div>
                             <div>
-                              <label className="text-[10px] text-muted-foreground font-medium">Cliente paga $</label>
+                              <label className="text-[10px] text-muted-foreground font-medium">Tú cobras al cliente $</label>
                               <Input type="number" step="0.01" value={d.extraChargeClient} onChange={e => updateDim(p.id, 'extraChargeClient', e.target.value)} className="h-8 text-sm" />
                             </div>
                           </div>
@@ -382,84 +382,42 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
 
                     {/* RIGHT — Live Result Card */}
                     <div className="p-4 flex flex-col">
-                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Resultado</p>
-
                       {hasWeight ? (
-                        <div className="flex-1 flex flex-col">
-                          <div className="bg-card rounded-xl border-2 border-primary/20 p-4 flex-1 flex flex-col justify-center">
-                            {/* Two-column: Yo pago vs Cliente paga */}
-                            <div className="grid grid-cols-2 gap-3 text-xs">
-                              {/* Ana's column */}
-                              <div>
-                                <p className="font-bold text-muted-foreground uppercase tracking-wider mb-2">Yo pago</p>
-                                <div className="space-y-1">
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Por peso:</span>
-                                    <span>{fmt(c.billable * (parseFloat(freightRate) || 6.50))}</span>
-                                  </div>
-                                  {c.extraCo > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Extra:</span>
-                                      <span>+{fmt(c.extraCo)}</span>
-                                    </div>
-                                  )}
-                                  <div className="border-t border-border pt-1 flex justify-between font-semibold">
-                                    <span>Total:</span>
-                                    <span>{fmt(c.anaPaysFreight)}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Client's column */}
-                              <div>
-                                <p className="font-bold text-muted-foreground uppercase tracking-wider mb-2">Cliente paga</p>
-                                <div className="space-y-1">
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Por peso:</span>
-                                    <span>{fmt(c.billable * (parseFloat(clientShipRate) || 12))}</span>
-                                  </div>
-                                  {c.extraCl > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Extra:</span>
-                                      <span>+{fmt(c.extraCl)}</span>
-                                    </div>
-                                  )}
-                                  <div className="border-t border-border pt-1 flex justify-between font-semibold">
-                                    <span>Total:</span>
-                                    <span className="text-primary font-bold">{fmt(c.clientPaysShipping)}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Profit summary */}
-                            <div className="border-t-2 border-border mt-3 pt-3 space-y-1">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-bold">MI GANANCIA:</span>
-                                <span className="text-lg font-black text-green-600 dark:text-green-400">{fmt(c.anaShippingProfit)} ✅</span>
-                              </div>
-                              <p className="text-[10px] text-muted-foreground">
-                                {fmt(c.clientPaysShipping)} − {fmt(c.anaPaysFreight)} = {fmt(c.anaShippingProfit)}
-                              </p>
-                              {/* Profit breakdown */}
-                              <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1 border-t border-border">
-                                <div className="flex justify-between">
-                                  <span>Por peso: ({c.billable.toFixed(1)} × ${(parseFloat(clientShipRate) || 12).toFixed(2)}) − ({c.billable.toFixed(1)} × ${(parseFloat(freightRate) || 6.50).toFixed(2)})</span>
-                                  <span className="font-medium">{fmt(c.billable * ((parseFloat(clientShipRate) || 12) - (parseFloat(freightRate) || 6.50)))}</span>
-                                </div>
-                                {(c.extraCo > 0 || c.extraCl > 0) && (
-                                  <div className="flex justify-between">
-                                    <span>Por extra: {fmt(c.extraCl)} − {fmt(c.extraCo)}</span>
-                                    <span className="font-medium">{fmt(c.extraCl - c.extraCo)}</span>
-                                  </div>
-                                )}
-                              </div>
+                        <div className="flex-1 flex flex-col gap-3">
+                          {/* CLIENT PAYS — big pink */}
+                          <div className="rounded-xl border-2 border-pink-200 dark:border-pink-800 bg-pink-50 dark:bg-pink-950/30 p-4 text-center">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600 dark:text-pink-400 mb-1">CLIENTE PAGA</p>
+                            <p className="text-3xl font-black text-pink-700 dark:text-pink-300">{fmt(c.clientPaysShipping)}</p>
+                            <div className="text-[10px] text-muted-foreground mt-2 space-y-0.5 text-left">
+                              <p>Flete empresa: {c.billable.toFixed(1)} lbs × ${myRate.toFixed(2)}</p>
+                              <p>Tu comisión: {c.billable.toFixed(1)} lbs × ${(cRate - myRate).toFixed(2)}</p>
+                              {c.extraCl > 0 && <p>Extra: +{fmt(c.extraCl)}</p>}
                             </div>
                           </div>
 
-                          <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                          {/* YOUR PROFIT — big green or red */}
+                          <div className={`rounded-xl border-2 p-4 text-center ${
+                            isNegative
+                              ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
+                              : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30'
+                          }`}>
+                            <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                              {isNegative ? '⚠️ PERDERÍAS DINERO' : 'TU GANANCIA'}
+                            </p>
+                            <p className={`text-3xl font-black ${isNegative ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>
+                              {fmt(c.anaShippingProfit)} {!isNegative && '✅'}
+                            </p>
+                            <div className="text-[10px] text-muted-foreground mt-2 space-y-0.5 text-left">
+                              <p>Por peso: {c.billable.toFixed(1)} × ${(cRate - myRate).toFixed(2)} = {fmt(c.billable * (cRate - myRate))}</p>
+                              {(c.extraCo > 0 || c.extraCl > 0) && (
+                                <p>Por extra: {fmt(c.extraCl)} − {fmt(c.extraCo)} = {fmt(c.extraCl - c.extraCo)}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <p className="text-[10px] text-muted-foreground text-center">
                             Peso facturable: {c.billable.toFixed(1)} lbs
-                            {c.volWeight > 0 && <span> (Vol: {c.volWeight.toFixed(1)} — Real: {(parseFloat(d.weightLb) || 0).toFixed(1)})</span>}
+                            {c.volWeight > 0 && <span> (Vol: {c.volWeight.toFixed(1)} · Real: {(parseFloat(d.weightLb) || 0).toFixed(1)})</span>}
                           </p>
                         </div>
                       ) : (
