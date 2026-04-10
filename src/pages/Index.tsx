@@ -158,6 +158,7 @@ const Index = () => {
               clients={clients}
               clientOrders={clientOrders}
               onAddClient={addClient}
+              onUpdateClient={updateClient}
               onDeleteClient={deleteClient}
               onAddOrder={addClientOrder}
               onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
