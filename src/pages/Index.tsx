@@ -23,7 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const { orders, loading, addOrder, updateOrder, deleteOrder, getByCategory, getCounts } = useOrders();
-  const { clients, addClient, deleteClient } = useClients();
+  const { clients, addClient, updateClient, deleteClient } = useClients();
   const { clientOrders, addClientOrder, updateClientOrder, deleteClientOrder, getByClient } = useClientOrders();
   const { settings: shippingSettings, saveSettings } = useShippingSettings();
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
