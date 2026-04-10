@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle } from 'lucide-react';
+import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle, Send } from 'lucide-react';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { useOrders } from '@/hooks/useOrders';
 import { supabase } from '@/integrations/supabase/client';
+import { QuotationGenerator } from '@/components/QuotationGenerator';
 
 const PAYMENT_METHODS = ['PayPal', 'Binance', 'PagoMóvil', 'Zelle', 'Efectivo', 'Otro'];
 
@@ -486,16 +487,33 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             </div>
           )}
 
-          {/* Notes + Save */}
+          {/* Notes + Quotation + Save */}
           <div className="p-4 space-y-3">
             <div>
               <Label className="text-xs text-muted-foreground">Notas</Label>
               <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="text-sm" />
             </div>
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => {
+                const products = order.products.map(p => ({ name: p.productName, price: p.pricePaid }));
+                const shipCharge = totals.totalClientPaysShipping;
+                setQuotationData({ clientName: order.clientName || '', products, shippingCharge: shipCharge, exchangeRate });
+              }}
+            >
+              <Send className="h-4 w-4" /> 📤 Generar cotización
+            </Button>
             <Button onClick={handleSave} className="w-full gap-2" size="lg">
               <Save className="h-4 w-4" /> 💾 Guardar todo
             </Button>
           </div>
+
+          <QuotationGenerator
+            open={!!quotationData}
+            onOpenChange={(v) => { if (!v) setQuotationData(null); }}
+            data={quotationData}
+          />
         </div>
       </DialogContent>
     </Dialog>
