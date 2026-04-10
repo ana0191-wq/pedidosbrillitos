@@ -387,45 +387,80 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                       {hasWeight ? (
                         <div className="flex-1 flex flex-col">
                           <div className="bg-card rounded-xl border-2 border-primary/20 p-4 flex-1 flex flex-col justify-center">
-                            <p className="text-xs text-muted-foreground mb-1 text-center">Cobrar al cliente</p>
-                            <p className="text-3xl font-black text-center text-primary">{fmt(c.clientPaysShipping)}</p>
+                            {/* Two-column: Yo pago vs Cliente paga */}
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              {/* Ana's column */}
+                              <div>
+                                <p className="font-bold text-muted-foreground uppercase tracking-wider mb-2">Yo pago</p>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Por peso:</span>
+                                    <span>{fmt(c.billable * (parseFloat(freightRate) || 6.50))}</span>
+                                  </div>
+                                  {c.extraCo > 0 && (
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Extra:</span>
+                                      <span>+{fmt(c.extraCo)}</span>
+                                    </div>
+                                  )}
+                                  <div className="border-t border-border pt-1 flex justify-between font-semibold">
+                                    <span>Total:</span>
+                                    <span>{fmt(c.anaPaysFreight)}</span>
+                                  </div>
+                                </div>
+                              </div>
 
-                            <div className="mt-4 space-y-1.5 text-xs">
-                              <div className="flex justify-between text-muted-foreground">
-                                <span>Peso facturable:</span>
-                                <span className="text-foreground font-medium">{c.billable.toFixed(1)} lbs</span>
-                              </div>
-                              <div className="flex justify-between text-muted-foreground">
-                                <span>Yo pago flete:</span>
-                                <span className="text-foreground">{fmt(c.anaPaysFreight - (c.extraCo))}</span>
-                              </div>
-                              {c.extraCo > 0 && (
-                                <div className="flex justify-between text-muted-foreground">
-                                  <span>Extra empresa:</span>
-                                  <span className="text-foreground">{fmt(c.extraCo)}</span>
+                              {/* Client's column */}
+                              <div>
+                                <p className="font-bold text-muted-foreground uppercase tracking-wider mb-2">Cliente paga</p>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Por peso:</span>
+                                    <span>{fmt(c.billable * (parseFloat(clientShipRate) || 12))}</span>
+                                  </div>
+                                  {c.extraCl > 0 && (
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Extra:</span>
+                                      <span>+{fmt(c.extraCl)}</span>
+                                    </div>
+                                  )}
+                                  <div className="border-t border-border pt-1 flex justify-between font-semibold">
+                                    <span>Total:</span>
+                                    <span className="text-primary font-bold">{fmt(c.clientPaysShipping)}</span>
+                                  </div>
                                 </div>
-                              )}
-                              {c.extraCl > 0 && (
-                                <div className="flex justify-between text-muted-foreground">
-                                  <span>Extra cliente:</span>
-                                  <span className="text-foreground">{fmt(c.extraCl)}</span>
-                                </div>
-                              )}
+                              </div>
                             </div>
 
-                            <div className="border-t border-border mt-3 pt-3">
+                            {/* Profit summary */}
+                            <div className="border-t-2 border-border mt-3 pt-3 space-y-1">
                               <div className="flex justify-between items-center">
                                 <span className="text-sm font-bold">MI GANANCIA:</span>
                                 <span className="text-lg font-black text-green-600 dark:text-green-400">{fmt(c.anaShippingProfit)} ✅</span>
                               </div>
+                              <p className="text-[10px] text-muted-foreground">
+                                {fmt(c.clientPaysShipping)} − {fmt(c.anaPaysFreight)} = {fmt(c.anaShippingProfit)}
+                              </p>
+                              {/* Profit breakdown */}
+                              <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1 border-t border-border">
+                                <div className="flex justify-between">
+                                  <span>Por peso: ({c.billable.toFixed(1)} × ${(parseFloat(clientShipRate) || 12).toFixed(2)}) − ({c.billable.toFixed(1)} × ${(parseFloat(freightRate) || 6.50).toFixed(2)})</span>
+                                  <span className="font-medium">{fmt(c.billable * ((parseFloat(clientShipRate) || 12) - (parseFloat(freightRate) || 6.50)))}</span>
+                                </div>
+                                {(c.extraCo > 0 || c.extraCl > 0) && (
+                                  <div className="flex justify-between">
+                                    <span>Por extra: {fmt(c.extraCl)} − {fmt(c.extraCo)}</span>
+                                    <span className="font-medium">{fmt(c.extraCl - c.extraCo)}</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
 
-                          {c.volWeight > 0 && (
-                            <p className="text-[10px] text-muted-foreground mt-2 text-center">
-                              Vol: {c.volWeight.toFixed(1)} lbs — Real: {(parseFloat(d.weightLb) || 0).toFixed(1)} lbs
-                            </p>
-                          )}
+                          <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                            Peso facturable: {c.billable.toFixed(1)} lbs
+                            {c.volWeight > 0 && <span> (Vol: {c.volWeight.toFixed(1)} — Real: {(parseFloat(d.weightLb) || 0).toFixed(1)})</span>}
+                          </p>
                         </div>
                       ) : (
                         <div className="flex-1 flex items-center justify-center">
