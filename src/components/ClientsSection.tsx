@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ChevronDown, ChevronUp, Trash2, Package, Phone, Pencil, Send } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Trash2, Package, Phone, Pencil, Send, Calendar } from 'lucide-react';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
@@ -14,6 +14,22 @@ import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 import { EditClientDialog } from '@/components/EditClientDialog';
 import { QuotationGenerator } from '@/components/QuotationGenerator';
 import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+
+const STORAGE_KEY = 'brillitos_expanded_clients';
+
+function loadExpanded(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {}
+  return new Set();
+}
+
+function saveExpanded(set: Set<string>) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
+}
 
 interface ClientsSectionProps {
   clients: Client[];
@@ -58,12 +74,27 @@ function calcShippingFromProducts(order: ClientOrder, settings?: ShippingSetting
   return { totalAnaPays, totalClientPays, profit: totalClientPays - totalAnaPays };
 }
 
+function formatDateShort(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  try {
+    return format(new Date(dateStr), "d MMM yyyy", { locale: es });
+  } catch {
+    return null;
+  }
+}
+
+function isToday(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return d.toDateString() === now.toDateString();
+}
+
 export function ClientsSection({
   clients, clientOrders, onAddClient, onUpdateClient, onDeleteClient,
   onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, getOrdersByClient, exchangeRate, shippingSettings
 }: ClientsSectionProps) {
   const { toast } = useToast();
-  const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(loadExpanded);
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddOrder, setShowAddOrder] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
@@ -71,6 +102,16 @@ export function ClientsSection({
   const [quotationData, setQuotationData] = useState<any>(null);
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
+
+  const toggleClient = (clientId: string) => {
+    setExpandedClients(prev => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      saveExpanded(next);
+      return next;
+    });
+  };
 
   const handleAddClient = async () => {
     if (!newClientName.trim()) return;
@@ -87,7 +128,6 @@ export function ClientsSection({
 
     orders.forEach(o => {
       o.products.forEach(p => products.push({ name: p.productName, price: p.pricePaid }));
-      // Use saved shipping_charge_to_client from DB, not recalculated
       totalShip += o.shippingChargeToClient || 0;
     });
 
@@ -122,7 +162,7 @@ export function ClientsSection({
       ) : (
         clients.map(client => {
           const orders = getOrdersByClient(client.id);
-          const expanded = expandedClient === client.id;
+          const expanded = expandedClients.has(client.id);
           const totalProducts = orders.reduce((sum, o) => sum + o.products.length, 0);
 
           let totalProdPaid = 0;
@@ -166,10 +206,10 @@ export function ClientsSection({
           return (
             <Card key={client.id} className="overflow-hidden">
               <CardContent className="p-0">
-                {/* Client header */}
+                {/* Client header — clickable to expand/collapse */}
                 <button
                   className="w-full p-4 text-left hover:bg-muted/30 transition-colors"
-                  onClick={() => setExpandedClient(expanded ? null : client.id)}
+                  onClick={() => toggleClient(client.id)}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -210,11 +250,11 @@ export function ClientsSection({
                       </div>
                     )}
 
-                    {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground mt-1" /> : <ChevronDown className="h-4 w-4 text-muted-foreground mt-1" />}
+                    {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />}
                   </div>
                 </button>
 
-                {/* Expanded */}
+                {/* Expanded detail */}
                 {expanded && (
                   <div className="border-t border-border p-4 space-y-2 bg-muted/10">
                     <div className="flex items-center justify-between">
@@ -240,17 +280,31 @@ export function ClientsSection({
                       orders.map(order => (
                         <div key={order.id} className="flex items-center gap-2 p-2 rounded-md bg-card border border-border cursor-pointer hover:shadow-sm transition-shadow" onClick={() => setEditingOrder(order)}>
                           <div className="flex-1 min-w-0 space-y-1">
-                            {order.products.map(p => (
-                              <div key={p.id} className="flex items-center gap-2 text-xs">
-                                <div className="h-7 w-7 rounded bg-muted flex-shrink-0 overflow-hidden">
-                                  {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3.5 w-3.5 m-1.5 text-muted-foreground" />}
+                            {order.products.map(p => {
+                              const dateLabel = formatDateShort(p.createdAt);
+                              const backfilled = p.createdAt && isToday(p.createdAt) && new Date(p.createdAt).getTime() > Date.now() - 60000;
+                              return (
+                                <div key={p.id} className="flex items-center gap-2 text-xs">
+                                  <div className="h-7 w-7 rounded bg-muted flex-shrink-0 overflow-hidden">
+                                    {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3.5 w-3.5 m-1.5 text-muted-foreground" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <span className={`truncate text-foreground block ${p.arrived ? 'line-through opacity-60' : ''}`}>
+                                      📦 {p.productName}
+                                    </span>
+                                    <span className="flex items-center gap-1 text-muted-foreground text-[10px]">
+                                      <Calendar className="h-2.5 w-2.5" />
+                                      {dateLabel ? `📅 ${dateLabel}` : '—'}
+                                      {' · '}
+                                      {p.status}
+                                      {' · '}
+                                      {p.store}
+                                    </span>
+                                  </div>
+                                  <span className="text-muted-foreground flex-shrink-0">{fmt(p.pricePaid)}</span>
                                 </div>
-                                <span className={`flex-1 truncate text-foreground ${p.arrived ? 'line-through opacity-60' : ''}`}>
-                                  📦 {p.productName}
-                                </span>
-                                <span className="text-muted-foreground">{fmt(p.pricePaid)} · {p.store}</span>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <Badge variant="outline" className="text-[10px]">{order.status}</Badge>
