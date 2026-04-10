@@ -241,7 +241,7 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
             ) : (
               <>
                 <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">📋 Pega una imagen del producto (Ctrl+V) o haz clic para subir</p>
+                <p className="text-sm text-muted-foreground">📋 Pega imagen del producto (Ctrl+V) para estimar peso</p>
               </>
             )}
             <input
