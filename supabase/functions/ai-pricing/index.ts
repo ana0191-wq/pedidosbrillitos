@@ -105,9 +105,9 @@ Formato exacto: {"shippingUSD":0,"shippingVES":0,"estimatedDays":0,"suggestion":
       const { imageBase64, clientRate } = body;
       const rate = clientRate || 12;
 
-      const textPrompt = `Look at this product image. Identify what it is. Give a realistic estimated weight range in lbs for ONE unit of this type of product. Then calculate tentative shipping costs for quantities: 1, 5, 10, 20 units using $${rate}/lb rate.
+      const textPrompt = `Analyze this product image carefully. Identify exactly what the product is, including materials, accessories, and any extra components you can see (metal pieces, straps, zippers, padding, etc.) that would affect weight. Based on what you see, give a realistic weight estimate in lbs for this specific product — not a generic category estimate.
 Respond ONLY with valid JSON, no markdown or explanations.
-Format: {"product_type":"...","weight_min_lbs":0.3,"weight_max_lbs":0.6,"estimates":[{"qty":1,"total_shipping":7.2,"per_unit_shipping":7.2},{"qty":5,"total_shipping":36,"per_unit_shipping":7.2},{"qty":10,"total_shipping":72,"per_unit_shipping":7.2},{"qty":20,"total_shipping":144,"per_unit_shipping":7.2}]}`;
+Format: {"product_name":"...","description":"...","estimated_weight_lbs":1.2,"weight_reasoning":"...","confidence":"low|medium|high"}`;
 
       const parts: any[] = [];
       if (imageBase64) {

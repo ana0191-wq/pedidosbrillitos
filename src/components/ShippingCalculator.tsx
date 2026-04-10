@@ -17,10 +17,11 @@ interface ShippingCalculatorProps {
 }
 
 interface AIAnalysis {
-  productType: string;
-  weightMinLbs: number;
-  weightMaxLbs: number;
-  estimates: { qty: number; totalShipping: number; perUnitShipping: number }[];
+  productName: string;
+  description: string;
+  estimatedWeightLbs: number;
+  weightReasoning: string;
+  confidence: 'low' | 'medium' | 'high';
 }
 
 export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalculatorProps) {
@@ -61,7 +62,6 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
   // AI image analysis
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
-  const [customQty, setCustomQty] = useState('');
   const [pastedImage, setPastedImage] = useState<string | null>(null);
 
   const handleAIExtract = async (source: 'text' | 'image', value: string) => {
@@ -104,14 +104,11 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
     setAiAnalysis(null);
 
     try {
-      const clientRate = settings.airPricePerLb;
-      
-      // Send image to ai-pricing with a custom shipping-estimation prompt
       const { data, error } = await supabase.functions.invoke('ai-pricing', {
         body: {
           type: 'shipping-estimate',
           imageBase64: base64,
-          clientRate,
+          clientRate: settings.airPricePerLb,
         }
       });
 
@@ -119,21 +116,18 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
 
       if (data?.success && data.data) {
         const d = data.data;
-        const avgWeight = ((d.weight_min_lbs || 0.5) + (d.weight_max_lbs || 0.5)) / 2;
+        const weight = d.estimated_weight_lbs || 0.5;
         
         setAiAnalysis({
-          productType: d.product_type || 'Producto',
-          weightMinLbs: d.weight_min_lbs || 0.3,
-          weightMaxLbs: d.weight_max_lbs || 0.8,
-          estimates: d.estimates || [1, 5, 10, 20].map(qty => ({
-            qty,
-            totalShipping: avgWeight * qty * clientRate,
-            perUnitShipping: avgWeight * clientRate,
-          })),
+          productName: d.product_name || 'Producto',
+          description: d.description || '',
+          estimatedWeightLbs: weight,
+          weightReasoning: d.weight_reasoning || '',
+          confidence: d.confidence || 'medium',
         });
 
-        // Pre-fill weight with average estimate
-        setWeightLb(String(avgWeight.toFixed(2)));
+        // Pre-fill weight input
+        setWeightLb(String(weight.toFixed(2)));
       } else {
         toast({ title: 'No se pudo analizar', description: data?.error, variant: 'destructive' });
       }
@@ -168,12 +162,7 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
     reader.readAsDataURL(file);
   };
 
-  const recalcBulk = (weightPerUnit: number, qty: number) => {
-    const clientRate = settings.airPricePerLb;
-    const totalWeight = weightPerUnit * qty;
-    const totalShipping = totalWeight * clientRate;
-    return { totalShipping, perUnit: totalShipping / qty };
-  };
+
 
   const calcAir = () => {
     const result = calcAirShipping({
@@ -259,74 +248,46 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
             </div>
           )}
 
-          {aiAnalysis && (
-            <Card className="bg-muted/30 border-primary/20">
-              <CardContent className="p-4 space-y-3">
-                <p className="text-sm font-bold">🤖 Análisis IA: {aiAnalysis.productType} (estimado)</p>
-                <p className="text-xs text-muted-foreground">Peso aprox por pieza: {aiAnalysis.weightMinLbs.toFixed(1)} – {aiAnalysis.weightMaxLbs.toFixed(1)} lbs</p>
+          {aiAnalysis && (() => {
+            const w = aiAnalysis.estimatedWeightLbs;
+            const clientRate = settings.airPricePerLb;
+            const courierRate = settings.airRatePerLb;
+            const clientPays = w * clientRate;
+            const profit = w * (clientRate - courierRate);
+            const confidenceLabel = aiAnalysis.confidence === 'high' ? '🟢 alta' : aiAnalysis.confidence === 'medium' ? '🟡 media' : '🔴 baja';
 
-                <div className="overflow-x-auto">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">ENVÍO ESTIMADO POR PIEZA:</p>
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-1 px-2">Piezas</th>
-                        <th className="text-right py-1 px-2">Total envío</th>
-                        <th className="text-right py-1 px-2">Por pieza</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {aiAnalysis.estimates.map(row => (
-                        <tr key={row.qty} className="border-b border-border/50">
-                          <td className="py-1 px-2 font-medium">{row.qty}</td>
-                          <td className="py-1 px-2 text-right">{fmt(row.totalShipping)}</td>
-                          <td className="py-1 px-2 text-right font-semibold text-primary">{fmt(row.perUnitShipping)}</td>
-                        </tr>
-                      ))}
-                      {customQty && parseInt(customQty) > 0 && (() => {
-                        const qty = parseInt(customQty);
-                        const avgWeight = (aiAnalysis.weightMinLbs + aiAnalysis.weightMaxLbs) / 2;
-                        const r = recalcBulk(avgWeight, qty);
-                        return (
-                          <tr className="border-b border-border/50 bg-primary/5">
-                            <td className="py-1 px-2 font-medium">{qty}</td>
-                            <td className="py-1 px-2 text-right">{fmt(r.totalShipping)}</td>
-                            <td className="py-1 px-2 text-right font-semibold text-primary">{fmt(r.perUnit)}</td>
-                          </tr>
-                        );
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
+            return (
+              <Card className="bg-muted/30 border-primary/20">
+                <CardContent className="p-4 space-y-2">
+                  <p className="text-sm font-bold">🤖 {aiAnalysis.productName}</p>
+                  {aiAnalysis.description && (
+                    <p className="text-xs text-muted-foreground italic">"{aiAnalysis.description}"</p>
+                  )}
+                  <div className="text-sm space-y-1">
+                    <p>Peso estimado: <span className="font-semibold">~{w.toFixed(2)} lbs</span></p>
+                    <p className="text-xs text-muted-foreground">📊 Confianza: {confidenceLabel}</p>
+                  </div>
+                  <div className="border-t border-border pt-2 text-sm space-y-0.5">
+                    <p>→ Cliente pagaría: <span className="font-semibold text-primary">{fmt(clientPays)}</span></p>
+                    <p>→ Tu ganancia: <span className="font-semibold text-green-600">{fmt(profit)}</span></p>
+                  </div>
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">⚠️ Tentativo — ajusta el peso si es necesario</p>
 
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs whitespace-nowrap">Cantidad personalizada:</Label>
-                  <Input
-                    type="number"
-                    value={customQty}
-                    onChange={e => setCustomQty(e.target.value)}
-                    placeholder="ej: 15"
-                    className="h-8 text-sm w-24"
-                  />
-                </div>
-
-                <p className="text-[10px] text-muted-foreground">⚠️ Estimado tentativo — el precio final depende del peso real del paquete.</p>
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setPastedImage(null);
-                    setAiAnalysis(null);
-                    setCustomQty('');
-                  }}
-                  className="text-xs"
-                >
-                  Limpiar análisis
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setPastedImage(null);
+                      setAiAnalysis(null);
+                    }}
+                    className="text-xs"
+                  >
+                    Limpiar análisis
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </CardContent>
       </Card>
 
