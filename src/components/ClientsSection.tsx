@@ -87,8 +87,8 @@ export function ClientsSection({
 
     orders.forEach(o => {
       o.products.forEach(p => products.push({ name: p.productName, price: p.pricePaid }));
-      const ship = calcShippingFromProducts(o, shippingSettings);
-      totalShip += ship.totalClientPays;
+      // Use saved shipping_charge_to_client from DB, not recalculated
+      totalShip += o.shippingChargeToClient || 0;
     });
 
     setQuotationData({

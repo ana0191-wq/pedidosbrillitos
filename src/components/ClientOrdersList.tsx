@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Package, Plus, Pencil } from 'lucide-react';
+import { Trash2, Package, Plus, Pencil, Send } from 'lucide-react';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { Client } from '@/hooks/useClients';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
+import { QuotationGenerator } from '@/components/QuotationGenerator';
 
 interface ClientOrdersListProps {
   clientOrders: ClientOrder[];
