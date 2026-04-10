@@ -19,6 +19,7 @@ interface ClientOrdersListProps {
   onDeleteOrder: (id: string) => void;
   exchangeRate: number | null;
   shippingSettings?: ShippingSettings;
+  clients: Client[];
 }
 
 function calcShippingFromOrder(order: ClientOrder, settings?: ShippingSettings) {
@@ -52,9 +53,11 @@ function calcShippingFromOrder(order: ClientOrder, settings?: ShippingSettings) 
 export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings }: ClientOrdersListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
+  const [quotationData, setQuotationData] = useState<any>(null);
   const fmt = (n: number) => `$${n.toFixed(2)}`;
   const clientMap: Record<string, string> = {};
-  clients.forEach(c => { clientMap[c.id] = c.name; });
+  const clientPhoneMap: Record<string, string> = {};
+  clients.forEach(c => { clientMap[c.id] = c.name; clientPhoneMap[c.id] = c.phone || ''; });
 
   return (
     <div className="space-y-4">
