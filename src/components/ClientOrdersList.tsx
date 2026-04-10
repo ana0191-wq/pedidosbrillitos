@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Package, Plus, Pencil } from 'lucide-react';
+import { Trash2, Package, Plus, Pencil, Send } from 'lucide-react';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { Client } from '@/hooks/useClients';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
+import { QuotationGenerator } from '@/components/QuotationGenerator';
 
 interface ClientOrdersListProps {
   clientOrders: ClientOrder[];
@@ -51,9 +52,11 @@ function calcShippingFromOrder(order: ClientOrder, settings?: ShippingSettings) 
 export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings }: ClientOrdersListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
+  const [quotationData, setQuotationData] = useState<any>(null);
   const fmt = (n: number) => `$${n.toFixed(2)}`;
   const clientMap: Record<string, string> = {};
-  clients.forEach(c => { clientMap[c.id] = c.name; });
+  const clientPhoneMap: Record<string, string> = {};
+  clients.forEach(c => { clientMap[c.id] = c.name; clientPhoneMap[c.id] = c.phone || ''; });
 
   return (
     <div className="space-y-4">
@@ -102,6 +105,15 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
                     <Badge variant="outline" className="text-[10px] mt-0.5">{order.status}</Badge>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => {
+                      e.stopPropagation();
+                      const clientName = order.clientName || clientMap[order.clientId] || '';
+                      const products = order.products.map(p => ({ name: p.productName, price: p.pricePaid }));
+                      const shipCharge = order.shippingChargeToClient || 0;
+                      setQuotationData({ clientName, clientPhone: clientPhoneMap[order.clientId], products, shippingCharge: shipCharge, exchangeRate });
+                    }}>
+                      <Send className="h-3 w-3" />
+                    </Button>
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
                       <Pencil className="h-3 w-3" />
                     </Button>
@@ -157,6 +169,12 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
           );
         })
       )}
+
+      <QuotationGenerator
+        open={!!quotationData}
+        onOpenChange={(v) => { if (!v) setQuotationData(null); }}
+        data={quotationData}
+      />
     </div>
   );
 }

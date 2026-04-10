@@ -17,10 +17,10 @@ interface ShippingCalculatorProps {
 }
 
 interface AIAnalysis {
-  productName: string;
-  estimatedWeightLb: number;
-  estimatedDimensions: { length: number; width: number; height: number };
-  bulkTable: { units: number; totalShipping: number; perUnit: number }[];
+  productType: string;
+  weightMinLbs: number;
+  weightMaxLbs: number;
+  estimates: { qty: number; totalShipping: number; perUnitShipping: number }[];
 }
 
 export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalculatorProps) {
@@ -104,43 +104,39 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
     setAiAnalysis(null);
 
     try {
-      const freightRate = settings.airRatePerLb;
       const clientRate = settings.airPricePerLb;
-
+      
+      // Send image to ai-pricing with a custom shipping-estimation prompt
       const { data, error } = await supabase.functions.invoke('ai-pricing', {
         body: {
-          type: 'merchandise',
+          type: 'shipping-estimate',
           imageBase64: base64,
-          exchangeRate: 1,
-          profitPercent: 0,
-          extraCosts: 0,
+          clientRate,
         }
       });
 
       if (error) throw error;
 
-      const productName = data?.data?.productName || 'Producto';
-      // Use a reasonable estimated weight
-      const estWeight = 0.5; // default estimate in lbs
+      if (data?.success && data.data) {
+        const d = data.data;
+        const avgWeight = ((d.weight_min_lbs || 0.5) + (d.weight_max_lbs || 0.5)) / 2;
+        
+        setAiAnalysis({
+          productType: d.product_type || 'Producto',
+          weightMinLbs: d.weight_min_lbs || 0.3,
+          weightMaxLbs: d.weight_max_lbs || 0.8,
+          estimates: d.estimates || [1, 5, 10, 20].map(qty => ({
+            qty,
+            totalShipping: avgWeight * qty * clientRate,
+            perUnitShipping: avgWeight * clientRate,
+          })),
+        });
 
-      // Build bulk table
-      const quantities = [1, 5, 10, 20];
-      const bulkTable = quantities.map(units => {
-        const totalWeight = estWeight * units;
-        const billable = Math.max(totalWeight, 0);
-        const totalShipping = billable * clientRate;
-        return { units, totalShipping, perUnit: totalShipping / units };
-      });
-
-      setAiAnalysis({
-        productName,
-        estimatedWeightLb: estWeight,
-        estimatedDimensions: { length: 10, width: 8, height: 4 },
-        bulkTable,
-      });
-
-      // Auto-fill weight
-      setWeightLb(String(estWeight));
+        // Pre-fill weight with average estimate
+        setWeightLb(String(avgWeight.toFixed(2)));
+      } else {
+        toast({ title: 'No se pudo analizar', description: data?.error, variant: 'destructive' });
+      }
     } catch {
       toast({ title: 'Error', description: 'No se pudo analizar la imagen', variant: 'destructive' });
     } finally {
@@ -245,7 +241,7 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
             ) : (
               <>
                 <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">📋 Pega una imagen del producto (Ctrl+V) o haz clic para subir</p>
+                <p className="text-sm text-muted-foreground">📋 Pega imagen del producto (Ctrl+V) para estimar peso</p>
               </>
             )}
             <input
@@ -266,30 +262,31 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
           {aiAnalysis && (
             <Card className="bg-muted/30 border-primary/20">
               <CardContent className="p-4 space-y-3">
-                <p className="text-sm font-bold">🤖 Análisis IA: {aiAnalysis.productName}</p>
-                <p className="text-xs text-muted-foreground">Peso estimado por pieza: ~{aiAnalysis.estimatedWeightLb} lbs</p>
+                <p className="text-sm font-bold">🤖 Análisis IA: {aiAnalysis.productType} (estimado)</p>
+                <p className="text-xs text-muted-foreground">Peso aprox por pieza: {aiAnalysis.weightMinLbs.toFixed(1)} – {aiAnalysis.weightMaxLbs.toFixed(1)} lbs</p>
 
                 <div className="overflow-x-auto">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">COSTO DE ENVÍO POR PIEZA según cantidad:</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">ENVÍO ESTIMADO POR PIEZA:</p>
                   <table className="w-full text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="text-left py-1 px-2">Prendas</th>
+                        <th className="text-left py-1 px-2">Piezas</th>
                         <th className="text-right py-1 px-2">Total envío</th>
                         <th className="text-right py-1 px-2">Por pieza</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {aiAnalysis.bulkTable.map(row => (
-                        <tr key={row.units} className="border-b border-border/50">
-                          <td className="py-1 px-2 font-medium">{row.units}</td>
+                      {aiAnalysis.estimates.map(row => (
+                        <tr key={row.qty} className="border-b border-border/50">
+                          <td className="py-1 px-2 font-medium">{row.qty}</td>
                           <td className="py-1 px-2 text-right">{fmt(row.totalShipping)}</td>
-                          <td className="py-1 px-2 text-right font-semibold text-primary">{fmt(row.perUnit)}</td>
+                          <td className="py-1 px-2 text-right font-semibold text-primary">{fmt(row.perUnitShipping)}</td>
                         </tr>
                       ))}
                       {customQty && parseInt(customQty) > 0 && (() => {
                         const qty = parseInt(customQty);
-                        const r = recalcBulk(aiAnalysis.estimatedWeightLb, qty);
+                        const avgWeight = (aiAnalysis.weightMinLbs + aiAnalysis.weightMaxLbs) / 2;
+                        const r = recalcBulk(avgWeight, qty);
                         return (
                           <tr className="border-b border-border/50 bg-primary/5">
                             <td className="py-1 px-2 font-medium">{qty}</td>
@@ -313,7 +310,7 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
                   />
                 </div>
 
-                <p className="text-[10px] text-amber-600">⚠️ Estimado — peso real puede variar</p>
+                <p className="text-[10px] text-muted-foreground">⚠️ Estimado tentativo — el precio final depende del peso real del paquete.</p>
 
                 <Button
                   size="sm"
