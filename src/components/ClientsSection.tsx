@@ -5,15 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ChevronDown, ChevronUp, Trash2, Package, DollarSign, Phone, Pencil, CheckCircle2, Circle } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Trash2, Package, Phone, Pencil } from 'lucide-react';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 import { useToast } from '@/hooks/use-toast';
-
-const ORDER_STATUSES = ['Pagado sin comprar', 'Comprado', 'En Tránsito', 'Recibido'];
 
 interface ClientsSectionProps {
   clients: Client[];
@@ -27,6 +25,36 @@ interface ClientsSectionProps {
   getOrdersByClient: (clientId: string) => ClientOrder[];
   exchangeRate: number | null;
   shippingSettings?: ShippingSettings;
+}
+
+// Compute shipping from saved product data
+function calcShippingFromProducts(order: ClientOrder, settings?: ShippingSettings) {
+  const freightRate = settings?.airRatePerLb ?? 6.50;
+  const clientRate = settings?.airPricePerLb ?? 12.00;
+
+  let totalAnaPays = 0;
+  let totalClientPays = 0;
+
+  for (const p of order.products) {
+    const weight = p.weightLb || 0;
+    const l = p.lengthIn || 0;
+    const w = p.widthIn || 0;
+    const h = p.heightIn || 0;
+    const volWeight = (l && w && h) ? (l * w * h) / 166 : 0;
+    const billable = Math.max(weight, volWeight);
+    totalAnaPays += billable * freightRate;
+    totalClientPays += billable * clientRate;
+  }
+
+  // Use saved values if available, otherwise use calculated
+  if (order.shippingChargeToClient && order.shippingChargeToClient > 0) {
+    totalClientPays = order.shippingChargeToClient;
+  }
+  if (order.shippingCostCompany && order.shippingCostCompany > 0) {
+    totalAnaPays = order.shippingCostCompany;
+  }
+
+  return { totalAnaPays, totalClientPays, profit: totalClientPays - totalAnaPays };
 }
 
 export function ClientsSection({
@@ -74,8 +102,17 @@ export function ClientsSection({
           const orders = getOrdersByClient(client.id);
           const expanded = expandedClient === client.id;
           const totalProducts = orders.reduce((sum, o) => sum + o.products.length, 0);
-          const totalCharged = orders.reduce((sum, o) => sum + o.amountCharged, 0);
-          const totalCost = orders.reduce((sum, o) => sum + o.products.reduce((s, p) => s + p.pricePaid, 0) + o.shippingCost, 0);
+
+          // Calculate real totals
+          const totalProductCost = orders.reduce((sum, o) => sum + o.products.reduce((s, p) => s + p.pricePaid, 0), 0);
+          let totalClientShipping = 0;
+          let totalProfit = 0;
+          orders.forEach(o => {
+            const ship = calcShippingFromProducts(o, shippingSettings);
+            totalClientShipping += ship.totalClientPays;
+            totalProfit += ship.profit;
+          });
+          const totalCharged = totalProductCost + totalClientShipping;
 
           return (
             <Card key={client.id} className="overflow-hidden">
@@ -94,9 +131,9 @@ export function ClientsSection({
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-foreground">{fmt(totalCharged)}</p>
-                      <p className={`text-xs font-medium ${(totalCharged - totalCost) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                        {fmt(totalCharged - totalCost)} ganancia
+                      <p className="text-sm font-semibold text-foreground">{fmt(totalCharged)} total</p>
+                      <p className={`text-xs font-medium ${totalProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                        {fmt(totalProfit)} tu ganancia {totalProfit >= 0 ? '✅' : ''}
                       </p>
                     </div>
                     {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
@@ -120,61 +157,79 @@ export function ClientsSection({
                     {orders.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-2">Sin pedidos</p>
                     ) : (
-                      orders.map(order => (
-                        <Card key={order.id} className="bg-card cursor-pointer hover:shadow-sm transition-shadow" onClick={() => setEditingOrder(order)}>
-                          <CardContent className="p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">{order.status}</Badge>
-                                {order.paymentMethod && <Badge variant="secondary" className="text-xs">{order.paymentMethod}</Badge>}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); onDeleteOrder(order.id); }}>
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
+                      orders.map(order => {
+                        const ship = calcShippingFromProducts(order, shippingSettings);
+                        const isProdPaid = order.productPaymentStatus === 'Pagado';
+                        const isShipPaid = order.shippingPaymentStatus === 'Pagado';
+                        const productCost = order.products.reduce((s, p) => s + p.pricePaid, 0);
+                        const hasShippingData = ship.totalClientPays > 0;
 
-                            {order.products.length > 0 ? (
-                              <div className="space-y-2">
-                                {order.products.map(p => (
-                                  <div key={p.id} className="flex items-center gap-3 text-sm">
-                                    {p.arrived ? <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" /> : <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
-                                    <div className="h-16 w-16 rounded-md bg-muted flex-shrink-0 overflow-hidden">
-                                      {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-6 w-6 m-5 text-muted-foreground" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <span className={`block truncate text-foreground font-medium ${p.arrived ? 'line-through opacity-60' : ''}`}>{p.productName}</span>
-                                      <div className="flex items-center gap-2 mt-0.5">
-                                        <Badge variant="outline" className="text-[10px] h-4">{p.status}</Badge>
-                                        <span className="text-xs text-muted-foreground">{p.store}</span>
+                        return (
+                          <Card key={order.id} className="bg-card cursor-pointer hover:shadow-sm transition-shadow" onClick={() => setEditingOrder(order)}>
+                            <CardContent className="p-3 space-y-2">
+                              {/* Products */}
+                              {order.products.length > 0 ? (
+                                <div className="space-y-1.5">
+                                  {order.products.map(p => (
+                                    <div key={p.id} className="flex items-center gap-2 text-sm">
+                                      <div className="h-10 w-10 rounded-md bg-muted flex-shrink-0 overflow-hidden">
+                                        {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-3 text-muted-foreground" />}
                                       </div>
+                                      <span className={`flex-1 truncate text-foreground text-xs ${p.arrived ? 'line-through opacity-60' : ''}`}>
+                                        📦 {p.productName}
+                                      </span>
+                                      <span className="font-semibold text-xs">{fmt(p.pricePaid)} · {p.store}</span>
                                     </div>
-                                    <span className="font-semibold text-foreground">{fmt(p.pricePaid)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">Sin productos asignados aún</p>
-                            )}
-
-                            <div className="flex items-center justify-between text-xs pt-1 border-t border-border">
-                              <span className="text-muted-foreground">
-                                <DollarSign className="h-3 w-3 inline" /> Envío: {fmt(order.shippingCost)} · Cobrado: {fmt(order.amountCharged)}
-                              </span>
-                              {exchangeRate && order.amountCharged > 0 && (
-                                <span className="text-muted-foreground">
-                                  ≈ {(order.amountCharged * exchangeRate).toFixed(2)} Bs
-                                </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">Sin productos</p>
                               )}
-                            </div>
-                            {order.notes && <p className="text-xs text-muted-foreground">📝 {order.notes}</p>}
-                          </CardContent>
-                        </Card>
-                      ))
+
+                              {/* Two-stage summary */}
+                              <div className="space-y-1 pt-2 border-t border-border text-xs">
+                                {/* Stage 1 */}
+                                {isProdPaid ? (
+                                  <p className="text-green-600 font-medium">
+                                    ✅ Etapa 1  {fmt(order.productPaymentAmount || productCost)} pagado · {order.productPaymentMethod || '—'}
+                                  </p>
+                                ) : (
+                                  <p className="text-amber-600 font-medium">⏳ Etapa 1  Producto pendiente · {fmt(productCost)}</p>
+                                )}
+
+                                {/* Stage 2 */}
+                                {isShipPaid ? (
+                                  <p className="text-green-600 font-medium">
+                                    ✅ Etapa 2  {fmt(order.shippingPaymentAmount || ship.totalClientPays)} pagado · {order.shippingPaymentMethod || '—'}
+                                  </p>
+                                ) : hasShippingData ? (
+                                  <p className="text-blue-600 font-medium">
+                                    ⏳ Etapa 2  Cobrar {fmt(ship.totalClientPays)} envío · Ganancia {fmt(ship.profit)}
+                                    {exchangeRate && <span className="text-muted-foreground"> ≈ {(ship.totalClientPays * exchangeRate).toFixed(0)} Bs</span>}
+                                  </p>
+                                ) : (
+                                  <p className="text-amber-500 font-medium">⚠️ Envío sin calcular · <span className="underline">Calcular</span></p>
+                                )}
+                              </div>
+
+                              {/* Action row */}
+                              <div className="flex items-center justify-between pt-1">
+                                <Badge variant="outline" className="text-[10px]">{order.status}</Badge>
+                                <div className="flex items-center gap-1">
+                                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); onDeleteOrder(order.id); }}>
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {order.notes && <p className="text-[10px] text-muted-foreground">📝 {order.notes}</p>}
+                            </CardContent>
+                          </Card>
+                        );
+                      })
                     )}
                   </div>
                 )}

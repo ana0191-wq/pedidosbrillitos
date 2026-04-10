@@ -20,6 +20,34 @@ interface ClientOrdersListProps {
   shippingSettings?: ShippingSettings;
 }
 
+function calcShippingFromOrder(order: ClientOrder, settings?: ShippingSettings) {
+  const freightRate = settings?.airRatePerLb ?? 6.50;
+  const clientRate = settings?.airPricePerLb ?? 12.00;
+
+  let totalAnaPays = 0;
+  let totalClientPays = 0;
+
+  for (const p of order.products) {
+    const weight = p.weightLb || 0;
+    const l = p.lengthIn || 0;
+    const w = p.widthIn || 0;
+    const h = p.heightIn || 0;
+    const volWeight = (l && w && h) ? (l * w * h) / 166 : 0;
+    const billable = Math.max(weight, volWeight);
+    totalAnaPays += billable * freightRate;
+    totalClientPays += billable * clientRate;
+  }
+
+  if (order.shippingChargeToClient && order.shippingChargeToClient > 0) {
+    totalClientPays = order.shippingChargeToClient;
+  }
+  if (order.shippingCostCompany && order.shippingCostCompany > 0) {
+    totalAnaPays = order.shippingCostCompany;
+  }
+
+  return { totalAnaPays, totalClientPays, profit: totalClientPays - totalAnaPays };
+}
+
 export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings }: ClientOrdersListProps) {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
@@ -60,7 +88,9 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
         clientOrders.map(order => {
           const isProdPaid = order.productPaymentStatus === 'Pagado';
           const isShipPaid = order.shippingPaymentStatus === 'Pagado';
-          const shippingProfit = (order.shippingChargeToClient || 0) - (order.shippingCostCompany || 0);
+          const ship = calcShippingFromOrder(order, shippingSettings);
+          const productCost = order.products.reduce((s, p) => s + p.pricePaid, 0);
+          const hasShippingData = ship.totalClientPays > 0;
 
           return (
             <Card key={order.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setEditingOrder(order)}>
@@ -97,32 +127,27 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
                 )}
 
                 {/* Two-stage status */}
-                <div className="space-y-1 pt-2 border-t border-border text-sm">
+                <div className="space-y-1 pt-2 border-t border-border text-xs">
                   {/* Stage 1 */}
                   {isProdPaid ? (
-                    <p className="text-green-600 font-medium text-xs">
-                      ✅ Etapa 1: {fmt(order.productPaymentAmount || 0)} pagado ({order.productPaymentMethod || '—'})
+                    <p className="text-green-600 font-medium">
+                      ✅ Etapa 1: {fmt(order.productPaymentAmount || productCost)} pagado ({order.productPaymentMethod || '—'})
                     </p>
                   ) : (
-                    <p className="text-amber-600 font-medium text-xs">⏳ Etapa 1: Producto pendiente de pago</p>
+                    <p className="text-amber-600 font-medium">⏳ Etapa 1: Producto pendiente · {fmt(productCost)}</p>
                   )}
 
                   {/* Stage 2 */}
                   {isShipPaid ? (
-                    <p className="text-green-600 font-medium text-xs">
-                      ✅ Etapa 2: {fmt(order.shippingPaymentAmount || 0)} pagado ({order.shippingPaymentMethod || '—'})
+                    <p className="text-green-600 font-medium">
+                      ✅ Etapa 2: {fmt(order.shippingPaymentAmount || ship.totalClientPays)} pagado ({order.shippingPaymentMethod || '—'})
+                    </p>
+                  ) : hasShippingData ? (
+                    <p className="text-blue-600 font-medium">
+                      ⏳ Etapa 2: Cobrar {fmt(ship.totalClientPays)} · Ganancia {fmt(ship.profit)}
                     </p>
                   ) : (
-                    <div className="text-xs">
-                      <p className="text-blue-600 font-medium">
-                        ⏳ Etapa 2: Envío {order.shippingChargeToClient ? fmt(order.shippingChargeToClient) : '—'}
-                      </p>
-                      {order.shippingCostCompany != null && order.shippingCostCompany > 0 && (
-                        <p className="text-muted-foreground ml-6">
-                          Yo pago: {fmt(order.shippingCostCompany)} → Cobro: {fmt(order.shippingChargeToClient || 0)} → Mi ganancia: <span className="text-green-600 font-semibold">{fmt(shippingProfit)}</span>
-                        </p>
-                      )}
-                    </div>
+                    <p className="text-amber-500 font-medium">⚠️ Envío sin calcular · <span className="underline">Calcular</span></p>
                   )}
                 </div>
 
