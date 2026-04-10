@@ -101,9 +101,32 @@ Formato exacto: {"shippingUSD":0,"shippingVES":0,"estimatedDays":0,"suggestion":
         },
       };
 
+    } else if (type === 'shipping-estimate') {
+      const { imageBase64, clientRate } = body;
+      const rate = clientRate || 12;
+
+      const textPrompt = `Look at this product image. Identify what it is. Give a realistic estimated weight range in lbs for ONE unit of this type of product. Then calculate tentative shipping costs for quantities: 1, 5, 10, 20 units using $${rate}/lb rate.
+Respond ONLY with valid JSON, no markdown or explanations.
+Format: {"product_type":"...","weight_min_lbs":0.3,"weight_max_lbs":0.6,"estimates":[{"qty":1,"total_shipping":7.2,"per_unit_shipping":7.2},{"qty":5,"total_shipping":36,"per_unit_shipping":7.2},{"qty":10,"total_shipping":72,"per_unit_shipping":7.2},{"qty":20,"total_shipping":144,"per_unit_shipping":7.2}]}`;
+
+      const parts: any[] = [];
+      if (imageBase64) {
+        const base64Data = imageBase64.startsWith('data:') ? imageBase64.split(',')[1] : imageBase64;
+        parts.push({ inline_data: { mime_type: 'image/jpeg', data: base64Data } });
+      }
+      parts.push({ text: textPrompt });
+
+      requestBody = {
+        contents: [{ parts }],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          temperature: 0.3,
+        },
+      };
+
     } else {
       return new Response(
-        JSON.stringify({ success: false, error: 'Tipo no válido. Usa "merchandise" o "shipping".' }),
+        JSON.stringify({ success: false, error: 'Tipo no válido. Usa "merchandise", "shipping" o "shipping-estimate".' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
