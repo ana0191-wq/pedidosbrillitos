@@ -5,18 +5,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ChevronDown, ChevronUp, Trash2, Package, Phone, Pencil } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Trash2, Package, Phone, Pencil, Send } from 'lucide-react';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
+import { EditClientDialog } from '@/components/EditClientDialog';
+import { QuotationGenerator } from '@/components/QuotationGenerator';
 import { useToast } from '@/hooks/use-toast';
 
 interface ClientsSectionProps {
   clients: Client[];
   clientOrders: ClientOrder[];
   onAddClient: (name: string, phone?: string, notes?: string) => Promise<string | null>;
+  onUpdateClient?: (id: string, updates: Partial<Pick<Client, 'name' | 'phone' | 'notes'>>) => void;
   onDeleteClient: (id: string) => void;
   onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
   onAddProduct: (order: any, clientOrderId?: string) => Promise<void>;
@@ -27,7 +30,6 @@ interface ClientsSectionProps {
   shippingSettings?: ShippingSettings;
 }
 
-// Compute shipping from saved product data
 function calcShippingFromProducts(order: ClientOrder, settings?: ShippingSettings) {
   const freightRate = settings?.airRatePerLb ?? 6.50;
   const clientRate = settings?.airPricePerLb ?? 12.00;
@@ -46,7 +48,6 @@ function calcShippingFromProducts(order: ClientOrder, settings?: ShippingSetting
     totalClientPays += billable * clientRate;
   }
 
-  // Use saved values if available, otherwise use calculated
   if (order.shippingChargeToClient && order.shippingChargeToClient > 0) {
     totalClientPays = order.shippingChargeToClient;
   }
@@ -58,7 +59,7 @@ function calcShippingFromProducts(order: ClientOrder, settings?: ShippingSetting
 }
 
 export function ClientsSection({
-  clients, clientOrders, onAddClient, onDeleteClient,
+  clients, clientOrders, onAddClient, onUpdateClient, onDeleteClient,
   onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, getOrdersByClient, exchangeRate, shippingSettings
 }: ClientsSectionProps) {
   const { toast } = useToast();
@@ -66,6 +67,8 @@ export function ClientsSection({
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddOrder, setShowAddOrder] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [quotationData, setQuotationData] = useState<any>(null);
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
 
@@ -76,6 +79,25 @@ export function ClientsSection({
     setNewClientPhone('');
     setShowAddClient(false);
     toast({ title: '✅ Cliente agregado' });
+  };
+
+  const handleQuotation = (client: Client, orders: ClientOrder[]) => {
+    const products: { name: string; price: number }[] = [];
+    let totalShip = 0;
+
+    orders.forEach(o => {
+      o.products.forEach(p => products.push({ name: p.productName, price: p.pricePaid }));
+      const ship = calcShippingFromProducts(o, shippingSettings);
+      totalShip += ship.totalClientPays;
+    });
+
+    setQuotationData({
+      clientName: client.name,
+      clientPhone: client.phone,
+      products,
+      shippingCharge: totalShip,
+      exchangeRate,
+    });
   };
 
   const fmt = (n: number) => `$${n.toFixed(2)}`;
@@ -103,7 +125,6 @@ export function ClientsSection({
           const expanded = expandedClient === client.id;
           const totalProducts = orders.reduce((sum, o) => sum + o.products.length, 0);
 
-          // Aggregate across all orders using SAVED values
           let totalProdPaid = 0;
           let totalProdAmount = 0;
           let totalShipCharge = 0;
@@ -112,7 +133,6 @@ export function ClientsSection({
           let allShipPaid = orders.length > 0;
           let anyShipMissing = false;
           let prodMethods: string[] = [];
-          let shipMethods: string[] = [];
 
           orders.forEach(o => {
             const productCost = o.products.reduce((s, p) => s + p.pricePaid, 0);
@@ -131,9 +151,6 @@ export function ClientsSection({
             if (o.shippingPaymentStatus === 'Pagado') {
               totalShipCharge += o.shippingPaymentAmount || ship.totalClientPays;
               totalProfit += ship.profit;
-              if (o.shippingPaymentMethod && !shipMethods.includes(o.shippingPaymentMethod)) {
-                shipMethods.push(o.shippingPaymentMethod);
-              }
             } else if (ship.totalClientPays > 0) {
               allShipPaid = false;
               totalShipCharge += ship.totalClientPays;
@@ -145,27 +162,31 @@ export function ClientsSection({
           });
 
           const bothFullyPaid = allProdPaid && allShipPaid && !anyShipMissing;
-          const totalOwed = (allProdPaid ? 0 : totalProdAmount - totalProdPaid) + (allShipPaid ? 0 : totalShipCharge);
 
           return (
             <Card key={client.id} className="overflow-hidden">
               <CardContent className="p-0">
-                {/* Client header — two-column compact */}
+                {/* Client header */}
                 <button
                   className="w-full p-4 text-left hover:bg-muted/30 transition-colors"
                   onClick={() => setExpandedClient(expanded ? null : client.id)}
                 >
                   <div className="flex items-start justify-between gap-4">
-                    {/* Left column: name, counts */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-foreground text-base">{client.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-foreground text-base">{client.name}</p>
+                        {onUpdateClient && (
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setEditingClient(client); }}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                         {client.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{client.phone}</span>}
                         <span>{orders.length} pedido{orders.length !== 1 ? 's' : ''} · {totalProducts} producto{totalProducts !== 1 ? 's' : ''}</span>
                       </div>
                     </div>
 
-                    {/* Right column: financial summary */}
                     {orders.length > 0 && (
                       <div className="text-right text-xs space-y-0.5 flex-shrink-0">
                         {allProdPaid ? (
@@ -193,12 +214,17 @@ export function ClientsSection({
                   </div>
                 </button>
 
-                {/* Expanded: order rows — essentials only */}
+                {/* Expanded */}
                 {expanded && (
                   <div className="border-t border-border p-4 space-y-2 bg-muted/10">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-muted-foreground">Pedidos</span>
                       <div className="flex gap-2">
+                        {orders.length > 0 && (
+                          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); handleQuotation(client, orders); }}>
+                            <Send className="h-3 w-3 mr-1" /> Cotización
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => setShowAddOrder(client.id)}>
                           <Plus className="h-3 w-3 mr-1" /> Pedido
                         </Button>
@@ -213,7 +239,6 @@ export function ClientsSection({
                     ) : (
                       orders.map(order => (
                         <div key={order.id} className="flex items-center gap-2 p-2 rounded-md bg-card border border-border cursor-pointer hover:shadow-sm transition-shadow" onClick={() => setEditingOrder(order)}>
-                          {/* Product rows */}
                           <div className="flex-1 min-w-0 space-y-1">
                             {order.products.map(p => (
                               <div key={p.id} className="flex items-center gap-2 text-xs">
@@ -227,8 +252,6 @@ export function ClientsSection({
                               </div>
                             ))}
                           </div>
-
-                          {/* Right: status + actions */}
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <Badge variant="outline" className="text-[10px]">{order.status}</Badge>
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
@@ -260,6 +283,23 @@ export function ClientsSection({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Client Dialog */}
+      {onUpdateClient && (
+        <EditClientDialog
+          open={!!editingClient}
+          onOpenChange={(v) => { if (!v) setEditingClient(null); }}
+          client={editingClient}
+          onUpdate={onUpdateClient}
+        />
+      )}
+
+      {/* Quotation Generator */}
+      <QuotationGenerator
+        open={!!quotationData}
+        onOpenChange={(v) => { if (!v) setQuotationData(null); }}
+        data={quotationData}
+      />
 
       {/* Add Order Dialog */}
       <AddClientOrderDialog
