@@ -17,10 +17,10 @@ interface ShippingCalculatorProps {
 }
 
 interface AIAnalysis {
-  productName: string;
-  estimatedWeightLb: number;
-  estimatedDimensions: { length: number; width: number; height: number };
-  bulkTable: { units: number; totalShipping: number; perUnit: number }[];
+  productType: string;
+  weightMinLbs: number;
+  weightMaxLbs: number;
+  estimates: { qty: number; totalShipping: number; perUnitShipping: number }[];
 }
 
 export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalculatorProps) {
@@ -104,43 +104,39 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
     setAiAnalysis(null);
 
     try {
-      const freightRate = settings.airRatePerLb;
       const clientRate = settings.airPricePerLb;
-
+      
+      // Send image to ai-pricing with a custom shipping-estimation prompt
       const { data, error } = await supabase.functions.invoke('ai-pricing', {
         body: {
-          type: 'merchandise',
+          type: 'shipping-estimate',
           imageBase64: base64,
-          exchangeRate: 1,
-          profitPercent: 0,
-          extraCosts: 0,
+          clientRate,
         }
       });
 
       if (error) throw error;
 
-      const productName = data?.data?.productName || 'Producto';
-      // Use a reasonable estimated weight
-      const estWeight = 0.5; // default estimate in lbs
+      if (data?.success && data.data) {
+        const d = data.data;
+        const avgWeight = ((d.weight_min_lbs || 0.5) + (d.weight_max_lbs || 0.5)) / 2;
+        
+        setAiAnalysis({
+          productType: d.product_type || 'Producto',
+          weightMinLbs: d.weight_min_lbs || 0.3,
+          weightMaxLbs: d.weight_max_lbs || 0.8,
+          estimates: d.estimates || [1, 5, 10, 20].map(qty => ({
+            qty,
+            totalShipping: avgWeight * qty * clientRate,
+            perUnitShipping: avgWeight * clientRate,
+          })),
+        });
 
-      // Build bulk table
-      const quantities = [1, 5, 10, 20];
-      const bulkTable = quantities.map(units => {
-        const totalWeight = estWeight * units;
-        const billable = Math.max(totalWeight, 0);
-        const totalShipping = billable * clientRate;
-        return { units, totalShipping, perUnit: totalShipping / units };
-      });
-
-      setAiAnalysis({
-        productName,
-        estimatedWeightLb: estWeight,
-        estimatedDimensions: { length: 10, width: 8, height: 4 },
-        bulkTable,
-      });
-
-      // Auto-fill weight
-      setWeightLb(String(estWeight));
+        // Pre-fill weight with average estimate
+        setWeightLb(String(avgWeight.toFixed(2)));
+      } else {
+        toast({ title: 'No se pudo analizar', description: data?.error, variant: 'destructive' });
+      }
     } catch {
       toast({ title: 'Error', description: 'No se pudo analizar la imagen', variant: 'destructive' });
     } finally {
