@@ -4,9 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Package, Ruler, Check } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Trash2, Package, Check, Save } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
@@ -15,8 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 const ORDER_STATUSES = ['Pendiente', 'En Tránsito', 'Listo', 'Entregado'];
 const PAYMENT_METHODS = ['PayPal', 'Binance', 'PagoMóvil', 'Zelle', 'Efectivo', 'Otro'];
-const STORES = ['AliExpress', 'Shein', 'Temu', 'Amazon'];
-const PRODUCT_STATUSES = ['Pedido', 'En Tránsito', 'Entregado'];
+const CURRENCIES = ['USD', 'EUR', 'Bs'];
 
 interface ProductDims {
   weightLb: string;
@@ -41,39 +38,27 @@ interface EditClientOrderDialogProps {
   shippingSettings?: ShippingSettings;
 }
 
-function calcProductShipping(
-  weight: number,
-  l: number,
-  w: number,
-  h: number,
-  myRate: number,
-  clientRate: number
-) {
+function calcShipping(weight: number, l: number, w: number, h: number, myRate: number, clientRate: number) {
   const volWeight = (l && w && h) ? (l * w * h) / 166 : 0;
   const billable = Math.ceil(Math.max(weight, volWeight));
   const myCost = billable * myRate;
   const clientCharge = billable * clientRate;
-  return { volWeight, billable, myCost, clientCharge, profit: clientCharge - myCost };
+  return { volWeight, billable, myCost, clientCharge };
 }
 
-function StatusButtonGroup({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map(opt => (
-        <button
-          key={opt}
-          type="button"
-          onClick={() => onChange(opt)}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-            value === opt
-              ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-          }`}
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+        active
+          ? 'bg-primary text-primary-foreground border-primary'
+          : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -82,13 +67,15 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const [status, setStatus] = useState('');
   const [payment, setPayment] = useState('');
   const [payRef, setPayRef] = useState('');
+  const [currency, setCurrency] = useState('USD');
+  const [amountPaid, setAmountPaid] = useState('');
   const [notes, setNotes] = useState('');
   const [products, setProducts] = useState<ClientOrderProduct[]>([]);
   const [productDims, setProductDims] = useState<Record<string, ProductDims>>({});
 
   const myRate = shippingSettings?.airRatePerLb ?? 6.50;
   const clientRate = shippingSettings?.airPricePerLb ?? 10;
-  const profitPercent = 0.30;
+  const profitPercent = shippingSettings?.defaultMarginPercent ?? 0.30;
 
   useEffect(() => {
     if (order && open) {
@@ -97,6 +84,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       setPayRef(order.paymentReference);
       setNotes(order.notes);
       setProducts([...order.products]);
+      setCurrency('USD');
+      setAmountPaid('');
 
       const dims: Record<string, ProductDims> = {};
       order.products.forEach(p => {
@@ -117,47 +106,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     }
   }, [order, open]);
 
-  const productCalcs = useMemo(() => {
-    const calcs: Record<string, ReturnType<typeof calcProductShipping> & { suggestedSaleUsd: number }> = {};
-    products.forEach(p => {
-      const d = productDims[p.id];
-      if (!d) return;
-      const weight = parseFloat(d.weightLb) || 0;
-      const l = parseFloat(d.lengthIn) || 0;
-      const w = parseFloat(d.widthIn) || 0;
-      const h = parseFloat(d.heightIn) || 0;
-      if (weight > 0) {
-        const calc = calcProductShipping(weight, l, w, h, myRate, clientRate);
-        const suggestedSaleUsd = p.pricePaid * (1 + profitPercent);
-        calcs[p.id] = { ...calc, suggestedSaleUsd };
-      }
-    });
-    return calcs;
-  }, [products, productDims, myRate, clientRate]);
-
-  const summary = useMemo(() => {
-    let totalSaleUsd = 0;
-    let totalShippingClient = 0;
-    let totalCostUsd = 0;
-    let totalShippingMy = 0;
-
-    products.forEach(p => {
-      const d = productDims[p.id];
-      const calc = productCalcs[p.id];
-      const salePrice = d ? (parseFloat(d.salePriceUsd) || calc?.suggestedSaleUsd || 0) : 0;
-      const shippingClient = d ? (parseFloat(d.shippingChargeClient) || calc?.clientCharge || 0) : 0;
-      totalSaleUsd += salePrice;
-      totalShippingClient += shippingClient;
-      totalCostUsd += p.pricePaid;
-      totalShippingMy += calc?.myCost || 0;
-    });
-
-    const totalChargeClient = totalSaleUsd + totalShippingClient;
-    const totalChargeVes = exchangeRate ? totalChargeClient * exchangeRate : 0;
-    const profit = totalChargeClient - totalCostUsd - totalShippingMy;
-    return { totalSaleUsd, totalShippingClient, totalChargeClient, totalChargeVes, totalCostUsd, totalShippingMy, profit };
-  }, [products, productDims, productCalcs, exchangeRate]);
-
   if (!order) return null;
 
   const updateDim = (id: string, field: keyof ProductDims, value: any) => {
@@ -175,18 +123,24 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
 
   const confirmPrices = async (productId: string) => {
     const d = productDims[productId];
-    const calc = productCalcs[productId];
-    if (!d) return;
-
-    const saleUsd = parseFloat(d.salePriceUsd) || calc?.suggestedSaleUsd || 0;
-    const shippingClient = parseFloat(d.shippingChargeClient) || calc?.clientCharge || 0;
+    const p = products.find(x => x.id === productId);
+    if (!d || !p) return;
+    const weight = parseFloat(d.weightLb) || 0;
+    const l = parseFloat(d.lengthIn) || 0;
+    const w = parseFloat(d.widthIn) || 0;
+    const h = parseFloat(d.heightIn) || 0;
+    const calc = calcShipping(weight, l, w, h, myRate, clientRate);
+    const suggestedSale = p.pricePaid * (1 + profitPercent);
+    const saleUsd = parseFloat(d.salePriceUsd) || suggestedSale;
+    const extraClient = d.hasExtraCharge ? (parseFloat(d.extraChargeClient) || 0) : 0;
+    const shippingClient = (parseFloat(d.shippingChargeClient) || calc.clientCharge) + extraClient;
     const saleVes = exchangeRate ? saleUsd * exchangeRate : 0;
 
     await supabase.from('orders').update({
-      weight_lb: parseFloat(d.weightLb) || null,
-      length_in: parseFloat(d.lengthIn) || null,
-      width_in: parseFloat(d.widthIn) || null,
-      height_in: parseFloat(d.heightIn) || null,
+      weight_lb: weight || null,
+      length_in: l || null,
+      width_in: w || null,
+      height_in: h || null,
       sale_price_usd: saleUsd,
       sale_price_ves: saleVes,
       shipping_charge_client: shippingClient,
@@ -203,21 +157,18 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       status,
       paymentMethod: payment,
       paymentReference: payRef,
-      shippingCost: summary.totalShippingMy,
-      amountCharged: summary.totalChargeClient,
       notes,
     });
 
     for (const p of products) {
       const orig = order.products.find(op => op.id === p.id);
       if (!orig) continue;
-      const updates: Record<string, any> = {};
-      if (p.productName !== orig.productName) updates.productName = p.productName;
-      if (p.store !== orig.store) updates.store = p.store;
-      if (p.pricePaid !== orig.pricePaid) updates.pricePaid = p.pricePaid;
-      if (p.orderNumber !== orig.orderNumber) updates.orderNumber = p.orderNumber;
-      if (p.status !== orig.status) updates.status = p.status;
-      if (p.arrived !== orig.arrived) updates.arrived = p.arrived;
+      const dbUpdates: any = {};
+      if (p.productName !== orig.productName) dbUpdates.product_name = p.productName;
+      if (p.store !== orig.store) dbUpdates.store = p.store;
+      if (p.pricePaid !== orig.pricePaid) dbUpdates.price_paid = p.pricePaid;
+      if (p.status !== orig.status) dbUpdates.status = p.status;
+      if (p.arrived !== orig.arrived) dbUpdates.arrived = p.arrived;
 
       const d = productDims[p.id];
       if (d) {
@@ -225,31 +176,14 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
         const li = parseFloat(d.lengthIn) || null;
         const wi = parseFloat(d.widthIn) || null;
         const hi = parseFloat(d.heightIn) || null;
-        if (wl !== orig.weightLb) updates.weightLb = wl;
-        if (li !== orig.lengthIn) updates.lengthIn = li;
-        if (wi !== orig.widthIn) updates.widthIn = wi;
-        if (hi !== orig.heightIn) updates.heightIn = hi;
+        if (wl !== orig.weightLb) dbUpdates.weight_lb = wl;
+        if (li !== orig.lengthIn) dbUpdates.length_in = li;
+        if (wi !== orig.widthIn) dbUpdates.width_in = wi;
+        if (hi !== orig.heightIn) dbUpdates.height_in = hi;
       }
 
-      if (Object.keys(updates).length > 0) {
-        const dbUpdates: any = {};
-        Object.entries(updates).forEach(([k, v]) => {
-          if (k === 'weightLb') dbUpdates.weight_lb = v;
-          else if (k === 'lengthIn') dbUpdates.length_in = v;
-          else if (k === 'widthIn') dbUpdates.width_in = v;
-          else if (k === 'heightIn') dbUpdates.height_in = v;
-        });
-
-        const stdUpdates: any = { ...updates };
-        delete stdUpdates.weightLb;
-        delete stdUpdates.lengthIn;
-        delete stdUpdates.widthIn;
-        delete stdUpdates.heightIn;
-        if (Object.keys(stdUpdates).length > 0) updateProduct(p.id, stdUpdates);
-
-        if (Object.keys(dbUpdates).length > 0) {
-          supabase.from('orders').update(dbUpdates).eq('id', p.id).then();
-        }
+      if (Object.keys(dbUpdates).length > 0) {
+        supabase.from('orders').update(dbUpdates).eq('id', p.id).then();
       }
     }
 
@@ -260,109 +194,83 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-2">
-          <DialogTitle>Editar Pedido — {order.clientName}</DialogTitle>
+      <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-5 pt-4 pb-3 border-b border-border">
+          <DialogTitle className="text-base">Editar Pedido — {order.clientName}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
-          {/* Estado */}
-          <div className="space-y-1.5">
-            <Label className="text-sm font-semibold">Estado</Label>
-            <StatusButtonGroup value={status} onChange={setStatus} options={ORDER_STATUSES} />
+        <div className="px-5 py-3 space-y-3 max-h-[80vh] overflow-y-auto">
+          {/* STATUS + PAYMENT row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Estado</Label>
+              <div className="flex flex-wrap gap-1">
+                {ORDER_STATUSES.map(s => <Pill key={s} label={s} active={status === s} onClick={() => setStatus(s)} />)}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Pago</Label>
+              <div className="flex flex-wrap gap-1">
+                {PAYMENT_METHODS.map(m => <Pill key={m} label={m} active={payment === m} onClick={() => setPayment(m)} />)}
+              </div>
+              <div className="flex gap-1.5 items-center mt-1">
+                <Input
+                  value={amountPaid}
+                  onChange={e => setAmountPaid(e.target.value)}
+                  placeholder="Monto"
+                  type="number"
+                  step="0.01"
+                  className="h-7 text-xs w-24"
+                />
+                {CURRENCIES.map(c => <Pill key={c} label={c} active={currency === c} onClick={() => setCurrency(c)} />)}
+              </div>
+            </div>
           </div>
 
-          {/* Método de pago */}
-          <div className="space-y-1.5">
-            <Label className="text-sm font-semibold">Método de pago</Label>
-            <StatusButtonGroup value={payment} onChange={setPayment} options={PAYMENT_METHODS} />
-          </div>
+          {/* PRODUCTS */}
+          {products.map((p) => {
+            const d = productDims[p.id] || { weightLb: '', lengthIn: '', widthIn: '', heightIn: '', salePriceUsd: '', shippingChargeClient: '', pricesConfirmed: false, hasExtraCharge: false, extraChargeCompany: '', extraChargeClient: '' };
+            const weight = parseFloat(d.weightLb) || 0;
+            const l = parseFloat(d.lengthIn) || 0;
+            const w = parseFloat(d.widthIn) || 0;
+            const h = parseFloat(d.heightIn) || 0;
+            const calc = weight > 0 ? calcShipping(weight, l, w, h, myRate, clientRate) : null;
 
-          <div><Label>Referencia de pago</Label><Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="Nro de referencia..." /></div>
-          <div><Label>Notas</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} /></div>
+            const extraCompany = d.hasExtraCharge ? (parseFloat(d.extraChargeCompany) || 0) : 0;
+            const extraClient = d.hasExtraCharge ? (parseFloat(d.extraChargeClient) || 0) : 0;
+            const suggestedSale = p.pricePaid * (1 + profitPercent);
+            const saleUsd = parseFloat(d.salePriceUsd) || suggestedSale;
+            const shippingClient = (parseFloat(d.shippingChargeClient) || calc?.clientCharge || 0) + extraClient;
+            const myShippingCost = (calc?.myCost || 0) + extraCompany;
+            const profitAmount = saleUsd + shippingClient - p.pricePaid - myShippingCost;
 
-          {/* Products */}
-          <div className="border-t border-border pt-3 space-y-3">
-            <Label className="text-base font-semibold">Productos ({products.length})</Label>
-            {products.map((p) => {
-              const d = productDims[p.id] || { weightLb: '', lengthIn: '', widthIn: '', heightIn: '', salePriceUsd: '', shippingChargeClient: '', pricesConfirmed: false, hasExtraCharge: false, extraChargeCompany: '', extraChargeClient: '' };
-              const calc = productCalcs[p.id];
-              const isConfirmed = d.pricesConfirmed;
-
-              const extraCompany = parseFloat(d.extraChargeCompany) || 0;
-              const extraClient = parseFloat(d.extraChargeClient) || 0;
-              const suggestedSale = calc?.suggestedSaleUsd ?? p.pricePaid * (1 + profitPercent);
-              const saleUsd = parseFloat(d.salePriceUsd) || suggestedSale;
-              const shippingClient = (parseFloat(d.shippingChargeClient) || calc?.clientCharge || 0) + (d.hasExtraCharge ? extraClient : 0);
-              const myShippingCost = (calc?.myCost || 0) + (d.hasExtraCharge ? extraCompany : 0);
-              const profitAmount = saleUsd + shippingClient - p.pricePaid - myShippingCost;
-
-              return (
-                <div key={p.id} className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-2">
-                  {/* Product header */}
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={!!p.arrived}
-                      onCheckedChange={(checked) => updateLocalProduct(p.id, 'arrived', !!checked)}
-                      className="flex-shrink-0"
-                    />
-                    <div className="h-12 w-12 rounded-md bg-muted flex-shrink-0 overflow-hidden">
-                      {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-4 text-muted-foreground" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <Input value={p.productName} onChange={e => updateLocalProduct(p.id, 'productName', e.target.value)} className={`h-7 text-xs ${p.arrived ? 'line-through opacity-60' : ''}`} />
-                    </div>
-                    <span className="text-xs font-semibold text-foreground whitespace-nowrap">{fmt(p.pricePaid)}</span>
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(p.id)} className="h-7 w-7 p-0 text-destructive flex-shrink-0">
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+            return (
+              <div key={p.id} className="border border-border rounded-lg overflow-hidden">
+                {/* Product header bar */}
+                <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b border-border">
+                  <div className="h-8 w-8 rounded bg-muted flex-shrink-0 overflow-hidden">
+                    {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-2 text-muted-foreground" />}
                   </div>
+                  <span className="text-sm font-semibold flex-1 truncate">PRODUCTO: {p.productName}</span>
+                  <span className="text-sm font-bold text-foreground">{fmt(p.pricePaid)}</span>
+                  <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(p.id)} className="h-6 w-6 p-0 text-destructive">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
 
-                  {/* Store / price / status */}
-                  <div className="flex gap-1">
-                    <Select value={p.store} onValueChange={v => updateLocalProduct(p.id, 'store', v)}>
-                      <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {STORES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Input type="number" step="0.01" value={p.pricePaid} onChange={e => updateLocalProduct(p.id, 'pricePaid', parseFloat(e.target.value) || 0)} className="h-7 text-xs w-20" placeholder="$" />
-                    <Select value={p.status} onValueChange={v => updateLocalProduct(p.id, 'status', v)}>
-                      <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {PRODUCT_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                {d.pricesConfirmed ? (
+                  <div className="p-3 bg-green-50 dark:bg-green-950/20 text-xs space-y-1">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Precio venta:</span><span className="font-bold text-green-700 dark:text-green-400">{fmt(parseFloat(d.salePriceUsd) || 0)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Envío al cliente:</span><span className="font-semibold">{fmt(parseFloat(d.shippingChargeClient) || 0)}</span></div>
+                    {exchangeRate && <div className="flex justify-between"><span className="text-muted-foreground">Total Bs:</span><span>{(((parseFloat(d.salePriceUsd) || 0) + (parseFloat(d.shippingChargeClient) || 0)) * exchangeRate).toFixed(2)} Bs</span></div>}
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full mt-1" onClick={() => updateDim(p.id, 'pricesConfirmed', false)}>✏️ Editar precios</Button>
                   </div>
-
-                  {/* Pricing Calculator - always visible */}
-                  {isConfirmed ? (
-                    <div className="rounded-md bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-2.5 text-xs space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Precio venta:</span>
-                        <span className="font-bold text-green-700 dark:text-green-400">{fmt(parseFloat(d.salePriceUsd) || 0)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Envío al cliente:</span>
-                        <span className="font-semibold">{fmt(parseFloat(d.shippingChargeClient) || 0)}</span>
-                      </div>
-                      {exchangeRate && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Total Bs:</span>
-                          <span>{(((parseFloat(d.salePriceUsd) || 0) + (parseFloat(d.shippingChargeClient) || 0)) * exchangeRate).toFixed(2)} Bs</span>
-                        </div>
-                      )}
-                      <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full mt-1" onClick={() => updateDim(p.id, 'pricesConfirmed', false)}>
-                        ✏️ Editar precios
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="rounded-md bg-muted/40 border border-border p-2.5 space-y-2.5">
-                      {/* Weight & Dimensions */}
-                      <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
-                        <Ruler className="h-3 w-3" /> Peso y medidas
-                      </p>
-                      <div className="grid grid-cols-4 gap-1.5">
+                ) : (
+                  <div className="grid grid-cols-2 divide-x divide-border">
+                    {/* LEFT: inputs */}
+                    <div className="p-3 space-y-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Peso y medidas</p>
+                      <div className="grid grid-cols-2 gap-1.5">
                         <div>
                           <label className="text-[9px] text-muted-foreground">Peso (lbs)</label>
                           <Input type="number" step="0.1" value={d.weightLb} onChange={e => updateDim(p.id, 'weightLb', e.target.value)} className="h-7 text-xs" placeholder="0" />
@@ -381,143 +289,99 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                         </div>
                       </div>
 
-                      {/* Extra charge toggle */}
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] text-muted-foreground">¿La empresa cobra cargo adicional?</label>
-                        <Switch
-                          checked={d.hasExtraCharge}
-                          onCheckedChange={(v) => updateDim(p.id, 'hasExtraCharge', v)}
-                          className="scale-75"
-                        />
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center gap-2">
+                          <label className="text-[10px] text-muted-foreground">¿Cargo adicional de la empresa?</label>
+                          <div className="flex gap-1">
+                            <Pill label="NO" active={!d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', false)} />
+                            <Pill label="SÍ" active={d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', true)} />
+                          </div>
+                        </div>
+                        {d.hasExtraCharge && (
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <label className="text-[9px] text-muted-foreground">Empresa cobra $</label>
+                              <Input type="number" step="0.01" value={d.extraChargeCompany} onChange={e => updateDim(p.id, 'extraChargeCompany', e.target.value)} className="h-7 text-xs" placeholder="0" />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-muted-foreground">Cliente paga $</label>
+                              <Input type="number" step="0.01" value={d.extraChargeClient} onChange={e => updateDim(p.id, 'extraChargeClient', e.target.value)} className="h-7 text-xs" placeholder="0" />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {d.hasExtraCharge && (
-                        <div className="grid grid-cols-2 gap-1.5">
-                          <div>
-                            <label className="text-[9px] text-muted-foreground">Cargo empresa $</label>
-                            <Input type="number" step="0.01" value={d.extraChargeCompany} onChange={e => updateDim(p.id, 'extraChargeCompany', e.target.value)} className="h-7 text-xs" placeholder="0" />
-                          </div>
-                          <div>
-                            <label className="text-[9px] text-muted-foreground">Cargo al cliente $</label>
-                            <Input type="number" step="0.01" value={d.extraChargeClient} onChange={e => updateDim(p.id, 'extraChargeClient', e.target.value)} className="h-7 text-xs" placeholder="0" />
-                          </div>
-                        </div>
-                      )}
 
-                      {/* Calculated results */}
-                      {calc && (
-                        <div className="text-xs space-y-1 border-t border-border pt-2">
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Peso facturable:</span>
-                            <span className="font-medium text-foreground">{calc.billable} lbs</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Flete me cuesta:</span>
-                            <span className="text-foreground">{fmt(myShippingCost)}</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Precio venta sugerido:</span>
-                            <span className="text-foreground font-medium">
-                              {fmt(suggestedSale)}
-                              {exchangeRate ? ` / ${(suggestedSale * exchangeRate).toFixed(2)} Bs` : ''}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Envío al cliente:</span>
-                            <span className="text-foreground">{fmt(shippingClient)}</span>
-                          </div>
-                          <div className="flex justify-between font-semibold text-green-600 dark:text-green-400">
-                            <span>Mi ganancia:</span>
-                            <span>{fmt(profitAmount)} ✅</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Editable sale/shipping prices */}
-                      <div className="grid grid-cols-2 gap-1.5">
+                      {/* Editable overrides */}
+                      <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border">
                         <div>
                           <label className="text-[9px] text-muted-foreground">Precio venta $</label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={d.salePriceUsd}
-                            onChange={e => updateDim(p.id, 'salePriceUsd', e.target.value)}
-                            placeholder={calc ? calc.suggestedSaleUsd.toFixed(2) : '0'}
-                            className="h-7 text-xs"
-                          />
+                          <Input type="number" step="0.01" value={d.salePriceUsd} onChange={e => updateDim(p.id, 'salePriceUsd', e.target.value)} placeholder={suggestedSale.toFixed(2)} className="h-7 text-xs" />
                         </div>
                         <div>
                           <label className="text-[9px] text-muted-foreground">Envío cliente $</label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={d.shippingChargeClient}
-                            onChange={e => updateDim(p.id, 'shippingChargeClient', e.target.value)}
-                            placeholder={calc ? calc.clientCharge.toFixed(2) : '0'}
-                            className="h-7 text-xs"
-                          />
+                          <Input type="number" step="0.01" value={d.shippingChargeClient} onChange={e => updateDim(p.id, 'shippingChargeClient', e.target.value)} placeholder={calc ? calc.clientCharge.toFixed(2) : '0'} className="h-7 text-xs" />
                         </div>
                       </div>
 
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-7 text-xs w-full"
-                        onClick={() => confirmPrices(p.id)}
-                      >
+                      <Button size="sm" className="h-7 text-xs w-full" onClick={() => confirmPrices(p.id)}>
                         <Check className="h-3 w-3 mr-1" /> Confirmar precios
                       </Button>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
 
-          {/* ORDER SUMMARY */}
-          {products.length > 0 && (
-            <div className="border-t-2 border-primary/30 pt-3 space-y-2">
-              <p className="text-sm font-bold text-foreground">📋 RESUMEN DEL PEDIDO</p>
-              <div className="text-xs space-y-1 font-mono bg-muted/30 rounded-md p-2.5 border border-border">
-                {products.map((p, idx) => {
-                  const d = productDims[p.id];
-                  const calc = productCalcs[p.id];
-                  const sale = d ? (parseFloat(d.salePriceUsd) || calc?.suggestedSaleUsd || 0) : 0;
-                  const ship = d ? (parseFloat(d.shippingChargeClient) || calc?.clientCharge || 0) : 0;
-                  return (
-                    <div key={p.id} className="flex justify-between">
-                      <span className="truncate max-w-[60%]">Producto {idx + 1}: {p.productName}</span>
-                      <span>Vender {fmt(sale)} + Envío {fmt(ship)}</span>
+                    {/* RIGHT: results */}
+                    <div className="p-3 space-y-1.5 text-xs">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Resultado</p>
+                      {calc ? (
+                        <div className="space-y-1">
+                          <Row label="Peso facturable:" value={`${calc.billable} lbs`} />
+                          <Row label="Flete me cuesta:" value={fmt(myShippingCost)} />
+                          <div className="border-t border-border my-1" />
+                          <Row label="Precio venta:" value={fmt(saleUsd)} bold />
+                          {exchangeRate && <Row label="En Bs:" value={`${(saleUsd * exchangeRate).toFixed(2)} Bs`} />}
+                          <div className="border-t border-border my-1" />
+                          <Row label="Envío al cliente:" value={fmt(shippingClient)} />
+                          <div className="border-t border-border my-1" />
+                          <div className="flex justify-between font-bold text-green-600 dark:text-green-400 pt-1">
+                            <span>MI GANANCIA:</span>
+                            <span>{fmt(profitAmount)} ✅</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-[10px] italic pt-2">Ingresa el peso para ver los cálculos</p>
+                      )}
                     </div>
-                  );
-                })}
-                <div className="border-t border-border mt-1 pt-1 space-y-0.5">
-                  <div className="flex justify-between font-bold">
-                    <span>Total a cobrarle al cliente:</span>
-                    <span>{fmt(summary.totalChargeClient)}</span>
                   </div>
-                  {exchangeRate && summary.totalChargeVes > 0 && (
-                    <div className="flex justify-between">
-                      <span>Total en Bs:</span>
-                      <span>{summary.totalChargeVes.toFixed(2)} Bs</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-green-600">
-                    <span>Mi ganancia total:</span>
-                    <span>{fmt(summary.profit)} ✅</span>
-                  </div>
-                </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })}
 
-          <div className="flex gap-2 pt-2">
-            <Button onClick={handleSave} className="flex-1">Guardar Cambios</Button>
-            <Button variant="destructive" onClick={() => { onDeleteOrder(order.id); onOpenChange(false); }}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+          {/* Notes + Save */}
+          <div className="space-y-2 pt-1">
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Notas</Label>
+              <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="text-xs" />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSave} className="flex-1 gap-2">
+                <Save className="h-4 w-4" /> Guardar todo
+              </Button>
+              <Button variant="destructive" size="icon" onClick={() => { onDeleteOrder(order.id); onOpenChange(false); }}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className={`flex justify-between ${bold ? 'font-semibold' : 'text-muted-foreground'}`}>
+      <span>{label}</span>
+      <span className={bold ? 'text-foreground' : 'text-foreground'}>{value}</span>
+    </div>
   );
 }
