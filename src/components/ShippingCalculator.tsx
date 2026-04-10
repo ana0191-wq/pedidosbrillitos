@@ -17,10 +17,11 @@ interface ShippingCalculatorProps {
 }
 
 interface AIAnalysis {
-  productType: string;
-  weightMinLbs: number;
-  weightMaxLbs: number;
-  estimates: { qty: number; totalShipping: number; perUnitShipping: number }[];
+  productName: string;
+  description: string;
+  estimatedWeightLbs: number;
+  weightReasoning: string;
+  confidence: 'low' | 'medium' | 'high';
 }
 
 export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalculatorProps) {
