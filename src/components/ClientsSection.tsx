@@ -103,43 +103,143 @@ export function ClientsSection({
           const expanded = expandedClient === client.id;
           const totalProducts = orders.reduce((sum, o) => sum + o.products.length, 0);
 
-          // Calculate real totals
-          const totalProductCost = orders.reduce((sum, o) => sum + o.products.reduce((s, p) => s + p.pricePaid, 0), 0);
-          let totalClientShipping = 0;
+          // Aggregate across all orders using SAVED values
+          let totalProdPaid = 0;
+          let totalProdAmount = 0;
+          let totalShipCharge = 0;
           let totalProfit = 0;
+          let allProdPaid = orders.length > 0;
+          let allShipPaid = orders.length > 0;
+          let anyShipMissing = false;
+          let prodMethods: string[] = [];
+          let shipMethods: string[] = [];
+
           orders.forEach(o => {
+            const productCost = o.products.reduce((s, p) => s + p.pricePaid, 0);
+            totalProdAmount += productCost;
+
+            if (o.productPaymentStatus === 'Pagado') {
+              totalProdPaid += o.productPaymentAmount || productCost;
+              if (o.productPaymentMethod && !prodMethods.includes(o.productPaymentMethod)) {
+                prodMethods.push(o.productPaymentMethod);
+              }
+            } else {
+              allProdPaid = false;
+            }
+
             const ship = calcShippingFromProducts(o, shippingSettings);
-            totalClientShipping += ship.totalClientPays;
-            totalProfit += ship.profit;
+            if (o.shippingPaymentStatus === 'Pagado') {
+              totalShipCharge += o.shippingPaymentAmount || ship.totalClientPays;
+              totalProfit += ship.profit;
+              if (o.shippingPaymentMethod && !shipMethods.includes(o.shippingPaymentMethod)) {
+                shipMethods.push(o.shippingPaymentMethod);
+              }
+            } else if (ship.totalClientPays > 0) {
+              allShipPaid = false;
+              totalShipCharge += ship.totalClientPays;
+              totalProfit += ship.profit;
+            } else {
+              allShipPaid = false;
+              anyShipMissing = true;
+            }
           });
-          const totalCharged = totalProductCost + totalClientShipping;
+
+          const bothFullyPaid = allProdPaid && allShipPaid && !anyShipMissing;
+          const totalOwed = (allProdPaid ? 0 : totalProdAmount - totalProdPaid) + (allShipPaid ? 0 : totalShipCharge);
 
           return (
             <Card key={client.id} className="overflow-hidden">
               <CardContent className="p-0">
+                {/* Client header — always visible */}
                 <button
-                  className="w-full p-4 flex items-center justify-between text-left hover:bg-muted/30 transition-colors"
+                  className="w-full p-4 text-left hover:bg-muted/30 transition-colors"
                   onClick={() => setExpandedClient(expanded ? null : client.id)}
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-foreground">{client.name}</p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                      {client.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{client.phone}</span>}
-                      <span>{orders.length} pedido{orders.length !== 1 ? 's' : ''}</span>
-                      <span>{totalProducts} producto{totalProducts !== 1 ? 's' : ''}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-foreground">{fmt(totalCharged)} total</p>
-                      <p className={`text-xs font-medium ${totalProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                        {fmt(totalProfit)} tu ganancia {totalProfit >= 0 ? '✅' : ''}
-                      </p>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-foreground text-base">{client.name}</p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                        {client.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{client.phone}</span>}
+                        <span>{orders.length} pedido{orders.length !== 1 ? 's' : ''} · {totalProducts} producto{totalProducts !== 1 ? 's' : ''}</span>
+                      </div>
                     </div>
                     {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                   </div>
+
+                  {orders.length > 0 && (
+                    <div className="space-y-1.5 text-xs">
+                      {/* Stage 1 summary */}
+                      {allProdPaid ? (
+                        <div className="flex justify-between">
+                          <span className="text-green-600 font-medium">✅ Producto pagado:</span>
+                          <span className="text-green-600 font-semibold">{fmt(totalProdPaid)} · {prodMethods.join(', ') || '—'}</span>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between">
+                          <span className="text-amber-600 font-medium">⏳ Producto pendiente:</span>
+                          <span className="text-amber-600 font-semibold">{fmt(totalProdAmount)}</span>
+                        </div>
+                      )}
+
+                      {/* Stage 2 summary */}
+                      {bothFullyPaid ? (
+                        <div className="flex justify-between">
+                          <span className="text-green-600 font-medium">✅ Envío pagado:</span>
+                          <span className="text-green-600 font-semibold">{fmt(totalShipCharge)} · {shipMethods.join(', ') || '—'}</span>
+                        </div>
+                      ) : allShipPaid && !anyShipMissing ? (
+                        <div className="flex justify-between">
+                          <span className="text-green-600 font-medium">✅ Envío pagado:</span>
+                          <span className="text-green-600 font-semibold">{fmt(totalShipCharge)}</span>
+                        </div>
+                      ) : anyShipMissing && totalShipCharge === 0 ? (
+                        <div className="flex justify-between">
+                          <span className="text-amber-500 font-medium">⚠️ Envío sin calcular</span>
+                          <span className="text-amber-500">—</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-blue-600 font-medium">⏳ Envío por cobrar:</span>
+                            <span className="text-blue-600 font-semibold">{fmt(totalShipCharge)}</span>
+                          </div>
+                          <div className="flex justify-between pl-4">
+                            <span className="text-muted-foreground">Tu ganancia:</span>
+                            <span className={`font-semibold ${totalProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>{fmt(totalProfit)}</span>
+                          </div>
+                          {exchangeRate && totalShipCharge > 0 && (
+                            <div className="flex justify-between pl-4">
+                              <span className="text-muted-foreground">En Bs:</span>
+                              <span className="text-muted-foreground">≈ {(totalShipCharge * exchangeRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Divider + Total owed */}
+                      <div className="border-t border-border pt-1.5 mt-1.5">
+                        {bothFullyPaid ? (
+                          <div className="flex justify-between">
+                            <span className="text-green-600 font-bold">✅ Todo cobrado</span>
+                            <span className="text-green-600 font-bold">Ganancia: {fmt(totalProfit)}</span>
+                          </div>
+                        ) : totalOwed > 0 ? (
+                          <div className="flex justify-between">
+                            <span className="font-bold text-foreground">Total por cobrar aún:</span>
+                            <span className="font-bold text-foreground">{fmt(totalOwed)}</span>
+                          </div>
+                        ) : anyShipMissing ? (
+                          <div className="flex justify-between">
+                            <span className="text-amber-500 font-medium">Pendiente de calcular envío</span>
+                            <span className="text-amber-500">—</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
                 </button>
 
+                {/* Expanded: show orders detail */}
                 {expanded && (
                   <div className="border-t border-border p-4 space-y-3 bg-muted/10">
                     <div className="flex items-center justify-between">
@@ -168,51 +268,34 @@ export function ClientsSection({
                           <Card key={order.id} className="bg-card cursor-pointer hover:shadow-sm transition-shadow" onClick={() => setEditingOrder(order)}>
                             <CardContent className="p-3 space-y-2">
                               {/* Products */}
-                              {order.products.length > 0 ? (
-                                <div className="space-y-1.5">
-                                  {order.products.map(p => (
-                                    <div key={p.id} className="flex items-center gap-2 text-sm">
-                                      <div className="h-10 w-10 rounded-md bg-muted flex-shrink-0 overflow-hidden">
-                                        {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-3 text-muted-foreground" />}
-                                      </div>
-                                      <span className={`flex-1 truncate text-foreground text-xs ${p.arrived ? 'line-through opacity-60' : ''}`}>
-                                        📦 {p.productName}
-                                      </span>
-                                      <span className="font-semibold text-xs">{fmt(p.pricePaid)} · {p.store}</span>
-                                    </div>
-                                  ))}
+                              {order.products.map(p => (
+                                <div key={p.id} className="flex items-center gap-2 text-xs">
+                                  <div className="h-8 w-8 rounded bg-muted flex-shrink-0 overflow-hidden">
+                                    {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-2 text-muted-foreground" />}
+                                  </div>
+                                  <span className={`flex-1 truncate text-foreground ${p.arrived ? 'line-through opacity-60' : ''}`}>
+                                    📦 {p.productName}
+                                  </span>
+                                  <span className="font-semibold">{fmt(p.pricePaid)} · {p.store}</span>
                                 </div>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">Sin productos</p>
-                              )}
+                              ))}
 
-                              {/* Two-stage summary */}
-                              <div className="space-y-1 pt-2 border-t border-border text-xs">
-                                {/* Stage 1 */}
+                              {/* Two-stage inline */}
+                              <div className="space-y-0.5 pt-1.5 border-t border-border text-xs">
                                 {isProdPaid ? (
-                                  <p className="text-green-600 font-medium">
-                                    ✅ Etapa 1  {fmt(order.productPaymentAmount || productCost)} pagado · {order.productPaymentMethod || '—'}
-                                  </p>
+                                  <p className="text-green-600 font-medium">✅ Etapa 1  {fmt(order.productPaymentAmount || productCost)} pagado · {order.productPaymentMethod || '—'}</p>
                                 ) : (
                                   <p className="text-amber-600 font-medium">⏳ Etapa 1  Producto pendiente · {fmt(productCost)}</p>
                                 )}
-
-                                {/* Stage 2 */}
                                 {isShipPaid ? (
-                                  <p className="text-green-600 font-medium">
-                                    ✅ Etapa 2  {fmt(order.shippingPaymentAmount || ship.totalClientPays)} pagado · {order.shippingPaymentMethod || '—'}
-                                  </p>
+                                  <p className="text-green-600 font-medium">✅ Etapa 2  {fmt(order.shippingPaymentAmount || ship.totalClientPays)} pagado · {order.shippingPaymentMethod || '—'}</p>
                                 ) : hasShippingData ? (
-                                  <p className="text-blue-600 font-medium">
-                                    ⏳ Etapa 2  Cobrar {fmt(ship.totalClientPays)} envío · Ganancia {fmt(ship.profit)}
-                                    {exchangeRate && <span className="text-muted-foreground"> ≈ {(ship.totalClientPays * exchangeRate).toFixed(0)} Bs</span>}
-                                  </p>
+                                  <p className="text-blue-600 font-medium">⏳ Etapa 2  Cobrar {fmt(ship.totalClientPays)} envío · Ganancia {fmt(ship.profit)}</p>
                                 ) : (
-                                  <p className="text-amber-500 font-medium">⚠️ Envío sin calcular · <span className="underline">Calcular</span></p>
+                                  <p className="text-amber-500 font-medium">⚠️ Envío sin calcular</p>
                                 )}
                               </div>
 
-                              {/* Action row */}
                               <div className="flex items-center justify-between pt-1">
                                 <Badge variant="outline" className="text-[10px]">{order.status}</Badge>
                                 <div className="flex items-center gap-1">
@@ -224,8 +307,6 @@ export function ClientsSection({
                                   </Button>
                                 </div>
                               </div>
-
-                              {order.notes && <p className="text-[10px] text-muted-foreground">📝 {order.notes}</p>}
                             </CardContent>
                           </Card>
                         );
