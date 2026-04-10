@@ -256,6 +256,14 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     }
   };
 
+  // Manual form state
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualName, setManualName] = useState('');
+  const [manualStore, setManualStore] = useState('Amazon');
+  const [manualPrice, setManualPrice] = useState('');
+  const [manualLink, setManualLink] = useState('');
+  const [manualNotes, setManualNotes] = useState('');
+
   const totalProducts = products.reduce((s, p) => s + p.pricePaid, 0);
 
   return (
@@ -292,10 +300,90 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
           </div>
           <div><Label>Notas</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} /></div>
 
-          {/* Screenshot Import Section */}
+          {/* Products Section */}
           <div className="border-t border-border pt-3 space-y-2">
             <Label className="flex items-center gap-1.5">
-              <Camera className="h-4 w-4" /> Productos (desde capturas)
+              <Package className="h-4 w-4" /> Productos
+            </Label>
+
+            {/* Manual product entry */}
+            {!showManualForm ? (
+              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setShowManualForm(true)}>
+                <Plus className="h-3 w-3 mr-1" /> Agregar producto manual
+              </Button>
+            ) : (
+              <div className="p-3 rounded-md border border-border space-y-2 bg-muted/20">
+                <div>
+                  <Input
+                    value={manualName}
+                    onChange={e => setManualName(e.target.value)}
+                    placeholder="Nombre del producto *"
+                    className="h-7 text-xs"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Select value={manualStore} onValueChange={setManualStore}>
+                    <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Amazon">Amazon</SelectItem>
+                      <SelectItem value="Shein">Shein</SelectItem>
+                      <SelectItem value="Temu">Temu</SelectItem>
+                      <SelectItem value="AliExpress">AliExpress</SelectItem>
+                      <SelectItem value="Otra">Otra</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={manualPrice}
+                    onChange={e => setManualPrice(e.target.value)}
+                    placeholder="Precio $"
+                    className="h-7 text-xs w-24"
+                  />
+                </div>
+                <Input
+                  value={manualLink}
+                  onChange={e => setManualLink(e.target.value)}
+                  placeholder="Link (opcional)"
+                  className="h-7 text-xs"
+                />
+                <Input
+                  value={manualNotes}
+                  onChange={e => setManualNotes(e.target.value)}
+                  placeholder="Notas (opcional)"
+                  className="h-7 text-xs"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs flex-1" onClick={() => {
+                    if (!manualName.trim()) return;
+                    setProducts(prev => [...prev, {
+                      productName: manualName.trim(),
+                      store: manualStore,
+                      pricePaid: parseFloat(manualPrice) || 0,
+                      pricePerUnit: parseFloat(manualPrice) || 0,
+                      unitsOrdered: 1,
+                      orderNumber: '',
+                      croppedImage: '',
+                    }]);
+                    setManualName('');
+                    setManualStore('Amazon');
+                    setManualPrice('');
+                    setManualLink('');
+                    setManualNotes('');
+                    setShowManualForm(false);
+                  }}>
+                    <Plus className="h-3 w-3 mr-1" /> Agregar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowManualForm(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Screenshot import */}
+            <Label className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
+              <Camera className="h-3 w-3" /> O importar desde captura
             </Label>
 
             <input

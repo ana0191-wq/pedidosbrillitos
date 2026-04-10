@@ -15,8 +15,9 @@ import { ClientOrdersList } from '@/components/ClientOrdersList';
 import { ShippingCalculator } from '@/components/ShippingCalculator';
 import { AIPricingCalculator } from '@/components/AIPricingCalculator';
 import { CatalogSection } from '@/components/CatalogSection';
+import { InventorySection } from '@/components/InventorySection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, Store } from 'lucide-react';
+import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, Store, Boxes } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -87,7 +88,7 @@ const Index = () => {
 
       <main className="container max-w-4xl mx-auto px-4 py-4 pb-24">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full grid grid-cols-4 sm:grid-cols-7 mb-6">
+          <TabsList className="w-full grid grid-cols-4 sm:grid-cols-8 mb-6">
             <TabsTrigger value="dashboard" className="gap-1 text-xs">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Inicio</span>
@@ -109,6 +110,10 @@ const Index = () => {
             <TabsTrigger value="client-orders" className="gap-1 text-xs">
               <ClipboardList className="h-4 w-4" />
               <span className="hidden sm:inline">Pedidos C.</span>
+            </TabsTrigger>
+            <TabsTrigger value="inventory" className="gap-1 text-xs">
+              <Boxes className="h-4 w-4" />
+              <span className="hidden sm:inline">Género</span>
             </TabsTrigger>
             <TabsTrigger value="catalog" className="gap-1 text-xs">
               <Store className="h-4 w-4" />
@@ -180,6 +185,16 @@ const Index = () => {
               onDeleteOrder={deleteClientOrder}
               exchangeRate={exchangeRate}
               shippingSettings={shippingSettings}
+            />
+          </TabsContent>
+
+          <TabsContent value="inventory">
+            <InventorySection
+              products={products}
+              onAdd={addProduct}
+              onUpdate={updateProduct}
+              onDelete={deleteProduct}
+              exchangeRate={exchangeRate}
             />
           </TabsContent>
 
