@@ -5,15 +5,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Package, CheckCircle2, Ruler, Check } from 'lucide-react';
+import { Trash2, Package, Ruler, Check } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { useOrders } from '@/hooks/useOrders';
 import { supabase } from '@/integrations/supabase/client';
 
-const ORDER_STATUSES = ['Pagado sin comprar', 'Comprado', 'En Tránsito', 'Recibido'];
-const PAYMENT_METHODS = ['Bolívares (tasa euro)', 'PayPal', 'Binance', 'Efectivo'];
+const ORDER_STATUSES = ['Pendiente', 'En Tránsito', 'Listo', 'Entregado'];
+const PAYMENT_METHODS = ['PayPal', 'Binance', 'PagoMóvil', 'Zelle', 'Efectivo', 'Otro'];
 const STORES = ['AliExpress', 'Shein', 'Temu', 'Amazon'];
 const PRODUCT_STATUSES = ['Pedido', 'En Tránsito', 'Entregado'];
 
@@ -25,6 +26,9 @@ interface ProductDims {
   salePriceUsd: string;
   shippingChargeClient: string;
   pricesConfirmed: boolean;
+  hasExtraCharge: boolean;
+  extraChargeCompany: string;
+  extraChargeClient: string;
 }
 
 interface EditClientOrderDialogProps {
@@ -50,6 +54,27 @@ function calcProductShipping(
   const myCost = billable * myRate;
   const clientCharge = billable * clientRate;
   return { volWeight, billable, myCost, clientCharge, profit: clientCharge - myCost };
+}
+
+function StatusButtonGroup({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map(opt => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onChange(opt)}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+            value === opt
+              ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+              : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+          }`}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings }: EditClientOrderDialogProps) {
@@ -83,13 +108,15 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
           salePriceUsd: p.salePriceUsd != null ? String(p.salePriceUsd) : '',
           shippingChargeClient: p.shippingChargeClient != null ? String(p.shippingChargeClient) : '',
           pricesConfirmed: p.pricesConfirmed,
+          hasExtraCharge: false,
+          extraChargeCompany: '',
+          extraChargeClient: '',
         };
       });
       setProductDims(dims);
     }
   }, [order, open]);
 
-  // Per-product calcs - must be before early return
   const productCalcs = useMemo(() => {
     const calcs: Record<string, ReturnType<typeof calcProductShipping> & { suggestedSaleUsd: number }> = {};
     products.forEach(p => {
@@ -108,7 +135,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     return calcs;
   }, [products, productDims, myRate, clientRate]);
 
-  // Order summary
   const summary = useMemo(() => {
     let totalSaleUsd = 0;
     let totalShippingClient = 0;
@@ -173,7 +199,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   };
 
   const handleSave = () => {
-    // Update client order totals
     onUpdateOrder(order.id, {
       status,
       paymentMethod: payment,
@@ -183,7 +208,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       notes,
     });
 
-    // Update each product's basic fields
     for (const p of products) {
       const orig = order.products.find(op => op.id === p.id);
       if (!orig) continue;
@@ -195,7 +219,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       if (p.status !== orig.status) updates.status = p.status;
       if (p.arrived !== orig.arrived) updates.arrived = p.arrived;
 
-      // Save dims
       const d = productDims[p.id];
       if (d) {
         const wl = parseFloat(d.weightLb) || null;
@@ -209,19 +232,14 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       }
 
       if (Object.keys(updates).length > 0) {
-        // Map to DB columns for weight/dims
         const dbUpdates: any = {};
         Object.entries(updates).forEach(([k, v]) => {
           if (k === 'weightLb') dbUpdates.weight_lb = v;
           else if (k === 'lengthIn') dbUpdates.length_in = v;
           else if (k === 'widthIn') dbUpdates.width_in = v;
           else if (k === 'heightIn') dbUpdates.height_in = v;
-          else {
-            // Use updateProduct for standard fields
-          }
         });
 
-        // Standard fields via hook
         const stdUpdates: any = { ...updates };
         delete stdUpdates.weightLb;
         delete stdUpdates.lengthIn;
@@ -229,7 +247,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
         delete stdUpdates.heightIn;
         if (Object.keys(stdUpdates).length > 0) updateProduct(p.id, stdUpdates);
 
-        // DB-direct for new columns
         if (Object.keys(dbUpdates).length > 0) {
           supabase.from('orders').update(dbUpdates).eq('id', p.id).then();
         }
@@ -243,42 +260,42 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle>Editar Pedido — {order.clientName}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label>Estado</Label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+
+        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
+          {/* Estado */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-semibold">Estado</Label>
+            <StatusButtonGroup value={status} onChange={setStatus} options={ORDER_STATUSES} />
           </div>
 
-          <div>
-            <Label>Método de pago</Label>
-            <Select value={payment} onValueChange={setPayment}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-              <SelectContent>
-                {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          {/* Método de pago */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-semibold">Método de pago</Label>
+            <StatusButtonGroup value={payment} onChange={setPayment} options={PAYMENT_METHODS} />
           </div>
 
-          <div><Label>Referencia de pago</Label><Input value={payRef} onChange={e => setPayRef(e.target.value)} /></div>
-
+          <div><Label>Referencia de pago</Label><Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="Nro de referencia..." /></div>
           <div><Label>Notas</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} /></div>
 
-          {/* Products with per-product calculator */}
+          {/* Products */}
           <div className="border-t border-border pt-3 space-y-3">
             <Label className="text-base font-semibold">Productos ({products.length})</Label>
-            {products.map((p, idx) => {
-              const d = productDims[p.id] || { weightLb: '', lengthIn: '', widthIn: '', heightIn: '', salePriceUsd: '', shippingChargeClient: '', pricesConfirmed: false };
+            {products.map((p) => {
+              const d = productDims[p.id] || { weightLb: '', lengthIn: '', widthIn: '', heightIn: '', salePriceUsd: '', shippingChargeClient: '', pricesConfirmed: false, hasExtraCharge: false, extraChargeCompany: '', extraChargeClient: '' };
               const calc = productCalcs[p.id];
               const isConfirmed = d.pricesConfirmed;
+
+              const extraCompany = parseFloat(d.extraChargeCompany) || 0;
+              const extraClient = parseFloat(d.extraChargeClient) || 0;
+              const suggestedSale = calc?.suggestedSaleUsd ?? p.pricePaid * (1 + profitPercent);
+              const saleUsd = parseFloat(d.salePriceUsd) || suggestedSale;
+              const shippingClient = (parseFloat(d.shippingChargeClient) || calc?.clientCharge || 0) + (d.hasExtraCharge ? extraClient : 0);
+              const myShippingCost = (calc?.myCost || 0) + (d.hasExtraCharge ? extraCompany : 0);
+              const profitAmount = saleUsd + shippingClient - p.pricePaid - myShippingCost;
 
               return (
                 <div key={p.id} className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-2">
@@ -289,8 +306,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                       onCheckedChange={(checked) => updateLocalProduct(p.id, 'arrived', !!checked)}
                       className="flex-shrink-0"
                     />
-                    <div className="h-14 w-14 rounded-md bg-muted flex-shrink-0 overflow-hidden">
-                      {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-5 w-5 m-4 text-muted-foreground" />}
+                    <div className="h-12 w-12 rounded-md bg-muted flex-shrink-0 overflow-hidden">
+                      {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-4 text-muted-foreground" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <Input value={p.productName} onChange={e => updateLocalProduct(p.id, 'productName', e.target.value)} className={`h-7 text-xs ${p.arrived ? 'line-through opacity-60' : ''}`} />
@@ -301,7 +318,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                     </Button>
                   </div>
 
-                  {/* Store / price / status row */}
+                  {/* Store / price / status */}
                   <div className="flex gap-1">
                     <Select value={p.store} onValueChange={v => updateLocalProduct(p.id, 'store', v)}>
                       <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
@@ -318,11 +335,11 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                     </Select>
                   </div>
 
-                  {/* Per-product shipping calculator */}
+                  {/* Pricing Calculator - always visible */}
                   {isConfirmed ? (
-                    <div className="rounded-md bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-2 text-xs space-y-0.5">
+                    <div className="rounded-md bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-2.5 text-xs space-y-1">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Vender:</span>
+                        <span className="text-muted-foreground">Precio venta:</span>
                         <span className="font-bold text-green-700 dark:text-green-400">{fmt(parseFloat(d.salePriceUsd) || 0)}</span>
                       </div>
                       <div className="flex justify-between">
@@ -332,51 +349,91 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                       {exchangeRate && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Total Bs:</span>
-                          <span>{((parseFloat(d.salePriceUsd) || 0) + (parseFloat(d.shippingChargeClient) || 0)) * exchangeRate} Bs</span>
+                          <span>{(((parseFloat(d.salePriceUsd) || 0) + (parseFloat(d.shippingChargeClient) || 0)) * exchangeRate).toFixed(2)} Bs</span>
                         </div>
                       )}
-                      <Button size="sm" variant="ghost" className="h-5 text-[10px] w-full" onClick={() => updateDim(p.id, 'pricesConfirmed', false)}>
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full mt-1" onClick={() => updateDim(p.id, 'pricesConfirmed', false)}>
                         ✏️ Editar precios
                       </Button>
                     </div>
                   ) : (
-                    <div className="rounded-md bg-muted/40 border border-border p-2 space-y-2">
+                    <div className="rounded-md bg-muted/40 border border-border p-2.5 space-y-2.5">
+                      {/* Weight & Dimensions */}
                       <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
-                        <Ruler className="h-3 w-3" /> 📐 Peso y medidas
+                        <Ruler className="h-3 w-3" /> Peso y medidas
                       </p>
-                      <div className="grid grid-cols-4 gap-1">
+                      <div className="grid grid-cols-4 gap-1.5">
                         <div>
                           <label className="text-[9px] text-muted-foreground">Peso (lbs)</label>
-                          <Input type="number" step="0.1" value={d.weightLb} onChange={e => updateDim(p.id, 'weightLb', e.target.value)} className="h-6 text-[10px]" placeholder="0" />
+                          <Input type="number" step="0.1" value={d.weightLb} onChange={e => updateDim(p.id, 'weightLb', e.target.value)} className="h-7 text-xs" placeholder="0" />
                         </div>
                         <div>
-                          <label className="text-[9px] text-muted-foreground">Largo</label>
-                          <Input type="number" step="0.1" value={d.lengthIn} onChange={e => updateDim(p.id, 'lengthIn', e.target.value)} className="h-6 text-[10px]" placeholder="0" />
+                          <label className="text-[9px] text-muted-foreground">Largo (in)</label>
+                          <Input type="number" step="0.1" value={d.lengthIn} onChange={e => updateDim(p.id, 'lengthIn', e.target.value)} className="h-7 text-xs" placeholder="0" />
                         </div>
                         <div>
-                          <label className="text-[9px] text-muted-foreground">Ancho</label>
-                          <Input type="number" step="0.1" value={d.widthIn} onChange={e => updateDim(p.id, 'widthIn', e.target.value)} className="h-6 text-[10px]" placeholder="0" />
+                          <label className="text-[9px] text-muted-foreground">Ancho (in)</label>
+                          <Input type="number" step="0.1" value={d.widthIn} onChange={e => updateDim(p.id, 'widthIn', e.target.value)} className="h-7 text-xs" placeholder="0" />
                         </div>
                         <div>
-                          <label className="text-[9px] text-muted-foreground">Alto</label>
-                          <Input type="number" step="0.1" value={d.heightIn} onChange={e => updateDim(p.id, 'heightIn', e.target.value)} className="h-6 text-[10px]" placeholder="0" />
+                          <label className="text-[9px] text-muted-foreground">Alto (in)</label>
+                          <Input type="number" step="0.1" value={d.heightIn} onChange={e => updateDim(p.id, 'heightIn', e.target.value)} className="h-7 text-xs" placeholder="0" />
                         </div>
                       </div>
 
+                      {/* Extra charge toggle */}
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] text-muted-foreground">¿La empresa cobra cargo adicional?</label>
+                        <Switch
+                          checked={d.hasExtraCharge}
+                          onCheckedChange={(v) => updateDim(p.id, 'hasExtraCharge', v)}
+                          className="scale-75"
+                        />
+                      </div>
+                      {d.hasExtraCharge && (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div>
+                            <label className="text-[9px] text-muted-foreground">Cargo empresa $</label>
+                            <Input type="number" step="0.01" value={d.extraChargeCompany} onChange={e => updateDim(p.id, 'extraChargeCompany', e.target.value)} className="h-7 text-xs" placeholder="0" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-muted-foreground">Cargo al cliente $</label>
+                            <Input type="number" step="0.01" value={d.extraChargeClient} onChange={e => updateDim(p.id, 'extraChargeClient', e.target.value)} className="h-7 text-xs" placeholder="0" />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Calculated results */}
                       {calc && (
-                        <div className="text-[10px] space-y-0.5 border-t border-border pt-1">
+                        <div className="text-xs space-y-1 border-t border-border pt-2">
                           <div className="flex justify-between text-muted-foreground">
                             <span>Peso facturable:</span>
                             <span className="font-medium text-foreground">{calc.billable} lbs</span>
                           </div>
                           <div className="flex justify-between text-muted-foreground">
-                            <span>Mi flete:</span>
-                            <span className="text-foreground">{fmt(calc.myCost)}</span>
+                            <span>Flete me cuesta:</span>
+                            <span className="text-foreground">{fmt(myShippingCost)}</span>
+                          </div>
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Precio venta sugerido:</span>
+                            <span className="text-foreground font-medium">
+                              {fmt(suggestedSale)}
+                              {exchangeRate ? ` / ${(suggestedSale * exchangeRate).toFixed(2)} Bs` : ''}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Envío al cliente:</span>
+                            <span className="text-foreground">{fmt(shippingClient)}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold text-green-600 dark:text-green-400">
+                            <span>Mi ganancia:</span>
+                            <span>{fmt(profitAmount)} ✅</span>
                           </div>
                         </div>
                       )}
 
-                      <div className="grid grid-cols-2 gap-1">
+                      {/* Editable sale/shipping prices */}
+                      <div className="grid grid-cols-2 gap-1.5">
                         <div>
                           <label className="text-[9px] text-muted-foreground">Precio venta $</label>
                           <Input
@@ -385,7 +442,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                             value={d.salePriceUsd}
                             onChange={e => updateDim(p.id, 'salePriceUsd', e.target.value)}
                             placeholder={calc ? calc.suggestedSaleUsd.toFixed(2) : '0'}
-                            className="h-6 text-[10px]"
+                            className="h-7 text-xs"
                           />
                         </div>
                         <div>
@@ -396,7 +453,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                             value={d.shippingChargeClient}
                             onChange={e => updateDim(p.id, 'shippingChargeClient', e.target.value)}
                             placeholder={calc ? calc.clientCharge.toFixed(2) : '0'}
-                            className="h-6 text-[10px]"
+                            className="h-7 text-xs"
                           />
                         </div>
                       </div>
@@ -404,10 +461,10 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                       <Button
                         size="sm"
                         variant="default"
-                        className="h-6 text-[10px] w-full"
+                        className="h-7 text-xs w-full"
                         onClick={() => confirmPrices(p.id)}
                       >
-                        <Check className="h-3 w-3 mr-1" /> ✅ Usar estos precios
+                        <Check className="h-3 w-3 mr-1" /> Confirmar precios
                       </Button>
                     </div>
                   )}
@@ -420,7 +477,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
           {products.length > 0 && (
             <div className="border-t-2 border-primary/30 pt-3 space-y-2">
               <p className="text-sm font-bold text-foreground">📋 RESUMEN DEL PEDIDO</p>
-              <div className="text-xs space-y-1 font-mono bg-muted/30 rounded-md p-2 border border-border">
+              <div className="text-xs space-y-1 font-mono bg-muted/30 rounded-md p-2.5 border border-border">
                 {products.map((p, idx) => {
                   const d = productDims[p.id];
                   const calc = productCalcs[p.id];
@@ -453,7 +510,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-2">
             <Button onClick={handleSave} className="flex-1">Guardar Cambios</Button>
             <Button variant="destructive" onClick={() => { onDeleteOrder(order.id); onOpenChange(false); }}>
               <Trash2 className="h-4 w-4" />
