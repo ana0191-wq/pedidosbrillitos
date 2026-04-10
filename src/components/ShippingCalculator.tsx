@@ -62,7 +62,6 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
   // AI image analysis
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
-  const [customQty, setCustomQty] = useState('');
   const [pastedImage, setPastedImage] = useState<string | null>(null);
 
   const handleAIExtract = async (source: 'text' | 'image', value: string) => {
