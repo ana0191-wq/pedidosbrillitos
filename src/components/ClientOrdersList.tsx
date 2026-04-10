@@ -105,6 +105,15 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
                     <Badge variant="outline" className="text-[10px] mt-0.5">{order.status}</Badge>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => {
+                      e.stopPropagation();
+                      const clientName = order.clientName || clientMap[order.clientId] || '';
+                      const products = order.products.map(p => ({ name: p.productName, price: p.pricePaid }));
+                      const shipCharge = order.shippingChargeToClient || 0;
+                      setQuotationData({ clientName, clientPhone: clientPhoneMap[order.clientId], products, shippingCharge: shipCharge, exchangeRate });
+                    }}>
+                      <Send className="h-3 w-3" />
+                    </Button>
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
                       <Pencil className="h-3 w-3" />
                     </Button>
@@ -160,6 +169,12 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
           );
         })
       )}
+
+      <QuotationGenerator
+        open={!!quotationData}
+        onOpenChange={(v) => { if (!v) setQuotationData(null); }}
+        data={quotationData}
+      />
     </div>
   );
 }
