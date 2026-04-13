@@ -90,10 +90,15 @@ export function EditableField({
         <span className={`font-semibold ${highlight ? 'text-green-600 text-base' : 'text-foreground'}`}>
           {format(value)}{suffix ? ` ${suffix}` : ''}
         </span>
-        {isOverridden && (
+        {showCheck && (
+          <Check className="h-3.5 w-3.5 text-green-600 animate-in fade-in zoom-in duration-300" />
+        )}
+        {isOverridden && !showCheck && (
           <span className="text-[9px] bg-primary/10 text-primary px-1 py-0.5 rounded font-medium">📄 Real</span>
         )}
-        <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+        {!showCheck && (
+          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
       </span>
     </div>
   );
