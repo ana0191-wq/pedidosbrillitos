@@ -12,6 +12,34 @@ import { PaymentMethodSelector, CurrencySelector } from '@/components/PaymentMet
 import { InvoiceSection } from '@/components/InvoiceSection';
 import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler, AlertTriangle, MapPin, FileText } from 'lucide-react';
 
+function InvoiceInput({ defaultValue, onSave }: { defaultValue: number | null; onSave: (v: number | null) => void }) {
+  const [saved, setSaved] = useState(false);
+  return (
+    <div className="flex justify-between items-center text-xs">
+      <span className="text-muted-foreground">📄 Factura empresa:</span>
+      <div className="flex items-center gap-1">
+        <Input
+          type="number"
+          step="0.01"
+          placeholder="Escribe lo que te cobró"
+          defaultValue={defaultValue ?? ''}
+          onBlur={(e) => {
+            const val = parseNum(e.target.value);
+            onSave(val);
+            if (val != null) {
+              setSaved(true);
+              setTimeout(() => setSaved(false), 1500);
+            }
+          }}
+          className="h-6 w-28 text-xs text-right placeholder:text-primary/40"
+          onClick={(e) => e.stopPropagation()}
+        />
+        {saved && <Check className="h-3.5 w-3.5 text-green-600 animate-in fade-in zoom-in duration-300" />}
+      </div>
+    </div>
+  );
+}
+
 interface CollabInfo {
   name: string;
   percentage: number;
@@ -229,21 +257,10 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                     />
 
                     {/* Inline invoice field — always visible */}
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">📄 Factura empresa:</span>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="Escribe lo que te cobró"
-                        defaultValue={invoiceAmt ?? ''}
-                        onBlur={(e) => {
-                          const val = parseNum(e.target.value);
-                          onUpdate(order.id, { companyInvoiceAmount: val } as any);
-                        }}
-                        className="h-6 w-28 text-xs text-right placeholder:text-primary/40"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
+                    <InvoiceInput
+                      defaultValue={invoiceAmt}
+                      onSave={(val) => onUpdate(order.id, { companyInvoiceAmount: val } as any)}
+                    />
 
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Ganancia:</span>
