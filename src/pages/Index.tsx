@@ -18,6 +18,8 @@ import { AIPricingCalculator } from '@/components/AIPricingCalculator';
 import { CatalogSection } from '@/components/CatalogSection';
 import { TeamSection } from '@/components/TeamSection';
 import { InventorySection } from '@/components/InventorySection';
+import { PorCobrarSection } from '@/components/PorCobrarSection';
+import { QuickCalculator } from '@/components/QuickCalculator';
 import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
@@ -77,14 +79,24 @@ const Index = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <Dashboard
-            orders={orders}
-            clients={clients}
+          <div className="space-y-6">
+            <Dashboard
+              orders={orders}
+              clients={clients}
+              clientOrders={clientOrders}
+              collaborators={collaborators}
+              earnings={earnings}
+              onNavigate={setActiveTab}
+              onMarkPaid={markPaid}
+            />
+            <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} />
+          </div>
+        );
+      case 'por-cobrar':
+        return (
+          <PorCobrarSection
             clientOrders={clientOrders}
-            collaborators={collaborators}
-            earnings={earnings}
-            onNavigate={setActiveTab}
-            onMarkPaid={markPaid}
+            onUpdateOrder={updateClientOrder}
           />
         );
       case 'personal':

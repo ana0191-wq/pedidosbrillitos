@@ -13,6 +13,7 @@ interface TopNavProps {
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'por-cobrar', label: '💰 Por Cobrar' },
   { id: 'clients', label: 'Clientes' },
   { id: 'personal', label: 'Pedidos' },
   { id: 'inventory', label: 'Género' },
