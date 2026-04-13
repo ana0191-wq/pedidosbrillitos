@@ -145,6 +145,9 @@ export function useOrders() {
     if ((updates as any).euroRate !== undefined) row.euro_rate = (updates as any).euroRate;
     if ((updates as any).deliveryNotes !== undefined) row.delivery_notes = (updates as any).deliveryNotes;
     if ((updates as any).deliveredAt !== undefined) row.delivered_at = (updates as any).deliveredAt;
+    if ((updates as any).companyInvoiceAmount !== undefined) row.company_invoice_amount = (updates as any).companyInvoiceAmount;
+    if ((updates as any).companyInvoiceNotes !== undefined) row.company_invoice_notes = (updates as any).companyInvoiceNotes;
+    if ((updates as any).invoiceFiles !== undefined) row.invoice_files = (updates as any).invoiceFiles;
 
     // Auto-set delivered_at when status changes to Entregado
     if (updates.status === 'Entregado' && !row.delivered_at) {
