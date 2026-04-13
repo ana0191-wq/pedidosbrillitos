@@ -208,41 +208,68 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                   />
                 </>
               )}
-              {isClient && clientOrder && (
-                <>
-                  <EditableField
-                    label="Envío:"
-                    value={clientOrder.shippingCost}
-                    onSave={(v) => onUpdate(order.id, { shippingCost: v } as any)}
-                    className="text-xs"
-                  />
-                  <EditableField
-                    label="Cobrado:"
-                    value={clientOrder.amountCharged}
-                    onSave={(v) => onUpdate(order.id, { amountCharged: v } as any)}
-                    className="text-xs"
-                  />
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Ganancia:</span>
-                    <span className={`font-bold ${(clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                      {fmt(clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost)}
-                    </span>
-                  </div>
-                  {collabInfo && (clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost) > 0 && (
-                    <>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>{collabInfo.name} ({collabInfo.percentage}%):</span>
-                        <span className="text-amber-600 font-semibold">-{fmt(collabInfo.cut)}</span>
-                      </div>
-                      <div className="border-t border-dashed border-border my-0.5" />
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground font-medium">Ganancia neta:</span>
-                        <span className="font-bold text-green-700">{fmt(clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost - collabInfo.cut)}</span>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
+              {isClient && clientOrder && (() => {
+                const invoiceAmt = order.companyInvoiceAmount;
+                const hasInvoice = invoiceAmt != null;
+                const anaProfit = hasInvoice ? clientOrder.amountCharged - invoiceAmt : null;
+                return (
+                  <>
+                    <EditableField
+                      label="Envío:"
+                      value={clientOrder.shippingCost}
+                      onSave={(v) => onUpdate(order.id, { shippingCost: v } as any)}
+                      className="text-xs"
+                    />
+                    <EditableField
+                      label="Cobrado:"
+                      value={clientOrder.amountCharged}
+                      onSave={(v) => onUpdate(order.id, { amountCharged: v } as any)}
+                      className="text-xs"
+                    />
+
+                    {/* Inline invoice field — always visible */}
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">📄 Factura empresa:</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Escribe lo que te cobró"
+                        defaultValue={invoiceAmt ?? ''}
+                        onBlur={(e) => {
+                          const val = e.target.value ? parseFloat(e.target.value) : null;
+                          onUpdate(order.id, { companyInvoiceAmount: val } as any);
+                        }}
+                        className="h-6 w-28 text-xs text-right placeholder:text-primary/40"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Ganancia:</span>
+                      {hasInvoice ? (
+                        <span className={`font-bold ${(anaProfit ?? 0) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                          {fmt(anaProfit!)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </div>
+                    {collabInfo && hasInvoice && (anaProfit ?? 0) > 0 && (
+                      <>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>{collabInfo.name} ({collabInfo.percentage}%):</span>
+                          <span className="text-amber-600 font-semibold">-{fmt(collabInfo.cut)}</span>
+                        </div>
+                        <div className="border-t border-dashed border-border my-0.5" />
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground font-medium">Ganancia neta:</span>
+                          <span className="font-bold text-green-700">{fmt((anaProfit ?? 0) - collabInfo.cut)}</span>
+                        </div>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
 
