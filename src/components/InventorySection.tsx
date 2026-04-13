@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, Trash2, Pencil, TrendingUp, Package } from 'lucide-react';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import type { Product } from '@/types/orders';
 
 interface InventorySectionProps {
@@ -102,9 +103,10 @@ export function InventorySection({ products, onAdd, onUpdate, onDelete, exchange
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(p)}>
                         <Pencil className="h-3 w-3" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => onDelete(p.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      <ConfirmDeleteDialog
+                        onConfirm={() => onDelete(p.id)}
+                        title="¿Segura que quieres eliminar este producto?"
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
