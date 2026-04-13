@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Order, OrderCategory } from '@/types/orders';
 import { useToast } from '@/hooks/use-toast';
+import { parseNum } from '@/lib/utils';
 
 export function useOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -25,7 +26,7 @@ export function useOrders() {
         productName: row.product_name,
         productPhoto: row.product_photo || '',
         store: row.store,
-        pricePaid: Number(row.price_paid),
+        pricePaid: parseNum(row.price_paid) ?? 0,
         orderDate: row.order_date || '',
         estimatedArrival: row.estimated_arrival || '',
         orderNumber: row.order_number || '',
@@ -33,22 +34,22 @@ export function useOrders() {
         createdAt: row.created_at,
         status: row.status,
         category: row.category as OrderCategory,
-        amountPaid: row.amount_paid != null ? Number(row.amount_paid) : null,
+        amountPaid: parseNum(row.amount_paid),
         paymentMethod: row.payment_method || null,
         paymentCurrency: row.payment_currency || null,
-        euroRate: row.euro_rate != null ? Number(row.euro_rate) : null,
+        euroRate: parseNum(row.euro_rate),
         deliveryNotes: row.delivery_notes || null,
         deliveredAt: row.delivered_at || null,
-        companyInvoiceAmount: row.company_invoice_amount != null ? Number(row.company_invoice_amount) : null,
+        companyInvoiceAmount: parseNum(row.company_invoice_amount),
         companyInvoiceNotes: row.company_invoice_notes || null,
         invoiceFiles: Array.isArray(row.invoice_files) ? row.invoice_files : [],
       };
 
       if (row.category === 'merchandise') {
-        return { ...base, category: 'merchandise' as const, unitsOrdered: row.units_ordered || 1, unitsReceived: row.units_received || 0, pricePerUnit: Number(row.price_per_unit) || 0, suggestedPrice: row.suggested_price != null ? Number(row.suggested_price) : null };
+        return { ...base, category: 'merchandise' as const, unitsOrdered: parseNum(row.units_ordered) ?? 1, unitsReceived: parseNum(row.units_received) ?? 0, pricePerUnit: parseNum(row.price_per_unit) ?? 0, suggestedPrice: parseNum(row.suggested_price) };
       }
       if (row.category === 'client') {
-        return { ...base, category: 'client' as const, clientName: row.client_name || '', shippingCost: Number(row.shipping_cost) || 0, amountCharged: Number(row.amount_charged) || 0 };
+        return { ...base, category: 'client' as const, clientName: row.client_name || '', shippingCost: parseNum(row.shipping_cost) ?? 0, amountCharged: parseNum(row.amount_charged) ?? 0 };
       }
       return { ...base, category: 'personal' as const };
     });

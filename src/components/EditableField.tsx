@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Pencil, Check } from 'lucide-react';
+import { parseNum, fmtMoney } from '@/lib/utils';
 
 interface EditableFieldProps {
   label: string;
-  value: number;
+  value: number | null;
   calculatedValue?: number;
-  onSave: (value: number) => void;
-  format?: (n: number) => string;
+  onSave: (value: number | null) => void;
+  format?: (n: number | null) => string;
   highlight?: boolean;
   className?: string;
   suffix?: string;
@@ -18,7 +19,7 @@ export function EditableField({
   value,
   calculatedValue,
   onSave,
-  format = (n) => `$${n.toFixed(2)}`,
+  format = fmtMoney,
   highlight = false,
   className = '',
   suffix,
@@ -26,7 +27,7 @@ export function EditableField({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const isOverridden = calculatedValue !== undefined && Math.abs(value - calculatedValue) > 0.001;
+  const isOverridden = calculatedValue !== undefined && value != null && Math.abs(value - calculatedValue) > 0.001;
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -36,10 +37,8 @@ export function EditableField({
   }, [editing]);
 
   const handleSave = () => {
-    const num = parseFloat(editValue);
-    if (!isNaN(num)) {
-      onSave(num);
-    }
+    const num = parseNum(editValue);
+    onSave(num);
     setEditing(false);
   };
 
@@ -77,7 +76,7 @@ export function EditableField({
     <div
       className={`flex justify-between items-center text-sm group cursor-pointer ${className}`}
       onClick={() => {
-        setEditValue(String(value));
+        setEditValue(value != null ? String(value) : '');
         setEditing(true);
       }}
     >

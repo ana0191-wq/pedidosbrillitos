@@ -43,18 +43,18 @@ const Index = () => {
   const getCollabInfo = (order: Order) => {
     if (collaborators.length === 0) return null;
     const collab = collaborators[0];
-    let profit = 0;
+    let profit: number | null = null;
     if (order.category === 'client') {
       const co = order as any;
       const invoiceAmt = order.companyInvoiceAmount;
-      if (invoiceAmt == null) return null; // No invoice = no profit calc
+      if (invoiceAmt == null) return null;
       profit = (co.amountCharged || 0) - invoiceAmt;
     } else if (order.category === 'merchandise') {
       const mo = order as any;
       const suggested = mo.suggestedPrice ?? (order.pricePaid / (mo.unitsOrdered || 1)) * 1.35;
       profit = (suggested - (order.pricePaid / (mo.unitsOrdered || 1))) * (mo.unitsOrdered || 1);
     }
-    if (profit <= 0) return null;
+    if (profit === null || profit <= 0) return null;
     const cut = Math.round(profit * collab.percentage / 100 * 100) / 100;
     return { name: collab.name, percentage: collab.percentage, cut };
   };
