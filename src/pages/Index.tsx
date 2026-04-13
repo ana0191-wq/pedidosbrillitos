@@ -79,14 +79,24 @@ const Index = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <Dashboard
-            orders={orders}
-            clients={clients}
+          <div className="space-y-6">
+            <Dashboard
+              orders={orders}
+              clients={clients}
+              clientOrders={clientOrders}
+              collaborators={collaborators}
+              earnings={earnings}
+              onNavigate={setActiveTab}
+              onMarkPaid={markPaid}
+            />
+            <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} />
+          </div>
+        );
+      case 'por-cobrar':
+        return (
+          <PorCobrarSection
             clientOrders={clientOrders}
-            collaborators={collaborators}
-            earnings={earnings}
-            onNavigate={setActiveTab}
-            onMarkPaid={markPaid}
+            onUpdateOrder={updateClientOrder}
           />
         );
       case 'personal':
