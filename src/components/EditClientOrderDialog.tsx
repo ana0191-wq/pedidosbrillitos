@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle, Send } from 'lucide-react';
+import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle, Send, FileText, Scale } from 'lucide-react';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { useOrders } from '@/hooks/useOrders';
 import { supabase } from '@/integrations/supabase/client';
 import { QuotationGenerator } from '@/components/QuotationGenerator';
+import { parseNum, fmtMoney } from '@/lib/utils';
 
 const PAYMENT_METHODS = ['PayPal', 'Binance', 'PagoMóvil', 'Zelle', 'Efectivo', 'Otro'];
 
@@ -60,33 +61,57 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const [products, setProducts] = useState<ClientOrderProduct[]>([]);
   const [productDims, setProductDims] = useState<Record<string, ProductDims>>({});
 
-  // Stage 1 payment
+  // Stage 1 payment — initialized from DB
   const [prodPayStatus, setProdPayStatus] = useState('Pendiente');
   const [prodPayMethod, setProdPayMethod] = useState('');
   const [prodPayAmount, setProdPayAmount] = useState('');
 
-  // Stage 2 payment
+  // Stage 2 payment — initialized from DB
   const [shipPayStatus, setShipPayStatus] = useState('Pendiente');
   const [shipPayMethod, setShipPayMethod] = useState('');
   const [shipPayAmount, setShipPayAmount] = useState('');
+
+  // Stage 2 mode: 'choose' | 'invoice' | 'weight'
+  const [stage2Mode, setStage2Mode] = useState<'choose' | 'invoice' | 'weight'>('choose');
+  // Factura rápida fields
+  const [invoiceCompanyAmount, setInvoiceCompanyAmount] = useState('');
+  const [invoiceClientCharge, setInvoiceClientCharge] = useState('');
 
   // Editable rates per order
   const [freightRate, setFreightRate] = useState('6.50');
   const [clientShipRate, setClientShipRate] = useState('12.00');
 
+  // Load ALL state from DB order prop — never default to 0
   useEffect(() => {
     if (order && open) {
       setStatus(order.status);
       setNotes(order.notes);
       setProducts([...order.products]);
 
+      // Stage 1 — persist saved state
       setProdPayStatus(order.productPaymentStatus || 'Pendiente');
       setProdPayMethod(order.productPaymentMethod || '');
       setProdPayAmount(order.productPaymentAmount != null ? String(order.productPaymentAmount) : '');
 
+      // Stage 2 — persist saved state
       setShipPayStatus(order.shippingPaymentStatus || 'Pendiente');
       setShipPayMethod(order.shippingPaymentMethod || '');
       setShipPayAmount(order.shippingPaymentAmount != null ? String(order.shippingPaymentAmount) : '');
+
+      // Factura rápida — load saved values
+      setInvoiceCompanyAmount(order.shippingCostCompany != null ? String(order.shippingCostCompany) : '');
+      setInvoiceClientCharge(order.shippingChargeToClient != null ? String(order.shippingChargeToClient) : '');
+
+      // Determine stage2 mode based on existing data
+      const hasWeightData = order.products.some(p => p.weightLb != null && p.weightLb > 0);
+      const hasInvoiceData = order.shippingCostCompany != null && order.shippingCostCompany > 0;
+      if (hasInvoiceData && !hasWeightData) {
+        setStage2Mode('invoice');
+      } else if (hasWeightData) {
+        setStage2Mode('weight');
+      } else {
+        setStage2Mode('choose');
+      }
 
       setFreightRate(String(shippingSettings?.airRatePerLb ?? 6.50));
       setClientShipRate(String(shippingSettings?.airPricePerLb ?? 12.00));
@@ -143,9 +168,17 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       totalClientPaysShipping += c.clientPaysShipping;
     });
 
+    // If in invoice mode, override with direct values
+    if (stage2Mode === 'invoice') {
+      const companyAmt = parseNum(invoiceCompanyAmount);
+      const clientAmt = parseNum(invoiceClientCharge);
+      if (companyAmt != null) totalAnaPaysFreight = companyAmt;
+      if (clientAmt != null) totalClientPaysShipping = clientAmt;
+    }
+
     const totalAnaProfit = totalClientPaysShipping - totalAnaPaysFreight;
     return { totalProductCost, totalAnaPaysFreight, totalClientPaysShipping, totalAnaProfit };
-  }, [products, productDims, freightRate, clientShipRate]);
+  }, [products, productDims, freightRate, clientShipRate, stage2Mode, invoiceCompanyAmount, invoiceClientCharge]);
 
   if (!order) return null;
 
@@ -179,6 +212,25 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     updateDim(productId, 'shippingChargeClient', String(c.clientPaysShipping));
   };
 
+  const handleSaveInvoice = async () => {
+    const companyAmt = parseNum(invoiceCompanyAmount);
+    const clientAmt = parseNum(invoiceClientCharge);
+
+    onUpdateOrder(order.id, {
+      shippingCostCompany: companyAmt,
+      shippingChargeToClient: clientAmt,
+      amountCharged: totals.totalProductCost + (clientAmt ?? 0),
+    });
+
+    // Also save company_invoice_amount on the linked orders
+    for (const p of products) {
+      await supabase.from('orders').update({
+        company_invoice_amount: companyAmt,
+        shipping_charge_client: clientAmt,
+      }).eq('id', p.id);
+    }
+  };
+
   const deriveStatus = (pPay: string, sPay: string) => {
     if (pPay === 'Pagado' && sPay === 'Pagado') return 'Listo';
     if (pPay === 'Pagado') return 'En Tránsito';
@@ -188,7 +240,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const handleSave = () => {
     const finalStatus = status === 'Entregado' ? 'Entregado' : deriveStatus(prodPayStatus, shipPayStatus);
 
-    onUpdateOrder(order.id, {
+    const updates: Record<string, any> = {
       status: finalStatus,
       notes,
       productPaymentStatus: prodPayStatus,
@@ -202,7 +254,9 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       shippingCostCompany: totals.totalAnaPaysFreight || null,
       shippingChargeToClient: totals.totalClientPaysShipping || null,
       amountCharged: totals.totalProductCost + totals.totalClientPaysShipping,
-    });
+    };
+
+    onUpdateOrder(order.id, updates);
 
     for (const p of products) {
       const d = productDims[p.id];
@@ -229,6 +283,13 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const bothPaid = prodPayStatus === 'Pagado' && shipPayStatus === 'Pagado';
   const myRate = parseFloat(freightRate) || 6.50;
   const cRate = parseFloat(clientShipRate) || 12;
+
+  // Invoice mode profit calculations
+  const invoiceCompany = parseNum(invoiceCompanyAmount);
+  const invoiceClient = parseNum(invoiceClientCharge);
+  const invoiceProfit = (invoiceCompany != null && invoiceClient != null) ? invoiceClient - invoiceCompany : null;
+  const invoiceBrotherCut = invoiceProfit != null ? invoiceProfit * 0.30 : null;
+  const invoiceNetProfit = invoiceProfit != null && invoiceBrotherCut != null ? invoiceProfit - invoiceBrotherCut : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -292,154 +353,262 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             )}
           </div>
 
-          {/* ═══ PRODUCTS — Shipping Calculator ═══ */}
-          {products.map((p) => {
-            const d = productDims[p.id] || { weightLb: '', lengthIn: '', widthIn: '', heightIn: '', hasExtraCharge: false, extraChargeCompany: '', extraChargeClient: '', pricesConfirmed: false, shippingChargeClient: '' };
-            const c = calcProduct(p, d);
-            const hasWeight = (parseFloat(d.weightLb) || 0) > 0;
-            const isNegative = c.anaShippingProfit < 0 && hasWeight;
+          {/* ═══ ETAPA 2 — Mode Chooser or Calculator ═══ */}
+          {stage2Mode === 'choose' && shipPayStatus !== 'Pagado' && (
+            <div className="mx-4 mt-4 rounded-lg border-2 border-blue-500/30 bg-blue-50 dark:bg-blue-950/20 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Truck className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-bold">ETAPA 2 — ¿Cómo quieres calcular el envío?</span>
+              </div>
+              <div className="flex gap-3 pl-6">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-16 flex flex-col gap-1 border-2 hover:border-primary hover:bg-primary/5"
+                  onClick={() => setStage2Mode('invoice')}
+                >
+                  <FileText className="h-5 w-5 text-primary" />
+                  <span className="text-xs font-semibold">📄 Ya tengo la factura</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 h-16 flex flex-col gap-1 border-2 hover:border-primary hover:bg-primary/5"
+                  onClick={() => setStage2Mode('weight')}
+                >
+                  <Scale className="h-5 w-5 text-primary" />
+                  <span className="text-xs font-semibold">⚖️ Calcular por peso</span>
+                </Button>
+              </div>
+            </div>
+          )}
 
-            return (
-              <div key={p.id} className="mx-4 mt-4 border border-border rounded-lg overflow-hidden">
-                {/* Product header */}
-                <div className="flex items-center gap-3 px-4 py-3 bg-muted/40 border-b border-border">
-                  <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-                    {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-5 w-5 m-2.5 text-muted-foreground" />}
+          {/* ═══ FACTURA RÁPIDA MODE ═══ */}
+          {stage2Mode === 'invoice' && shipPayStatus !== 'Pagado' && (
+            <div className="mx-4 mt-4 rounded-lg border-2 border-blue-500/30 bg-blue-50 dark:bg-blue-950/20 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-bold">📄 Factura Rápida</span>
+                </div>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setStage2Mode('choose')}>← Cambiar método</Button>
+              </div>
+              <div className="pl-6 space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">💵 ¿Cuánto te cobró Total Envíos?</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-sm font-bold">Factura empresa:</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={invoiceCompanyAmount}
+                      onChange={e => setInvoiceCompanyAmount(e.target.value)}
+                      placeholder="Ej: 93.00"
+                      className="h-8 text-sm w-36"
+                    />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">{p.productName}</p>
-                    <p className="text-xs text-muted-foreground">{p.store}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">💵 ¿Cuánto le cobras al cliente?</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-sm font-bold">Cobro al cliente:</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={invoiceClientCharge}
+                      onChange={e => setInvoiceClientCharge(e.target.value)}
+                      placeholder="Ej: 142.87"
+                      className="h-8 text-sm w-36"
+                    />
                   </div>
-                  <span className="text-lg font-bold">{fmt(p.pricePaid)}</span>
-                  <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(p.id)} className="h-7 w-7 p-0 text-destructive">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
                 </div>
 
-                {d.pricesConfirmed ? (
-                  <div className="p-4 bg-green-50 dark:bg-green-950/20 flex items-center justify-between">
-                    <div className="text-sm space-y-0.5">
-                      <p>Cobrar envío: <strong className="text-green-700 dark:text-green-400">{fmt(parseFloat(d.shippingChargeClient) || 0)}</strong></p>
-                      <p className="text-xs text-muted-foreground">Precios confirmados ✅</p>
-                    </div>
-                    <Button size="sm" variant="ghost" className="text-xs" onClick={() => updateDim(p.id, 'pricesConfirmed', false)}>✏️ Editar</Button>
+                {/* Live profit calculation */}
+                {invoiceProfit != null && (
+                  <div className="rounded-lg border border-green-300 bg-green-50 dark:bg-green-950/30 p-3 space-y-1">
+                    <p className="text-sm">→ Ganancia: <strong className="text-green-700">{fmt(invoiceProfit)}</strong></p>
+                    <p className="text-sm">→ Hermano (30%): <strong className="text-amber-600">{invoiceBrotherCut != null ? fmt(invoiceBrotherCut) : '—'}</strong></p>
+                    <p className="text-sm">→ Tu neto: <strong className="text-green-700">{invoiceNetProfit != null ? fmt(invoiceNetProfit) : '—'}</strong></p>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 divide-x divide-border">
-                    {/* LEFT — Inputs */}
-                    <div className="p-4 space-y-3">
-                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">ETAPA 2 — Calcular Envío</p>
+                )}
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-muted-foreground font-medium">Peso real (lbs)</label>
-                          <Input type="number" step="0.1" value={d.weightLb} onChange={e => updateDim(p.id, 'weightLb', e.target.value)} className="h-8 text-sm" placeholder="0" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground font-medium">Largo (in)</label>
-                          <Input type="number" step="0.1" value={d.lengthIn} onChange={e => updateDim(p.id, 'lengthIn', e.target.value)} className="h-8 text-sm" placeholder="0" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground font-medium">Ancho (in)</label>
-                          <Input type="number" step="0.1" value={d.widthIn} onChange={e => updateDim(p.id, 'widthIn', e.target.value)} className="h-8 text-sm" placeholder="0" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground font-medium">Alto (in)</label>
-                          <Input type="number" step="0.1" value={d.heightIn} onChange={e => updateDim(p.id, 'heightIn', e.target.value)} className="h-8 text-sm" placeholder="0" />
-                        </div>
+                <Button size="sm" className="h-8" onClick={handleSaveInvoice} disabled={invoiceCompany == null || invoiceClient == null}>
+                  <Save className="h-3 w-3 mr-1" /> 💾 Guardar factura
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ WEIGHT CALCULATOR MODE — Products ═══ */}
+          {stage2Mode === 'weight' && shipPayStatus !== 'Pagado' && (
+            <>
+              <div className="mx-4 mt-4 flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">⚖️ Calcular por peso</span>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setStage2Mode('choose')}>← Cambiar método</Button>
+              </div>
+              {products.map((p) => {
+                const d = productDims[p.id] || { weightLb: '', lengthIn: '', widthIn: '', heightIn: '', hasExtraCharge: false, extraChargeCompany: '', extraChargeClient: '', pricesConfirmed: false, shippingChargeClient: '' };
+                const c = calcProduct(p, d);
+                const hasWeight = (parseFloat(d.weightLb) || 0) > 0;
+                const isNegative = c.anaShippingProfit < 0 && hasWeight;
+
+                return (
+                  <div key={p.id} className="mx-4 mt-4 border border-border rounded-lg overflow-hidden">
+                    {/* Product header */}
+                    <div className="flex items-center gap-3 px-4 py-3 bg-muted/40 border-b border-border">
+                      <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+                        {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-5 w-5 m-2.5 text-muted-foreground" />}
                       </div>
-
-                      {/* Extra charges */}
-                      <div className="space-y-2 pt-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">¿Cargo extra de la empresa?</span>
-                          <div className="flex gap-1">
-                            <Pill label="NO" active={!d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', false)} />
-                            <Pill label="SÍ" active={d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', true)} />
-                          </div>
-                        </div>
-                        {d.hasExtraCharge && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[10px] text-muted-foreground font-medium">Empresa cobra $</label>
-                              <Input type="number" step="0.01" value={d.extraChargeCompany} onChange={e => updateDim(p.id, 'extraChargeCompany', e.target.value)} className="h-8 text-sm" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-muted-foreground font-medium">Tú cobras al cliente $</label>
-                              <Input type="number" step="0.01" value={d.extraChargeClient} onChange={e => updateDim(p.id, 'extraChargeClient', e.target.value)} className="h-8 text-sm" />
-                            </div>
-                          </div>
-                        )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{p.productName}</p>
+                        <p className="text-xs text-muted-foreground">{p.store}</p>
                       </div>
-
-                      {/* Editable rates */}
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
-                        <div>
-                          <label className="text-[10px] text-muted-foreground font-medium">Tarifa empresa $/lb</label>
-                          <Input type="number" step="0.01" value={freightRate} onChange={e => setFreightRate(e.target.value)} className="h-8 text-sm" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-muted-foreground font-medium">Tarifa cliente $/lb</label>
-                          <Input type="number" step="0.01" value={clientShipRate} onChange={e => setClientShipRate(e.target.value)} className="h-8 text-sm" />
-                        </div>
-                      </div>
-
-                      <Button size="sm" className="w-full h-8 text-xs mt-2" onClick={() => confirmPrices(p.id)} disabled={!hasWeight}>
-                        <Check className="h-3 w-3 mr-1" /> ✅ Confirmar precios
+                      <span className="text-lg font-bold">{fmt(p.pricePaid)}</span>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(p.id)} className="h-7 w-7 p-0 text-destructive">
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
 
-                    {/* RIGHT — Live Result Card */}
-                    <div className="p-4 flex flex-col">
-                      {hasWeight ? (
-                        <div className="flex-1 flex flex-col gap-3">
-                          {/* CLIENT PAYS — big pink */}
-                          <div className="rounded-xl border-2 border-pink-200 dark:border-pink-800 bg-pink-50 dark:bg-pink-950/30 p-4 text-center">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600 dark:text-pink-400 mb-1">CLIENTE PAGA</p>
-                            <p className="text-3xl font-black text-pink-700 dark:text-pink-300">{fmt(c.clientPaysShipping)}</p>
-                            <div className="text-[10px] text-muted-foreground mt-2 space-y-0.5 text-left">
-                              <p>Flete empresa: {c.billable.toFixed(1)} lbs × ${myRate.toFixed(2)}</p>
-                              <p>Tu comisión: {c.billable.toFixed(1)} lbs × ${(cRate - myRate).toFixed(2)}</p>
-                              {c.extraCl > 0 && <p>Extra: +{fmt(c.extraCl)}</p>}
+                    {d.pricesConfirmed ? (
+                      <div className="p-4 bg-green-50 dark:bg-green-950/20 flex items-center justify-between">
+                        <div className="text-sm space-y-0.5">
+                          <p>Cobrar envío: <strong className="text-green-700 dark:text-green-400">{fmt(parseFloat(d.shippingChargeClient) || 0)}</strong></p>
+                          <p className="text-xs text-muted-foreground">Precios confirmados ✅</p>
+                        </div>
+                        <Button size="sm" variant="ghost" className="text-xs" onClick={() => updateDim(p.id, 'pricesConfirmed', false)}>✏️ Editar</Button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 divide-x divide-border">
+                        {/* LEFT — Inputs */}
+                        <div className="p-4 space-y-3">
+                          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Dimensiones y peso</p>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-muted-foreground font-medium">Peso real (lbs)</label>
+                              <Input type="number" step="0.1" value={d.weightLb} onChange={e => updateDim(p.id, 'weightLb', e.target.value)} className="h-8 text-sm" placeholder="0" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground font-medium">Largo (in)</label>
+                              <Input type="number" step="0.1" value={d.lengthIn} onChange={e => updateDim(p.id, 'lengthIn', e.target.value)} className="h-8 text-sm" placeholder="0" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground font-medium">Ancho (in)</label>
+                              <Input type="number" step="0.1" value={d.widthIn} onChange={e => updateDim(p.id, 'widthIn', e.target.value)} className="h-8 text-sm" placeholder="0" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground font-medium">Alto (in)</label>
+                              <Input type="number" step="0.1" value={d.heightIn} onChange={e => updateDim(p.id, 'heightIn', e.target.value)} className="h-8 text-sm" placeholder="0" />
                             </div>
                           </div>
 
-                          {/* YOUR PROFIT — big green or red */}
-                          <div className={`rounded-xl border-2 p-4 text-center ${
-                            isNegative
-                              ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
-                              : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30'
-                          }`}>
-                            <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                              {isNegative ? '⚠️ PERDERÍAS DINERO' : 'TU GANANCIA'}
-                            </p>
-                            <p className={`text-3xl font-black ${isNegative ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>
-                              {fmt(c.anaShippingProfit)} {!isNegative && '✅'}
-                            </p>
-                            <div className="text-[10px] text-muted-foreground mt-2 space-y-0.5 text-left">
-                              <p>Por peso: {c.billable.toFixed(1)} × ${(cRate - myRate).toFixed(2)} = {fmt(c.billable * (cRate - myRate))}</p>
-                              {(c.extraCo > 0 || c.extraCl > 0) && (
-                                <p>Por extra: {fmt(c.extraCl)} − {fmt(c.extraCo)} = {fmt(c.extraCl - c.extraCo)}</p>
-                              )}
+                          {/* Extra charges */}
+                          <div className="space-y-2 pt-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">¿Cargo extra de la empresa?</span>
+                              <div className="flex gap-1">
+                                <Pill label="NO" active={!d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', false)} />
+                                <Pill label="SÍ" active={d.hasExtraCharge} onClick={() => updateDim(p.id, 'hasExtraCharge', true)} />
+                              </div>
+                            </div>
+                            {d.hasExtraCharge && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground font-medium">Empresa cobra $</label>
+                                  <Input type="number" step="0.01" value={d.extraChargeCompany} onChange={e => updateDim(p.id, 'extraChargeCompany', e.target.value)} className="h-8 text-sm" />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground font-medium">Tú cobras al cliente $</label>
+                                  <Input type="number" step="0.01" value={d.extraChargeClient} onChange={e => updateDim(p.id, 'extraChargeClient', e.target.value)} className="h-8 text-sm" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Editable rates */}
+                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+                            <div>
+                              <label className="text-[10px] text-muted-foreground font-medium">Tarifa empresa $/lb</label>
+                              <Input type="number" step="0.01" value={freightRate} onChange={e => setFreightRate(e.target.value)} className="h-8 text-sm" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground font-medium">Tarifa cliente $/lb</label>
+                              <Input type="number" step="0.01" value={clientShipRate} onChange={e => setClientShipRate(e.target.value)} className="h-8 text-sm" />
                             </div>
                           </div>
 
-                          <p className="text-[10px] text-muted-foreground text-center">
-                            Peso facturable: {c.billable.toFixed(1)} lbs
-                            {c.volWeight > 0 && <span> (Vol: {c.volWeight.toFixed(1)} · Real: {(parseFloat(d.weightLb) || 0).toFixed(1)})</span>}
-                          </p>
+                          <Button size="sm" className="w-full h-8 text-xs mt-2" onClick={() => confirmPrices(p.id)} disabled={!hasWeight}>
+                            <Check className="h-3 w-3 mr-1" /> ✅ Confirmar precios
+                          </Button>
                         </div>
-                      ) : (
-                        <div className="flex-1 flex items-center justify-center">
-                          <p className="text-sm text-muted-foreground italic">Ingresa el peso para calcular</p>
+
+                        {/* RIGHT — Live Result Card */}
+                        <div className="p-4 flex flex-col">
+                          {hasWeight ? (
+                            <div className="flex-1 flex flex-col gap-3">
+                              <div className="rounded-xl border-2 border-pink-200 dark:border-pink-800 bg-pink-50 dark:bg-pink-950/30 p-4 text-center">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-pink-600 dark:text-pink-400 mb-1">CLIENTE PAGA</p>
+                                <p className="text-3xl font-black text-pink-700 dark:text-pink-300">{fmt(c.clientPaysShipping)}</p>
+                                <div className="text-[10px] text-muted-foreground mt-2 space-y-0.5 text-left">
+                                  <p>Flete empresa: {c.billable.toFixed(1)} lbs × ${myRate.toFixed(2)}</p>
+                                  <p>Tu comisión: {c.billable.toFixed(1)} lbs × ${(cRate - myRate).toFixed(2)}</p>
+                                  {c.extraCl > 0 && <p>Extra: +{fmt(c.extraCl)}</p>}
+                                </div>
+                              </div>
+
+                              <div className={`rounded-xl border-2 p-4 text-center ${
+                                isNegative
+                                  ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
+                                  : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30'
+                              }`}>
+                                <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                  {isNegative ? '⚠️ PERDERÍAS DINERO' : 'TU GANANCIA'}
+                                </p>
+                                <p className={`text-3xl font-black ${isNegative ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>
+                                  {fmt(c.anaShippingProfit)} {!isNegative && '✅'}
+                                </p>
+                                <div className="text-[10px] text-muted-foreground mt-2 space-y-0.5 text-left">
+                                  <p>Por peso: {c.billable.toFixed(1)} × ${(cRate - myRate).toFixed(2)} = {fmt(c.billable * (cRate - myRate))}</p>
+                                  {(c.extraCo > 0 || c.extraCl > 0) && (
+                                    <p>Por extra: {fmt(c.extraCl)} − {fmt(c.extraCo)} = {fmt(c.extraCl - c.extraCo)}</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <p className="text-[10px] text-muted-foreground text-center">
+                                Peso facturable: {c.billable.toFixed(1)} lbs
+                                {c.volWeight > 0 && <span> (Vol: {c.volWeight.toFixed(1)} · Real: {(parseFloat(d.weightLb) || 0).toFixed(1)})</span>}
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="flex-1 flex items-center justify-center">
+                              <p className="text-sm text-muted-foreground italic">Ingresa el peso para calcular</p>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </>
+          )}
+
+          {/* ═══ Product list (when in invoice mode or paid) — show products without calculator ═══ */}
+          {(stage2Mode === 'invoice' || shipPayStatus === 'Pagado') && products.length > 0 && (
+            <div className="mx-4 mt-4 space-y-2">
+              {products.map(p => (
+                <div key={p.id} className="flex items-center gap-3 px-4 py-2 bg-muted/20 rounded-lg border border-border">
+                  <div className="h-8 w-8 rounded bg-muted flex-shrink-0 overflow-hidden">
+                    {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-2 text-muted-foreground" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{p.productName}</p>
+                    <p className="text-xs text-muted-foreground">{p.store}</p>
+                  </div>
+                  <span className="text-sm font-bold">{fmt(p.pricePaid)}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* ═══ ETAPA 2 — Pago del envío ═══ */}
           <div className={`mx-4 mt-4 rounded-lg border-2 p-4 ${shipPayStatus === 'Pagado' ? 'border-green-500/30 bg-green-50 dark:bg-green-950/20' : 'border-blue-500/30 bg-blue-50 dark:bg-blue-950/20'}`}>
@@ -505,9 +674,9 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
               variant="outline"
               className="w-full gap-2"
               onClick={() => {
-                const products = order.products.map(p => ({ name: p.productName, price: p.pricePaid }));
+                const prods = order.products.map(p => ({ name: p.productName, price: p.pricePaid }));
                 const shipCharge = totals.totalClientPaysShipping;
-                setQuotationData({ clientName: order.clientName || '', products, shippingCharge: shipCharge, exchangeRate });
+                setQuotationData({ clientName: order.clientName || '', products: prods, shippingCharge: shipCharge, exchangeRate });
               }}
             >
               <Send className="h-4 w-4" /> 📤 Generar cotización
