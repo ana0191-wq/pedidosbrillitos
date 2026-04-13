@@ -205,6 +205,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       sale_price_usd: p.pricePaid,
       sale_price_ves: exchangeRate ? p.pricePaid * exchangeRate : 0,
       shipping_charge_client: c.clientPaysShipping,
+      company_invoice_amount: c.anaPaysFreight,
       prices_confirmed: true,
     }).eq('id', productId);
 
@@ -270,6 +271,13 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       if (li !== p.lengthIn) dbUpdates.length_in = li;
       if (wi !== p.widthIn) dbUpdates.width_in = wi;
       if (hi !== p.heightIn) dbUpdates.height_in = hi;
+
+      // Save per-product shipping costs (includes extra charges)
+      const c = calcProduct(p, d);
+      if (wl && wl > 0) {
+        dbUpdates.shipping_charge_client = c.clientPaysShipping;
+        dbUpdates.company_invoice_amount = c.anaPaysFreight;
+      }
 
       if (Object.keys(dbUpdates).length > 0) {
         supabase.from('orders').update(dbUpdates).eq('id', p.id).then();
