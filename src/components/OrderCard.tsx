@@ -176,6 +176,11 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
             <div className="flex items-center gap-2 mt-0.5 mb-1">
               <StoreBadge store={order.store} />
               <StatusBadge status={order.status} />
+              {(order.invoiceFiles && order.invoiceFiles.length > 0) && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
+                  <FileText className="h-3 w-3" /> 📄
+                </span>
+              )}
             </div>
 
             {/* Always-visible pricing — all editable */}
