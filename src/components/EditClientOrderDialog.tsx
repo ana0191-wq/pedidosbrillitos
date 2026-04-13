@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle, Send, FileText, Scale } from 'lucide-react';
+import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
@@ -217,19 +218,26 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     const companyAmt = parseNum(invoiceCompanyAmount);
     const clientAmt = parseNum(invoiceClientCharge);
 
+    if (companyAmt == null || clientAmt == null) return;
+
+    const profit = clientAmt - companyAmt;
+    const brotherCut = profit * 0.30;
+
     onUpdateOrder(order.id, {
       shippingCostCompany: companyAmt,
       shippingChargeToClient: clientAmt,
-      amountCharged: totals.totalProductCost + (clientAmt ?? 0),
+      amountCharged: totals.totalProductCost + clientAmt,
     });
 
-    // Also save company_invoice_amount on the linked orders
+    // Also save on linked orders
     for (const p of products) {
       await supabase.from('orders').update({
         company_invoice_amount: companyAmt,
         shipping_charge_client: clientAmt,
       }).eq('id', p.id);
     }
+
+    toast.success(`✅ Factura guardada: Empresa $${companyAmt.toFixed(2)} · Cobro $${clientAmt.toFixed(2)} · Ganancia $${profit.toFixed(2)}`);
   };
 
   const deriveStatus = (pPay: string, sPay: string) => {
@@ -241,6 +249,17 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const handleSave = () => {
     const finalStatus = status === 'Entregado' ? 'Entregado' : deriveStatus(prodPayStatus, shipPayStatus);
 
+    // Use correct values: shippingChargeToClient = what client pays, shippingCostCompany = what Ana pays
+    const shippingChargeToClient = totals.totalClientPaysShipping > 0 ? totals.totalClientPaysShipping : null;
+    const shippingCostCompany = totals.totalAnaPaysFreight > 0 ? totals.totalAnaPaysFreight : null;
+
+    // Correct profit: ONLY from shipping difference
+    const anaProfit = (shippingChargeToClient != null && shippingCostCompany != null)
+      ? shippingChargeToClient - shippingCostCompany
+      : null;
+    const brotherCut = anaProfit != null ? anaProfit * 0.30 : null;
+    const netProfit = anaProfit != null && brotherCut != null ? anaProfit - brotherCut : null;
+
     const updates: Record<string, any> = {
       status: finalStatus,
       notes,
@@ -249,16 +268,28 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       productPaymentMethod: prodPayMethod || null,
       productPaymentDate: prodPayStatus === 'Pagado' ? (order.productPaymentDate || new Date().toISOString()) : null,
       shippingPaymentStatus: shipPayStatus,
-      shippingPaymentAmount: shipPayAmount ? parseFloat(shipPayAmount) : totals.totalClientPaysShipping,
+      shippingPaymentAmount: shipPayAmount ? parseFloat(shipPayAmount) : shippingChargeToClient,
       shippingPaymentMethod: shipPayMethod || null,
       shippingPaymentDate: shipPayStatus === 'Pagado' ? (order.shippingPaymentDate || new Date().toISOString()) : null,
-      shippingCostCompany: totals.totalAnaPaysFreight || null,
-      shippingChargeToClient: totals.totalClientPaysShipping || null,
-      amountCharged: totals.totalProductCost + totals.totalClientPaysShipping,
+      shippingCostCompany,
+      shippingChargeToClient,
+      amountCharged: totals.totalProductCost + (shippingChargeToClient ?? 0),
     };
+
+    // Validate: no NaN values
+    for (const [key, val] of Object.entries(updates)) {
+      if (typeof val === 'number' && isNaN(val)) {
+        console.error(`❌ NaN detected for field: ${key}`);
+        toast.error(`Error: valor inválido en ${key}`);
+        return;
+      }
+    }
+
+    console.log('💾 Guardando pedido:', updates);
 
     onUpdateOrder(order.id, updates);
 
+    // Save per-product dims
     for (const p of products) {
       const d = productDims[p.id];
       if (!d) continue;
@@ -272,7 +303,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       if (wi !== p.widthIn) dbUpdates.width_in = wi;
       if (hi !== p.heightIn) dbUpdates.height_in = hi;
 
-      // Save per-product shipping costs (includes extra charges)
       const c = calcProduct(p, d);
       if (wl && wl > 0) {
         dbUpdates.shipping_charge_client = c.clientPaysShipping;
@@ -283,6 +313,12 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
         supabase.from('orders').update(dbUpdates).eq('id', p.id).then();
       }
     }
+
+    // Show confirmation toast with real values
+    const productLabel = `Producto $${totals.totalProductCost.toFixed(2)}`;
+    const shippingLabel = shippingChargeToClient != null ? `Envío $${shippingChargeToClient.toFixed(2)}` : 'Envío —';
+    const profitLabel = anaProfit != null ? `Ganancia $${anaProfit.toFixed(2)}` : 'Ganancia —';
+    toast.success(`✅ Guardado: ${productLabel} · ${shippingLabel} · ${profitLabel}`);
 
     onOpenChange(false);
   };

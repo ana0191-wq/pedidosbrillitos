@@ -16,10 +16,8 @@ interface PendingItem {
   products: string[];
   stage1Paid: boolean;
   stage1Amount: number;
-  stage1Method: string | null;
   stage2Paid: boolean;
   stage2Amount: number;
-  stage2Method: string | null;
   totalPending: number;
   clientPhone?: string;
 }
@@ -34,22 +32,26 @@ export function PorCobrarSection({ clientOrders, onUpdateOrder }: PorCobrarSecti
 
       if (s1Paid && s2Paid) continue;
 
+      // Stage 1: client owes product price
       const productCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
-      const s1Amount = s1Paid ? 0 : (co.productPaymentAmount ?? productCost);
-      const shipCharge = co.shippingChargeToClient ?? co.shippingCost ?? 0;
-      const s2Amount = s2Paid ? 0 : (co.shippingPaymentAmount ?? shipCharge);
+      const s1Amount = s1Paid ? 0 : productCost;
+
+      // Stage 2: client owes shipping_charge_client (what Ana charges, NOT what company charges Ana)
+      const shippingChargeClient = co.shippingChargeToClient;
+      const s2Amount = s2Paid ? 0 : (shippingChargeClient ?? 0);
+
+      const totalPending = s1Amount + s2Amount;
+      if (totalPending <= 0 && s1Paid) continue; // skip if nothing owed (stage2 might be uncalculated)
 
       items.push({
         orderId: co.id,
         clientName: co.clientName || 'Sin nombre',
         products: co.products.map(p => p.productName),
         stage1Paid: s1Paid,
-        stage1Amount: s1Paid ? (co.productPaymentAmount ?? productCost) : s1Amount,
-        stage1Method: co.productPaymentMethod,
+        stage1Amount: s1Paid ? 0 : productCost,
         stage2Paid: s2Paid,
-        stage2Amount: s2Paid ? (co.shippingPaymentAmount ?? shipCharge) : s2Amount,
-        stage2Method: co.shippingPaymentMethod,
-        totalPending: (s1Paid ? 0 : s1Amount) + (s2Paid ? 0 : s2Amount),
+        stage2Amount: s2Paid ? 0 : (shippingChargeClient ?? 0),
+        totalPending,
       });
     }
 
@@ -122,7 +124,7 @@ export function PorCobrarSection({ clientOrders, onUpdateOrder }: PorCobrarSecti
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Etapa 1 — Producto:</span>
                   {item.stage1Paid ? (
-                    <span className="text-green-600 font-semibold">✅ Pagado {fmt(item.stage1Amount)}</span>
+                    <span className="text-green-600 font-semibold">✅ Pagado</span>
                   ) : (
                     <div className="flex items-center gap-2">
                       <span className="text-amber-600 font-semibold">⏳ Debe → {fmt(item.stage1Amount)}</span>
@@ -142,7 +144,7 @@ export function PorCobrarSection({ clientOrders, onUpdateOrder }: PorCobrarSecti
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Etapa 2 — Envío:</span>
                   {item.stage2Paid ? (
-                    <span className="text-green-600 font-semibold">✅ Pagado {fmt(item.stage2Amount)}</span>
+                    <span className="text-green-600 font-semibold">✅ Pagado</span>
                   ) : item.stage2Amount > 0 ? (
                     <div className="flex items-center gap-2">
                       <span className="text-amber-600 font-semibold">⏳ Debe → {fmt(item.stage2Amount)}</span>

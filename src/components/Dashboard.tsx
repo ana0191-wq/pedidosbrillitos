@@ -22,39 +22,31 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
     const totalOrders = orders.length;
     const inTransit = orders.filter(o => o.status === 'En Tránsito').length;
 
-    let totalProfit = 0;
-    let pendingCollection = 0;
+    let totalAnaProfit = 0; // SUM of ana_profit (shipping only) where company_invoice_amount IS NOT NULL
+    let pendingCollection = 0; // SUM of client_owes
 
     for (const co of clientOrders) {
       const productCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
-      const shippingCharge = co.shippingChargeToClient ?? co.shippingCost;
-      const shippingCompanyCost = co.shippingCostCompany ?? co.shippingCost;
-      const profit = shippingCharge - shippingCompanyCost;
-      totalProfit += profit;
+      const shippingChargeClient = co.shippingChargeToClient;
+      const companyInvoiceAmount = co.shippingCostCompany;
 
-      // Pending collection = amounts not yet paid by client
-      const prodPending = co.productPaymentStatus !== 'Pagado' ? productCost : 0;
-      const shipPending = co.shippingPaymentStatus !== 'Pagado' ? (shippingCharge || 0) : 0;
-      pendingCollection += prodPending + shipPending;
-    }
-
-    // Loose client orders
-    const linkedIds = new Set(clientOrders.flatMap(co => co.products.map(p => p.id)));
-    for (const o of orders) {
-      if (o.category === 'client' && !linkedIds.has(o.id)) {
-        const co = o as ClientOrder;
-        totalProfit += co.amountCharged - o.pricePaid - co.shippingCost;
-        if (o.status !== 'Entregado' && co.amountCharged > 0) {
-          pendingCollection += co.amountCharged;
-        }
+      // PROFIT: only from shipping, only when company_invoice_amount is known
+      if (companyInvoiceAmount != null && shippingChargeClient != null) {
+        const anaProfit = shippingChargeClient - companyInvoiceAmount;
+        totalAnaProfit += anaProfit;
       }
+
+      // POR COBRAR: what client still owes
+      const stage1Pending = co.productPaymentStatus !== 'Pagado' ? productCost : 0;
+      const stage2Pending = co.shippingPaymentStatus !== 'Pagado' ? (shippingChargeClient ?? 0) : 0;
+      pendingCollection += stage1Pending + stage2Pending;
     }
 
-    // Subtract collaborator cuts
+    // Brother cut = SUM of unpaid collaborator_earnings
     const collabTotal = earnings.filter(e => !e.paid).reduce((s, e) => s + e.collaboratorCut, 0);
-    const netProfit = totalProfit - collabTotal;
+    const netProfit = totalAnaProfit - collabTotal;
 
-    return { totalOrders, inTransit, pendingCollection, netProfit, totalProfit, collabTotal };
+    return { totalOrders, inTransit, pendingCollection, netProfit, totalAnaProfit, collabTotal };
   }, [orders, clientOrders, earnings]);
 
   // Monthly revenue data for chart (last 6 months)
@@ -81,16 +73,11 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
   }, [clientOrders]);
 
   const maxChart = Math.max(...chartData.map(d => d.value), 1);
-
-  // Recent orders for the table
   const recentOrders = orders.slice(0, 8);
-
-  // Tracking orders (in transit)
   const trackingOrders = orders
     .filter(o => ['En Tránsito', 'Llegó', 'En Venezuela'].includes(o.status))
     .slice(0, 5);
 
-  // Collaborator summary
   const primaryCollab = collaborators[0] || null;
   const collabUnpaid = primaryCollab
     ? earnings.filter(e => e.collaboratorId === primaryCollab.id && !e.paid)
@@ -98,7 +85,6 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
   const collabUnpaidTotal = collabUnpaid.reduce((s, e) => s + e.collaboratorCut, 0);
 
   const fmt = fmtMoney;
-
   const getOrderName = (orderId: string) => orders.find(o => o.id === orderId)?.productName || 'Pedido';
 
   return (
@@ -114,7 +100,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
         icon={<Clock className="h-5 w-5" />}
         label="Pendiente de cobro"
         value={fmt(stats.pendingCollection)}
-        onClick={() => onNavigate('client-orders')}
+        onClick={() => onNavigate('por-cobrar')}
       />
       <div className="card-brillitos gradient-pink p-5 flex flex-col justify-between cursor-pointer hover:shadow-brillitos-lg transition-shadow" onClick={() => onNavigate('client-orders')}>
         <div className="flex items-center justify-between">
@@ -144,7 +130,6 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
           </div>
           <span className="text-xs font-semibold text-profit bg-profit/10 px-2 py-1 rounded-full">↑ Activo</span>
         </div>
-        {/* Bar chart */}
         <div className="flex items-end gap-2 h-32">
           {chartData.map((d, i) => {
             const height = maxChart > 0 ? (d.value / maxChart) * 100 : 0;
@@ -162,17 +147,17 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
         </div>
       </div>
 
-      {/* Ganancias breakdown */}
+      {/* Ganancias breakdown — profit is ONLY from shipping */}
       <div className="card-brillitos p-5">
         <h3 className="text-sm font-semibold text-foreground mb-4">Ganancias</h3>
         <div className="space-y-4">
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-muted-foreground">Por envíos</span>
-              <span className="font-semibold text-foreground">{fmt(stats.totalProfit)}</span>
+              <span className="font-semibold text-foreground">{fmt(stats.totalAnaProfit)}</span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full" style={{ width: `${stats.totalProfit > 0 ? 70 : 0}%` }} />
+              <div className="h-full bg-primary rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? 70 : 0}%` }} />
             </div>
           </div>
           <div>
@@ -181,7 +166,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
               <span className="font-semibold text-primary">-{fmt(stats.collabTotal)}</span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full bg-pink-soft rounded-full" style={{ width: `${stats.totalProfit > 0 ? (stats.collabTotal / stats.totalProfit * 100) : 0}%` }} />
+              <div className="h-full bg-pink-soft rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? (stats.collabTotal / stats.totalAnaProfit * 100) : 0}%` }} />
             </div>
           </div>
           <div className="border-t border-border pt-3">
@@ -193,7 +178,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
         </div>
       </div>
 
-      {/* Tracking card (spans rows 2-3) */}
+      {/* Tracking card */}
       <div className="card-brillitos p-5 lg:row-span-2">
         <h3 className="text-sm font-semibold text-foreground mb-4">📦 Tracking</h3>
         {trackingOrders.length === 0 ? (
@@ -238,15 +223,20 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
                 <th className="text-left py-2 font-medium hidden md:table-cell">Tienda</th>
                 <th className="text-left py-2 font-medium">Estado</th>
                 <th className="text-right py-2 font-medium">Precio</th>
-                <th className="text-right py-2 font-medium hidden sm:table-cell">Envío</th>
+                <th className="text-right py-2 font-medium hidden sm:table-cell">Cobro envío</th>
                 <th className="text-right py-2 font-medium hidden md:table-cell">Ganancia</th>
               </tr>
             </thead>
             <tbody>
               {recentOrders.map(order => {
-                const isClient = order.category === 'client';
-                const co = isClient ? (order as ClientOrder) : null;
-                const profit = co ? co.amountCharged - order.pricePaid - co.shippingCost : 0;
+                // Find the parent client order for this product
+                const parentCO = clientOrders.find(co => co.products.some(p => p.id === order.id));
+                const shippingChargeClient = parentCO?.shippingChargeToClient;
+                const companyInvoice = parentCO?.shippingCostCompany;
+                const anaProfit = (shippingChargeClient != null && companyInvoice != null)
+                  ? shippingChargeClient - companyInvoice
+                  : null;
+
                 return (
                   <tr key={order.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
                     <td className="py-2.5">
@@ -262,7 +252,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
                       </div>
                     </td>
                     <td className="py-2.5 hidden sm:table-cell text-muted-foreground">
-                      {co?.clientName || '—'}
+                      {parentCO?.clientName || '—'}
                     </td>
                     <td className="py-2.5 hidden md:table-cell">
                       <StoreBadge store={order.store} />
@@ -272,10 +262,10 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
                     </td>
                     <td className="py-2.5 text-right font-bold text-foreground">{fmt(order.pricePaid)}</td>
                     <td className="py-2.5 text-right font-semibold text-primary hidden sm:table-cell">
-                      {co ? fmt(co.shippingCost) : '—'}
+                      {shippingChargeClient != null ? fmt(shippingChargeClient) : '—'}
                     </td>
                     <td className="py-2.5 text-right font-bold text-profit hidden md:table-cell">
-                      {isClient ? fmt(profit) : '—'}
+                      {anaProfit != null ? fmt(anaProfit) : '—'}
                     </td>
                   </tr>
                 );
@@ -285,7 +275,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
         </div>
       </div>
 
-      {/* Equipo card (col 4, in row 3 area) - only shows if there's a collaborator */}
+      {/* Equipo card */}
       {primaryCollab && (
         <div className="card-brillitos p-5">
           <h3 className="text-sm font-semibold text-foreground mb-3">👤 {primaryCollab.name}</h3>
