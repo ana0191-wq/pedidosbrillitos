@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Package, Plus, Pencil, Send } from 'lucide-react';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { Client } from '@/hooks/useClients';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
@@ -117,9 +118,10 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
                       <Pencil className="h-3 w-3" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); onDeleteOrder(order.id); }}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    <ConfirmDeleteDialog
+                      onConfirm={() => onDeleteOrder(order.id)}
+                      title="¿Segura que quieres eliminar este pedido?"
+                    />
                   </div>
                 </div>
 

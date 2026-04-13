@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Plus, ChevronDown, ChevronUp, Trash2, Package, Phone, Pencil, Send, Calendar } from 'lucide-react';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
@@ -268,9 +269,15 @@ export function ClientsSection({
                         <Button size="sm" variant="outline" onClick={() => setShowAddOrder(client.id)}>
                           <Plus className="h-3 w-3 mr-1" /> Pedido
                         </Button>
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => onDeleteClient(client.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <ConfirmDeleteDialog
+                          onConfirm={() => onDeleteClient(client.id)}
+                          title="¿Segura que quieres eliminar este cliente?"
+                          trigger={
+                            <Button size="sm" variant="ghost" className="text-destructive">
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          }
+                        />
                       </div>
                     </div>
 
@@ -311,9 +318,10 @@ export function ClientsSection({
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
                               <Pencil className="h-3 w-3" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); onDeleteOrder(order.id); }}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            <ConfirmDeleteDialog
+                              onConfirm={() => onDeleteOrder(order.id)}
+                              title="¿Segura que quieres eliminar este pedido?"
+                            />
                           </div>
                         </div>
                       ))

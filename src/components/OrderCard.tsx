@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from 'react';
 import type { Order, MerchandiseOrder, ClientOrder, OrderCategory, PaymentMethod, PaymentCurrency } from '@/types/orders';
 import { parseNum, fmtMoney } from '@/lib/utils';
 import { EditableField } from '@/components/EditableField';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -608,9 +609,16 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                   )}
 
                   <div className="flex gap-2">
-                    <Button size="sm" variant="ghost" className="text-destructive ml-auto" onClick={() => onDelete(order.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <ConfirmDeleteDialog
+                      onConfirm={() => onDelete(order.id)}
+                      title="¿Segura que quieres eliminar este pedido?"
+                      description="Esta acción no se puede deshacer."
+                      trigger={
+                        <Button size="sm" variant="ghost" className="text-destructive ml-auto">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
                   </div>
                 </div>
               )}
