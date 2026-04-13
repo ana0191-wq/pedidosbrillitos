@@ -365,19 +365,30 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
 
                       {shippingCalc && (
                         <div className="text-xs space-y-1 border-t border-border pt-2">
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Peso facturable:</span>
-                            <span className="font-medium text-foreground">{shippingCalc.billable} lbs</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Flete para mí:</span>
-                            <span className="font-medium text-foreground">{fmt(shippingCalc.myCost)}</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Cobro al cliente:</span>
-                            <span className="font-bold text-foreground">{fmt(shippingCalc.clientCharge)}</span>
-                          </div>
-                          <div className="flex justify-between border-t border-border pt-1">
+                          <EditableField
+                            label="Peso facturable:"
+                            value={shippingCalc.billable}
+                            onSave={(v) => setDims(p => ({ ...p, weight: String(v) }))}
+                            format={(n) => `${n} lbs`}
+                            className="text-xs"
+                          />
+                          <EditableField
+                            label="Flete para mí:"
+                            value={shippingCalc.myCost}
+                            calculatedValue={shippingCalc.myCost}
+                            onSave={(v) => onUpdate(order.id, { shippingCost: v } as any)}
+                            className="text-xs"
+                          />
+                          <EditableField
+                            label="Cobro al cliente:"
+                            value={shippingCalc.clientCharge}
+                            calculatedValue={shippingCalc.clientCharge}
+                            onSave={(v) => {
+                              if (order.category === 'client') onUpdate(order.id, { amountCharged: v } as any);
+                            }}
+                            className="text-xs"
+                          />
+                          <div className="flex justify-between border-t border-border pt-1 text-xs">
                             <span className="text-muted-foreground">Mi ganancia envío:</span>
                             <span className="font-bold text-green-600">{fmt(shippingCalc.profit)} ✅</span>
                           </div>
