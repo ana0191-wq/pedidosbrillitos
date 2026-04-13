@@ -218,6 +218,19 @@ const Index = () => {
             />
           </TabsContent>
 
+          <TabsContent value="team">
+            <TeamSection
+              collaborators={collaborators}
+              earnings={earnings}
+              orders={orders}
+              onAdd={addCollaborator}
+              onUpdate={updateCollaborator}
+              onDelete={deleteCollaborator}
+              onMarkPaid={markPaid}
+              getEarningsByCollaborator={getEarningsByCollaborator}
+            />
+          </TabsContent>
+
           <TabsContent value="shipping">
             <ShippingCalculator settings={shippingSettings} onSaveSettings={saveSettings} />
           </TabsContent>
