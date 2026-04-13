@@ -9,6 +9,12 @@ import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
 import { PaymentMethodSelector, CurrencySelector } from '@/components/PaymentMethodSelector';
 import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler, AlertTriangle, MapPin } from 'lucide-react';
 
+interface CollabInfo {
+  name: string;
+  percentage: number;
+  cut: number;
+}
+
 interface OrderCardProps {
   order: Order;
   onUpdate: (id: string, updates: Partial<Order>) => void;
@@ -17,6 +23,7 @@ interface OrderCardProps {
     airRatePerLb: number;
     airPricePerLb: number;
   };
+  collabInfo?: CollabInfo | null;
 }
 
 export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: OrderCardProps) {
