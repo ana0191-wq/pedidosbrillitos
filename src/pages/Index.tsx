@@ -6,7 +6,7 @@ import { useShippingSettings } from '@/hooks/useShippingSettings';
 import { useProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/hooks/useAuth';
 import { useCollaborators } from '@/hooks/useCollaborators';
-import type { OrderCategory } from '@/types/orders';
+import type { Order, OrderCategory } from '@/types/orders';
 import { Dashboard } from '@/components/Dashboard';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { OrderSection } from '@/components/OrderSection';
