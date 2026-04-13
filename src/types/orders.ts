@@ -1,8 +1,8 @@
 export type Store = string;
 
-export type PersonalStatus = 'Pedido' | 'En Tránsito' | 'Entregado';
-export type MerchandiseStatus = 'Pedido' | 'En Tránsito' | 'Parcialmente Recibido' | 'Completo';
-export type ClientStatus = 'Pedido' | 'En Tránsito' | 'Entregado' | 'Cliente Notificado';
+export type PersonalStatus = 'Pendiente' | 'En Tránsito' | 'Llegó' | 'No Llegó' | 'En Venezuela' | 'Entregado';
+export type MerchandiseStatus = 'Pendiente' | 'En Tránsito' | 'Llegó' | 'No Llegó' | 'En Venezuela' | 'Entregado';
+export type ClientStatus = 'Pendiente' | 'En Tránsito' | 'Llegó' | 'No Llegó' | 'En Venezuela' | 'Entregado';
 
 export type OrderCategory = 'personal' | 'merchandise' | 'client';
 
