@@ -135,7 +135,7 @@ const Index = () => {
               emoji="🛍️"
               category="personal"
               orders={getByCategory('personal')}
-              statusOptions={['Pedido', 'En Tránsito', 'Entregado']}
+              statusOptions={['Pendiente', 'En Tránsito', 'Llegó', 'No Llegó', 'En Venezuela', 'Entregado']}
               onUpdate={updateOrder}
               onDelete={deleteOrder}
               onAdd={() => openDialog('personal')}
@@ -149,7 +149,7 @@ const Index = () => {
                 emoji="📦"
                 category="merchandise"
                 orders={getByCategory('merchandise')}
-                statusOptions={['Pedido', 'En Tránsito', 'Parcialmente Recibido', 'Completo']}
+                statusOptions={['Pendiente', 'En Tránsito', 'Llegó', 'No Llegó', 'En Venezuela', 'Entregado']}
                 onUpdate={updateOrder}
                 onDelete={deleteOrder}
                 onAdd={() => openDialog('merchandise')}

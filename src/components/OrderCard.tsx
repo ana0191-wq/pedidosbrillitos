@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
 import { PaymentMethodSelector, CurrencySelector } from '@/components/PaymentMethodSelector';
-import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler } from 'lucide-react';
+import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler, AlertTriangle, MapPin } from 'lucide-react';
 
 interface OrderCardProps {
   order: Order;
@@ -23,6 +23,11 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
+  const [showNoLlegoNotes, setShowNoLlegoNotes] = useState(false);
+  const [noLlegoReason, setNoLlegoReason] = useState('');
+  const [showLlegoPrompt, setShowLlegoPrompt] = useState(false);
+  const [showEntregadoWarning, setShowEntregadoWarning] = useState(false);
+  const [entregadoPendingAmount, setEntregadoPendingAmount] = useState(0);
 
   // Inline dimension inputs
   const [dims, setDims] = useState({ weight: '', length: '', width: '', height: '' });
@@ -88,7 +93,7 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
   const handleCategoryChange = (newCategory: OrderCategory) => {
-    const updates: any = { category: newCategory, status: 'Pedido' };
+    const updates: any = { category: newCategory, status: 'Pendiente' };
     if (newCategory === 'merchandise') {
       updates.unitsOrdered = 1;
       updates.unitsReceived = 0;
@@ -323,7 +328,7 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
 
                   {/* Inline shipping dimensions — always visible if no shipping cost */}
                   {(order.category === 'client' || order.category === 'merchandise') && (
-                    <div className="rounded-md bg-muted/40 border border-border p-2.5 space-y-2">
+                    <div data-order-shipping={order.id} className="rounded-md bg-muted/40 border border-border p-2.5 space-y-2">
                       <p className="text-xs font-semibold text-foreground flex items-center gap-1">
                         <Ruler className="h-3.5 w-3.5" /> 📐 Peso y medidas para calcular envío
                       </p>
@@ -395,41 +400,119 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
                 </>
               )}
 
-              {/* Actions */}
+              {/* Status change actions */}
               {!editing && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {order.category === 'personal' && order.status !== 'Entregado' && (
-                    <Button size="sm" variant="default" onClick={() => onUpdate(order.id, { status: 'Entregado' })}>
-                      <Check className="h-4 w-4 mr-1" /> Entregado
-                    </Button>
-                  )}
-                  {order.category === 'personal' && order.status === 'Pedido' && (
-                    <Button size="sm" variant="secondary" onClick={() => onUpdate(order.id, { status: 'En Tránsito' })}>
-                      <Truck className="h-4 w-4 mr-1" /> En Tránsito
-                    </Button>
-                  )}
-                  {order.category === 'merchandise' && order.status !== 'Completo' && (
-                    <Button size="sm" variant="default" onClick={() => onUpdate(order.id, { status: 'Completo', unitsReceived: (order as MerchandiseOrder).unitsOrdered } as any)}>
-                      <Check className="h-4 w-4 mr-1" /> Completo
-                    </Button>
-                  )}
-                  {order.category === 'client' && order.status !== 'Cliente Notificado' && (
-                    <>
-                      {order.status !== 'Entregado' && (
-                        <Button size="sm" variant="default" onClick={() => onUpdate(order.id, { status: 'Entregado' })}>
-                          <Check className="h-4 w-4 mr-1" /> Entregado
+                <div className="space-y-2 pt-1">
+                  {/* Status selector */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Estado:</span>
+                    <Select
+                      value={order.status}
+                      onValueChange={(newStatus) => {
+                        if (newStatus === 'No Llegó') {
+                          setShowNoLlegoNotes(true);
+                          return;
+                        }
+                        if (newStatus === 'Llegó') {
+                          onUpdate(order.id, { status: 'Llegó' });
+                          setShowLlegoPrompt(true);
+                          return;
+                        }
+                        if (newStatus === 'Entregado' && isClient) {
+                          // Check if shipping is unpaid
+                          const co = order as ClientOrder;
+                          const pendingShip = co.amountCharged - co.shippingCost;
+                          if (co.shippingCost > 0 || co.amountCharged > 0) {
+                            // Show warning but still change status
+                            onUpdate(order.id, { status: 'Entregado' });
+                            setEntregadoPendingAmount(co.amountCharged);
+                            setShowEntregadoWarning(true);
+                          } else {
+                            onUpdate(order.id, { status: 'Entregado' });
+                          }
+                          return;
+                        }
+                        onUpdate(order.id, { status: newStatus as any });
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-[160px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pendiente">⬜ Pendiente</SelectItem>
+                        <SelectItem value="En Tránsito">🔵 En Tránsito</SelectItem>
+                        <SelectItem value="Llegó">🟢 Llegó</SelectItem>
+                        <SelectItem value="No Llegó">🔴 No Llegó</SelectItem>
+                        <SelectItem value="En Venezuela">🟣 En Venezuela</SelectItem>
+                        <SelectItem value="Entregado">✅ Entregado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* No Llegó notes prompt */}
+                  {showNoLlegoNotes && (
+                    <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-destructive">🔴 ¿Qué pasó con este pedido?</p>
+                      <Textarea
+                        value={noLlegoReason}
+                        onChange={(e) => setNoLlegoReason(e.target.value)}
+                        placeholder="Describe qué pasó..."
+                        className="text-xs min-h-[60px]"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="destructive" className="text-xs h-7" onClick={() => {
+                          onUpdate(order.id, { status: 'No Llegó', notes: noLlegoReason || order.notes } as any);
+                          setShowNoLlegoNotes(false);
+                          setNoLlegoReason('');
+                        }}>
+                          Guardar
                         </Button>
-                      )}
-                      {order.status === 'Entregado' && (
-                        <Button size="sm" variant="secondary" onClick={() => onUpdate(order.id, { status: 'Cliente Notificado' })}>
-                          <Bell className="h-4 w-4 mr-1" /> Notificar
+                        <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => { setShowNoLlegoNotes(false); setNoLlegoReason(''); }}>
+                          Cancelar
                         </Button>
-                      )}
-                    </>
+                      </div>
+                    </div>
                   )}
-                  <Button size="sm" variant="ghost" className="text-destructive ml-auto" onClick={() => onDelete(order.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+
+                  {/* Llegó prompt */}
+                  {showLlegoPrompt && (
+                    <div className="rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-green-700 dark:text-green-400">🟢 ¡Llegó! ¿Quieres calcular el envío ahora?</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="default" className="text-xs h-7" onClick={() => {
+                          setShowLlegoPrompt(false);
+                          setExpanded(true);
+                          // Scroll to shipping section
+                          setTimeout(() => {
+                            const el = document.querySelector(`[data-order-shipping="${order.id}"]`);
+                            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }, 100);
+                        }}>
+                          📐 Calcular envío
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setShowLlegoPrompt(false)}>
+                          Después
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Entregado unpaid shipping warning */}
+                  {showEntregadoWarning && (
+                    <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        ⚠️ Este pedido tiene envío pendiente de cobro — {fmt(entregadoPendingAmount)}
+                      </p>
+                      <Button size="sm" variant="ghost" className="text-xs h-6 mt-1" onClick={() => setShowEntregadoWarning(false)}>
+                        Entendido
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" className="text-destructive ml-auto" onClick={() => onDelete(order.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

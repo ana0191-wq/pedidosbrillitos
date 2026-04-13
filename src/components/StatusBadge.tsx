@@ -1,14 +1,19 @@
 import type { Store, PersonalStatus, MerchandiseStatus, ClientStatus } from '@/types/orders';
 import { Badge } from '@/components/ui/badge';
 
-type AnyStatus = PersonalStatus | MerchandiseStatus | ClientStatus;
+type AnyStatus = PersonalStatus | MerchandiseStatus | ClientStatus | string;
 
 const statusConfig: Record<string, { class: string }> = {
-  'Pedido': { class: 'bg-status-ordered text-primary-foreground' },
+  'Pendiente': { class: 'bg-muted text-muted-foreground' },
   'En Tránsito': { class: 'bg-status-transit text-primary-foreground' },
-  'Entregado': { class: 'bg-status-delivered text-primary-foreground' },
+  'Llegó': { class: 'bg-status-arrived text-primary-foreground' },
+  'No Llegó': { class: 'bg-destructive text-destructive-foreground' },
+  'En Venezuela': { class: 'bg-status-venezuela text-primary-foreground' },
+  'Entregado': { class: 'bg-status-delivered-dark text-primary-foreground' },
+  // Legacy statuses for backwards compat
+  'Pedido': { class: 'bg-muted text-muted-foreground' },
   'Parcialmente Recibido': { class: 'bg-status-partial text-primary-foreground' },
-  'Completo': { class: 'bg-status-delivered text-primary-foreground' },
+  'Completo': { class: 'bg-status-delivered-dark text-primary-foreground' },
   'Cliente Notificado': { class: 'bg-status-notified text-primary-foreground' },
 };
 
@@ -17,7 +22,7 @@ export function StatusBadge({ status }: { status: AnyStatus }) {
   return <Badge className={config.class}>{status}</Badge>;
 }
 
-const storeConfig: Record<Store, string> = {
+const storeConfig: Record<string, string> = {
   'AliExpress': 'store-badge-aliexpress',
   'Shein': 'store-badge-shein',
   'Temu': 'store-badge-temu',
@@ -25,5 +30,7 @@ const storeConfig: Record<Store, string> = {
 };
 
 export function StoreBadge({ store }: { store: Store }) {
-  return <Badge className={storeConfig[store]}>{store}</Badge>;
+  // Normalize store name for matching
+  const key = Object.keys(storeConfig).find(k => k.toLowerCase() === store.toLowerCase()) || store;
+  return <Badge className={storeConfig[key] || 'bg-muted text-muted-foreground'}>{store}</Badge>;
 }
