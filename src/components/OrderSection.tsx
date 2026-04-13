@@ -23,7 +23,7 @@ interface OrderSectionProps {
   getCollabInfo?: (order: Order) => CollabInfo | null;
 }
 
-export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, onDelete, onAdd }: OrderSectionProps) {
+export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, onDelete, onAdd, getCollabInfo }: OrderSectionProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const filtered = useMemo(() => {
@@ -60,7 +60,7 @@ export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, on
       ) : (
         <div className="space-y-3">
           {filtered.map(order => (
-            <OrderCard key={order.id} order={order} onUpdate={onUpdate} onDelete={onDelete} />
+            <OrderCard key={order.id} order={order} onUpdate={onUpdate} onDelete={onDelete} collabInfo={getCollabInfo?.(order) || null} />
           ))}
         </div>
       )}
