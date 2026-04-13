@@ -88,7 +88,7 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
   const handleCategoryChange = (newCategory: OrderCategory) => {
-    const updates: any = { category: newCategory, status: 'Pedido' };
+    const updates: any = { category: newCategory, status: 'Pendiente' };
     if (newCategory === 'merchandise') {
       updates.unitsOrdered = 1;
       updates.unitsReceived = 0;
@@ -403,7 +403,7 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
                       <Check className="h-4 w-4 mr-1" /> Entregado
                     </Button>
                   )}
-                  {order.category === 'personal' && order.status === 'Pedido' && (
+                  {order.category === 'personal' && order.status === 'Pendiente' && (
                     <Button size="sm" variant="secondary" onClick={() => onUpdate(order.id, { status: 'En Tránsito' })}>
                       <Truck className="h-4 w-4 mr-1" /> En Tránsito
                     </Button>

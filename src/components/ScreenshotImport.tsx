@@ -208,7 +208,7 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
       return {
         ...base,
         category: 'merchandise' as const,
-        status: 'Pedido' as const,
+        status: 'Pendiente' as const,
         unitsOrdered: units,
         unitsReceived: 0,
         pricePerUnit: perUnit,
@@ -219,13 +219,13 @@ export function ScreenshotImport({ onImportOrders }: ScreenshotImportProps) {
       return {
         ...base,
         category: 'client',
-        status: 'Pedido',
+        status: 'Pendiente',
         clientName: d.clientName || '',
         shippingCost: 0,
         amountCharged: 0,
       };
     }
-    return { ...base, category: 'personal', status: 'Pedido' };
+    return { ...base, category: 'personal', status: 'Pendiente' };
   };
 
   const importOrder = (index: number) => {

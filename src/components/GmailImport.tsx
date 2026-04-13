@@ -192,7 +192,7 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
       orderNumber: orderData.orderNumber || '',
       notes: 'Importado desde Gmail',
       createdAt: new Date().toISOString(),
-      status: 'Pedido',
+      status: 'Pendiente',
     };
 
     onImportOrders([order]);
@@ -215,7 +215,7 @@ export function GmailImport({ onImportOrders }: GmailImportProps) {
       orderNumber: orderData.orderNumber || '',
       notes: 'Importado desde Gmail',
       createdAt: new Date().toISOString(),
-      status: 'Pedido' as const,
+      status: 'Pendiente' as const,
     }));
 
     onImportOrders(ordersToImport);

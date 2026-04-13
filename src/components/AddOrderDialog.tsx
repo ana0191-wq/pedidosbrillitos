@@ -158,11 +158,11 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
 
     let order: Order;
     if (category === 'personal') {
-      order = { ...base, category: 'personal', status: 'Pedido' };
+      order = { ...base, category: 'personal', status: 'Pendiente' };
     } else if (category === 'merchandise') {
-      order = { ...base, category: 'merchandise', status: 'Pedido', unitsOrdered: parseInt(unitsOrdered) || 1, unitsReceived: 0, pricePerUnit: parseFloat(pricePerUnit) || parseFloat(pricePaid) || 0, suggestedPrice: null };
+      order = { ...base, category: 'merchandise', status: 'Pendiente', unitsOrdered: parseInt(unitsOrdered) || 1, unitsReceived: 0, pricePerUnit: parseFloat(pricePerUnit) || parseFloat(pricePaid) || 0, suggestedPrice: null };
     } else {
-      order = { ...base, category: 'client', status: 'Pedido', clientName, shippingCost: parseFloat(shippingCost) || 0, amountCharged: parseFloat(amountCharged) || 0 };
+      order = { ...base, category: 'client', status: 'Pendiente', clientName, shippingCost: parseFloat(shippingCost) || 0, amountCharged: parseFloat(amountCharged) || 0 };
     }
 
     onAdd(order);
