@@ -19,7 +19,7 @@ import { CatalogSection } from '@/components/CatalogSection';
 import { TeamSection } from '@/components/TeamSection';
 import { InventorySection } from '@/components/InventorySection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, Store, Boxes } from 'lucide-react';
+import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, Store, Boxes, UserCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
