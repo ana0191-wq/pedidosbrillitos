@@ -136,6 +136,87 @@ export type Database = {
         }
         Relationships: []
       }
+      collaborator_earnings: {
+        Row: {
+          ana_profit: number
+          collaborator_cut: number
+          collaborator_id: string
+          created_at: string
+          id: string
+          order_id: string
+          paid: boolean
+          paid_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ana_profit?: number
+          collaborator_cut?: number
+          collaborator_id: string
+          created_at?: string
+          id?: string
+          order_id: string
+          paid?: boolean
+          paid_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ana_profit?: number
+          collaborator_cut?: number
+          collaborator_id?: string
+          created_at?: string
+          id?: string
+          order_id?: string
+          paid?: boolean
+          paid_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_earnings_collaborator_id_fkey"
+            columns: ["collaborator_id"]
+            isOneToOne: false
+            referencedRelation: "collaborators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborator_earnings_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaborators: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          percentage: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          percentage?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          percentage?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       gmail_tokens: {
         Row: {
           access_token: string
