@@ -28,6 +28,10 @@ export interface BaseOrder {
   euroRate?: number | null;
   deliveryNotes?: string | null;
   deliveredAt?: string | null;
+  // Invoice/documentation
+  companyInvoiceAmount?: number | null;
+  companyInvoiceNotes?: string | null;
+  invoiceFiles?: Array<{ name: string; url: string; uploadedAt: string }>;
 }
 
 export interface PersonalOrder extends BaseOrder {

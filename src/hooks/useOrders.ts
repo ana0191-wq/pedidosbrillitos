@@ -39,6 +39,9 @@ export function useOrders() {
         euroRate: row.euro_rate != null ? Number(row.euro_rate) : null,
         deliveryNotes: row.delivery_notes || null,
         deliveredAt: row.delivered_at || null,
+        companyInvoiceAmount: row.company_invoice_amount != null ? Number(row.company_invoice_amount) : null,
+        companyInvoiceNotes: row.company_invoice_notes || null,
+        invoiceFiles: Array.isArray(row.invoice_files) ? row.invoice_files : [],
       };
 
       if (row.category === 'merchandise') {
