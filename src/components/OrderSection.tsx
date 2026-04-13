@@ -5,6 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Filter } from 'lucide-react';
 
+interface CollabInfo {
+  name: string;
+  percentage: number;
+  cut: number;
+}
+
 interface OrderSectionProps {
   title: string;
   emoji: string;
@@ -14,6 +20,7 @@ interface OrderSectionProps {
   onUpdate: (id: string, updates: Partial<Order>) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  getCollabInfo?: (order: Order) => CollabInfo | null;
 }
 
 export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, onDelete, onAdd }: OrderSectionProps) {
