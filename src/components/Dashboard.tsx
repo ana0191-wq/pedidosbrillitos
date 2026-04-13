@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Package, Clock, TrendingUp, Truck, ArrowUpRight } from 'lucide-react';
 import type { Order, ClientOrder, MerchandiseOrder } from '@/types/orders';
+import { fmtMoney } from '@/lib/utils';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder as ClientOrderType } from '@/hooks/useClientOrders';
 import type { Collaborator, CollaboratorEarning } from '@/hooks/useCollaborators';
@@ -93,7 +94,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
     : [];
   const collabUnpaidTotal = collabUnpaid.reduce((s, e) => s + e.collaboratorCut, 0);
 
-  const fmt = (n: number) => `$${n.toFixed(2)}`;
+  const fmt = fmtMoney;
 
   const getOrderName = (orderId: string) => orders.find(o => o.id === orderId)?.productName || 'Pedido';
 
