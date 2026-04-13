@@ -258,6 +258,8 @@ export type Database = {
           category: string
           client_name: string | null
           client_order_id: string | null
+          company_invoice_amount: number | null
+          company_invoice_notes: string | null
           created_at: string
           delivered_at: string | null
           delivery_notes: string | null
@@ -265,6 +267,7 @@ export type Database = {
           euro_rate: number | null
           height_in: number | null
           id: string
+          invoice_files: Json | null
           length_in: number | null
           notes: string | null
           order_date: string | null
@@ -297,6 +300,8 @@ export type Database = {
           category: string
           client_name?: string | null
           client_order_id?: string | null
+          company_invoice_amount?: number | null
+          company_invoice_notes?: string | null
           created_at?: string
           delivered_at?: string | null
           delivery_notes?: string | null
@@ -304,6 +309,7 @@ export type Database = {
           euro_rate?: number | null
           height_in?: number | null
           id?: string
+          invoice_files?: Json | null
           length_in?: number | null
           notes?: string | null
           order_date?: string | null
@@ -336,6 +342,8 @@ export type Database = {
           category?: string
           client_name?: string | null
           client_order_id?: string | null
+          company_invoice_amount?: number | null
+          company_invoice_notes?: string | null
           created_at?: string
           delivered_at?: string | null
           delivery_notes?: string | null
@@ -343,6 +351,7 @@ export type Database = {
           euro_rate?: number | null
           height_in?: number | null
           id?: string
+          invoice_files?: Json | null
           length_in?: number | null
           notes?: string | null
           order_date?: string | null
