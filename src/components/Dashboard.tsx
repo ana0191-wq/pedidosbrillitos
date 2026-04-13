@@ -27,12 +27,15 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
 
     for (const co of clientOrders) {
       const productCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
-      const profit = co.amountCharged - productCost - co.shippingCost;
+      const shippingCharge = co.shippingChargeToClient ?? co.shippingCost;
+      const shippingCompanyCost = co.shippingCostCompany ?? co.shippingCost;
+      const profit = shippingCharge - shippingCompanyCost;
       totalProfit += profit;
 
-      if (co.status !== 'Entregado' && co.amountCharged > 0) {
-        pendingCollection += co.amountCharged;
-      }
+      // Pending collection = amounts not yet paid by client
+      const prodPending = co.productPaymentStatus !== 'Pagado' ? productCost : 0;
+      const shipPending = co.shippingPaymentStatus !== 'Pagado' ? (shippingCharge || 0) : 0;
+      pendingCollection += prodPending + shipPending;
     }
 
     // Loose client orders
