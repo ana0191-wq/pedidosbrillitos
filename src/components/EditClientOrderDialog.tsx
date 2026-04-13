@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle, Send } from 'lucide-react';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { useOrders } from '@/hooks/useOrders';
@@ -241,9 +242,15 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                   📦 Marcar Entregado
                 </Button>
               )}
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { onDeleteOrder(order.id); onOpenChange(false); }}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <ConfirmDeleteDialog
+                onConfirm={() => { onDeleteOrder(order.id); onOpenChange(false); }}
+                title="¿Segura que quieres eliminar este pedido?"
+                trigger={
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                }
+              />
             </div>
           </div>
         </DialogHeader>
