@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { EditableField } from '@/components/EditableField';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -346,9 +347,28 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
               <ResultRow label="Peso real" value={`${fmtN(airResult.realWeightLb)} lb`} />
               <ResultRow label="Peso volumétrico" value={`${fmtN(airResult.volumetricWeight)} lb`} />
               <ResultRow label="Peso cobrable" value={`${airResult.chargeableWeight} lb`} />
-              <ResultRow label="Costo real envío" value={fmt(airResult.realShippingCost)} />
-              <ResultRow label="Precio al cliente" value={fmt(airResult.clientShippingPrice)} />
-              <ResultRow label={`Cobrar al cliente (+${airProfitPercent}%)`} value={fmt(airResult.realShippingCost * (1 + (parseFloat(airProfitPercent) || 0) / 100))} highlight />
+              <EditableField
+                label="Costo real envío"
+                value={airResult.realShippingCost}
+                calculatedValue={airResult.realShippingCost}
+                onSave={(v) => setAirResult(prev => prev ? { ...prev, realShippingCost: v } : null)}
+                className="text-sm"
+              />
+              <EditableField
+                label="Precio al cliente"
+                value={airResult.clientShippingPrice}
+                calculatedValue={airResult.clientShippingPrice}
+                onSave={(v) => setAirResult(prev => prev ? { ...prev, clientShippingPrice: v } : null)}
+                className="text-sm"
+              />
+              <EditableField
+                label={`Cobrar al cliente (+${airProfitPercent}%)`}
+                value={airResult.realShippingCost * (1 + (parseFloat(airProfitPercent) || 0) / 100)}
+                calculatedValue={airResult.realShippingCost * (1 + (parseFloat(airProfitPercent) || 0) / 100)}
+                onSave={() => {}}
+                highlight
+                className="text-sm"
+              />
               <ResultRow label="Ganancia envío" value={fmt(airResult.realShippingCost * (parseFloat(airProfitPercent) || 0) / 100)} />
             </CardContent></Card>
           )}
