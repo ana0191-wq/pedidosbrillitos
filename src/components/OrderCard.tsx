@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
 import { PaymentMethodSelector, CurrencySelector } from '@/components/PaymentMethodSelector';
-import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler } from 'lucide-react';
+import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler, AlertTriangle, MapPin } from 'lucide-react';
 
 interface OrderCardProps {
   order: Order;
@@ -23,6 +23,11 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
+  const [showNoLlegoNotes, setShowNoLlegoNotes] = useState(false);
+  const [noLlegoReason, setNoLlegoReason] = useState('');
+  const [showLlegoPrompt, setShowLlegoPrompt] = useState(false);
+  const [showEntregadoWarning, setShowEntregadoWarning] = useState(false);
+  const [entregadoPendingAmount, setEntregadoPendingAmount] = useState(0);
 
   // Inline dimension inputs
   const [dims, setDims] = useState({ weight: '', length: '', width: '', height: '' });
