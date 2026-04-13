@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import type { Order, MerchandiseOrder, ClientOrder, OrderCategory, PaymentMethod, PaymentCurrency } from '@/types/orders';
+import { parseNum, fmtMoney } from '@/lib/utils';
 import { EditableField } from '@/components/EditableField';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -99,7 +100,7 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
     return new Date(d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  const fmt = (n: number) => `$${n.toFixed(2)}`;
+  const fmt = fmtMoney;
 
   const handleCategoryChange = (newCategory: OrderCategory) => {
     const updates: any = { category: newCategory, status: 'Pendiente' };
@@ -236,7 +237,7 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                         placeholder="Escribe lo que te cobró"
                         defaultValue={invoiceAmt ?? ''}
                         onBlur={(e) => {
-                          const val = e.target.value ? parseFloat(e.target.value) : null;
+                          const val = parseNum(e.target.value);
                           onUpdate(order.id, { companyInvoiceAmount: val } as any);
                         }}
                         className="h-6 w-28 text-xs text-right placeholder:text-primary/40"
@@ -314,7 +315,7 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                         <SelectItem value="Amazon">Amazon</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input type="number" step="0.01" value={editData.pricePaid ?? ''} onChange={(e) => setEditData(p => ({ ...p, pricePaid: parseFloat(e.target.value) || 0 }))} placeholder="Precio $" className="h-8 text-xs" />
+                    <Input type="number" step="0.01" value={editData.pricePaid ?? ''} onChange={(e) => setEditData(p => ({ ...p, pricePaid: parseNum(e.target.value) }))} placeholder="Precio $" className="h-8 text-xs" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -335,20 +336,20 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                       <div className="grid grid-cols-3 gap-2 col-span-2">
                         <div>
                           <label className="text-xs text-muted-foreground">Uds pedidas</label>
-                          <Input type="number" min="1" value={editData.unitsOrdered ?? 1} onChange={(e) => setEditData(p => ({ ...p, unitsOrdered: parseInt(e.target.value) || 1 }))} className="h-8 text-xs" />
+                          <Input type="number" min="1" value={editData.unitsOrdered ?? 1} onChange={(e) => setEditData(p => ({ ...p, unitsOrdered: parseNum(e.target.value) ?? 1 }))} className="h-8 text-xs" />
                         </div>
                         <div>
                           <label className="text-xs text-muted-foreground">Uds recibidas</label>
-                          <Input type="number" min="0" value={editData.unitsReceived ?? 0} onChange={(e) => setEditData(p => ({ ...p, unitsReceived: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" />
+                          <Input type="number" min="0" value={editData.unitsReceived ?? 0} onChange={(e) => setEditData(p => ({ ...p, unitsReceived: parseNum(e.target.value) ?? 0 }))} className="h-8 text-xs" />
                         </div>
                         <div>
                           <label className="text-xs text-muted-foreground">Precio/ud</label>
-                          <Input type="number" step="0.01" value={editData.pricePerUnit ?? ''} onChange={(e) => setEditData(p => ({ ...p, pricePerUnit: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs" />
+                          <Input type="number" step="0.01" value={editData.pricePerUnit ?? ''} onChange={(e) => setEditData(p => ({ ...p, pricePerUnit: parseNum(e.target.value) }))} className="h-8 text-xs" />
                         </div>
                       </div>
                       <div className="col-span-2">
                         <label className="text-xs text-muted-foreground">Precio de venta sugerido $</label>
-                        <Input type="number" step="0.01" value={editData.suggestedPrice ?? ''} onChange={(e) => setEditData(p => ({ ...p, suggestedPrice: parseFloat(e.target.value) || null }))} placeholder="Auto-calculado si vacío" className="h-8 text-xs" />
+                        <Input type="number" step="0.01" value={editData.suggestedPrice ?? ''} onChange={(e) => setEditData(p => ({ ...p, suggestedPrice: parseNum(e.target.value) }))} placeholder="Auto-calculado si vacío" className="h-8 text-xs" />
                       </div>
                     </div>
                   )}
@@ -356,8 +357,8 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                   {order.category === 'client' && (
                     <div className="grid grid-cols-3 gap-2">
                       <Input value={editData.clientName || ''} onChange={(e) => setEditData(p => ({ ...p, clientName: e.target.value }))} placeholder="Cliente" className="h-8 text-xs" />
-                      <Input type="number" step="0.01" value={editData.shippingCost ?? ''} onChange={(e) => setEditData(p => ({ ...p, shippingCost: parseFloat(e.target.value) || 0 }))} placeholder="Envío $" className="h-8 text-xs" />
-                      <Input type="number" step="0.01" value={editData.amountCharged ?? ''} onChange={(e) => setEditData(p => ({ ...p, amountCharged: parseFloat(e.target.value) || 0 }))} placeholder="Cobrado $" className="h-8 text-xs" />
+                      <Input type="number" step="0.01" value={editData.shippingCost ?? ''} onChange={(e) => setEditData(p => ({ ...p, shippingCost: parseNum(e.target.value) }))} placeholder="Envío $" className="h-8 text-xs" />
+                      <Input type="number" step="0.01" value={editData.amountCharged ?? ''} onChange={(e) => setEditData(p => ({ ...p, amountCharged: parseNum(e.target.value) }))} placeholder="Cobrado $" className="h-8 text-xs" />
                     </div>
                   )}
 
@@ -463,7 +464,7 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                       onSelect={(m) => onUpdate(order.id, { paymentMethod: m } as any)}
                     />
                     <div className="flex items-center gap-2">
-                      <Input type="number" step="0.01" placeholder="Monto pagado" defaultValue={order.amountPaid ?? ''} onBlur={(e) => onUpdate(order.id, { amountPaid: parseFloat(e.target.value) || null } as any)} className="h-7 text-xs w-28" />
+                      <Input type="number" step="0.01" placeholder="Monto pagado" defaultValue={order.amountPaid ?? ''} onBlur={(e) => onUpdate(order.id, { amountPaid: parseNum(e.target.value) } as any)} className="h-7 text-xs w-28" />
                       <CurrencySelector
                         selected={order.paymentCurrency as PaymentCurrency || null}
                         onSelect={(c) => onUpdate(order.id, { paymentCurrency: c } as any)}
