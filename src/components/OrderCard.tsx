@@ -210,6 +210,19 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                       {fmt(clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost)}
                     </span>
                   </div>
+                  {collabInfo && (clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost) > 0 && (
+                    <>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>{collabInfo.name} ({collabInfo.percentage}%):</span>
+                        <span className="text-amber-600 font-semibold">-{fmt(collabInfo.cut)}</span>
+                      </div>
+                      <div className="border-t border-dashed border-border my-0.5" />
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground font-medium">Ganancia neta:</span>
+                        <span className="font-bold text-green-700">{fmt(clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost - collabInfo.cut)}</span>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
