@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { EditableField } from '@/components/EditableField';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -346,9 +347,28 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
               <ResultRow label="Peso real" value={`${fmtN(airResult.realWeightLb)} lb`} />
               <ResultRow label="Peso volumétrico" value={`${fmtN(airResult.volumetricWeight)} lb`} />
               <ResultRow label="Peso cobrable" value={`${airResult.chargeableWeight} lb`} />
-              <ResultRow label="Costo real envío" value={fmt(airResult.realShippingCost)} />
-              <ResultRow label="Precio al cliente" value={fmt(airResult.clientShippingPrice)} />
-              <ResultRow label={`Cobrar al cliente (+${airProfitPercent}%)`} value={fmt(airResult.realShippingCost * (1 + (parseFloat(airProfitPercent) || 0) / 100))} highlight />
+              <EditableField
+                label="Costo real envío"
+                value={airResult.realShippingCost}
+                calculatedValue={airResult.realShippingCost}
+                onSave={(v) => setAirResult(prev => prev ? { ...prev, realShippingCost: v } : null)}
+                className="text-sm"
+              />
+              <EditableField
+                label="Precio al cliente"
+                value={airResult.clientShippingPrice}
+                calculatedValue={airResult.clientShippingPrice}
+                onSave={(v) => setAirResult(prev => prev ? { ...prev, clientShippingPrice: v } : null)}
+                className="text-sm"
+              />
+              <EditableField
+                label={`Cobrar al cliente (+${airProfitPercent}%)`}
+                value={airResult.realShippingCost * (1 + (parseFloat(airProfitPercent) || 0) / 100)}
+                calculatedValue={airResult.realShippingCost * (1 + (parseFloat(airProfitPercent) || 0) / 100)}
+                onSave={() => {}}
+                highlight
+                className="text-sm"
+              />
               <ResultRow label="Ganancia envío" value={fmt(airResult.realShippingCost * (parseFloat(airProfitPercent) || 0) / 100)} />
             </CardContent></Card>
           )}
@@ -361,10 +381,10 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
           {seaResult && (
             <Card className="bg-muted/30"><CardContent className="p-3 space-y-1">
               <ResultRow label="Volumen" value={`${fmtN(seaResult.volumeFt3, 4)} ft³`} />
-              <ResultRow label="Costo base" value={fmt(seaResult.baseCost)} />
-              <ResultRow label="Costo real (con mín.)" value={fmt(seaResult.realCost)} />
-              <ResultRow label="Costo total (+ seguro)" value={fmt(seaResult.realCostTotal)} />
-              <ResultRow label={`Cobrar al cliente (+${seaProfitPercent}%)`} value={fmt(seaResult.realCostTotal * (1 + (parseFloat(seaProfitPercent) || 0) / 100))} highlight />
+              <EditableField label="Costo base" value={seaResult.baseCost} calculatedValue={seaResult.baseCost} onSave={(v) => setSeaResult(prev => prev ? { ...prev, baseCost: v } : null)} className="text-sm" />
+              <EditableField label="Costo real (con mín.)" value={seaResult.realCost} calculatedValue={seaResult.realCost} onSave={(v) => setSeaResult(prev => prev ? { ...prev, realCost: v, realCostTotal: v + (prev.realCostTotal - prev.realCost) } : null)} className="text-sm" />
+              <EditableField label="Costo total (+ seguro)" value={seaResult.realCostTotal} calculatedValue={seaResult.realCostTotal} onSave={(v) => setSeaResult(prev => prev ? { ...prev, realCostTotal: v } : null)} className="text-sm" />
+              <EditableField label={`Cobrar al cliente (+${seaProfitPercent}%)`} value={seaResult.realCostTotal * (1 + (parseFloat(seaProfitPercent) || 0) / 100)} calculatedValue={seaResult.realCostTotal * (1 + (parseFloat(seaProfitPercent) || 0) / 100)} onSave={() => {}} highlight className="text-sm" />
               <ResultRow label="Ganancia envío" value={fmt(seaResult.realCostTotal * (parseFloat(seaProfitPercent) || 0) / 100)} />
             </CardContent></Card>
           )}
@@ -382,12 +402,12 @@ export function ShippingCalculator({ settings, onSaveSettings }: ShippingCalcula
 
           {distResult && (
             <Card className="bg-muted/30"><CardContent className="p-3 space-y-1">
-              <ResultRow label="Envío para mercancía" value={fmt(distResult.shippingForMerch)} />
-              <ResultRow label="Envío por unidad" value={fmt(distResult.shippingPerUnit)} />
-              <ResultRow label="Costo real unitario" value={fmt(distResult.realUnitCost)} />
-              <ResultRow label="Precio sugerido" value={fmt(distResult.suggestedPrice)} highlight />
-              <ResultRow label="Ganancia por unidad" value={fmt(distResult.unitProfit)} />
-              <ResultRow label="Ganancia total estimada" value={fmt(distResult.totalEstimatedProfit)} highlight />
+              <EditableField label="Envío para mercancía" value={distResult.shippingForMerch} calculatedValue={distResult.shippingForMerch} onSave={(v) => setDistResult(prev => prev ? { ...prev, shippingForMerch: v, shippingPerUnit: v / (prev.shippingPerUnit > 0 ? prev.shippingForMerch / prev.shippingPerUnit : 1) } : null)} className="text-sm" />
+              <EditableField label="Envío por unidad" value={distResult.shippingPerUnit} calculatedValue={distResult.shippingPerUnit} onSave={(v) => setDistResult(prev => prev ? { ...prev, shippingPerUnit: v } : null)} className="text-sm" />
+              <EditableField label="Costo real unitario" value={distResult.realUnitCost} calculatedValue={distResult.realUnitCost} onSave={(v) => setDistResult(prev => prev ? { ...prev, realUnitCost: v } : null)} className="text-sm" />
+              <EditableField label="Precio sugerido" value={distResult.suggestedPrice} calculatedValue={distResult.suggestedPrice} onSave={(v) => setDistResult(prev => prev ? { ...prev, suggestedPrice: v, unitProfit: v - (prev.realUnitCost), totalEstimatedProfit: (v - prev.realUnitCost) * (prev.totalEstimatedProfit / prev.unitProfit || 1) } : null)} highlight className="text-sm" />
+              <EditableField label="Ganancia por unidad" value={distResult.unitProfit} calculatedValue={distResult.unitProfit} onSave={(v) => setDistResult(prev => prev ? { ...prev, unitProfit: v } : null)} className="text-sm" />
+              <EditableField label="Ganancia total estimada" value={distResult.totalEstimatedProfit} calculatedValue={distResult.totalEstimatedProfit} onSave={(v) => setDistResult(prev => prev ? { ...prev, totalEstimatedProfit: v } : null)} highlight className="text-sm" />
             </CardContent></Card>
           )}
         </TabsContent>

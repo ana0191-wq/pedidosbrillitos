@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import type { Order, MerchandiseOrder, ClientOrder, OrderCategory, PaymentMethod, PaymentCurrency } from '@/types/orders';
+import { EditableField } from '@/components/EditableField';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -169,35 +170,46 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
               <StatusBadge status={order.status} />
             </div>
 
-            {/* Always-visible pricing */}
+            {/* Always-visible pricing — all editable */}
             <div className="text-xs space-y-0.5 mt-1">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Costo:</span>
-                <span className="font-semibold text-foreground">{fmt(order.pricePaid)}</span>
-              </div>
+              <EditableField
+                label="Costo:"
+                value={order.pricePaid}
+                onSave={(v) => onUpdate(order.id, { pricePaid: v } as any)}
+                className="text-xs"
+              />
               {isMerch && merchPricing && (
                 <>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Precio/ud:</span>
-                    <span className="text-foreground">{fmt(merchPricing.costPerUnit)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Vender a:</span>
-                    <span className="font-bold text-green-600">{fmt(merchPricing.suggested)}</span>
-                  </div>
+                  <EditableField
+                    label="Precio/ud:"
+                    value={merchPricing.costPerUnit}
+                    onSave={(v) => onUpdate(order.id, { pricePerUnit: v } as any)}
+                    className="text-xs"
+                  />
+                  <EditableField
+                    label="Vender a:"
+                    value={merchPricing.suggested}
+                    onSave={(v) => onUpdate(order.id, { suggestedPrice: v } as any)}
+                    highlight
+                    className="text-xs"
+                  />
                 </>
               )}
               {isClient && clientOrder && (
                 <>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Envío:</span>
-                    <span>{fmt(clientOrder.shippingCost)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cobrado:</span>
-                    <span className="font-bold text-foreground">{fmt(clientOrder.amountCharged)}</span>
-                  </div>
-                  <div className="flex justify-between">
+                  <EditableField
+                    label="Envío:"
+                    value={clientOrder.shippingCost}
+                    onSave={(v) => onUpdate(order.id, { shippingCost: v } as any)}
+                    className="text-xs"
+                  />
+                  <EditableField
+                    label="Cobrado:"
+                    value={clientOrder.amountCharged}
+                    onSave={(v) => onUpdate(order.id, { amountCharged: v } as any)}
+                    className="text-xs"
+                  />
+                  <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Ganancia:</span>
                     <span className={`font-bold ${(clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
                       {fmt(clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost)}
@@ -353,19 +365,30 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
 
                       {shippingCalc && (
                         <div className="text-xs space-y-1 border-t border-border pt-2">
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Peso facturable:</span>
-                            <span className="font-medium text-foreground">{shippingCalc.billable} lbs</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Flete para mí:</span>
-                            <span className="font-medium text-foreground">{fmt(shippingCalc.myCost)}</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Cobro al cliente:</span>
-                            <span className="font-bold text-foreground">{fmt(shippingCalc.clientCharge)}</span>
-                          </div>
-                          <div className="flex justify-between border-t border-border pt-1">
+                          <EditableField
+                            label="Peso facturable:"
+                            value={shippingCalc.billable}
+                            onSave={(v) => setDims(p => ({ ...p, weight: String(v) }))}
+                            format={(n) => `${n} lbs`}
+                            className="text-xs"
+                          />
+                          <EditableField
+                            label="Flete para mí:"
+                            value={shippingCalc.myCost}
+                            calculatedValue={shippingCalc.myCost}
+                            onSave={(v) => onUpdate(order.id, { shippingCost: v } as any)}
+                            className="text-xs"
+                          />
+                          <EditableField
+                            label="Cobro al cliente:"
+                            value={shippingCalc.clientCharge}
+                            calculatedValue={shippingCalc.clientCharge}
+                            onSave={(v) => {
+                              if (order.category === 'client') onUpdate(order.id, { amountCharged: v } as any);
+                            }}
+                            className="text-xs"
+                          />
+                          <div className="flex justify-between border-t border-border pt-1 text-xs">
                             <span className="text-muted-foreground">Mi ganancia envío:</span>
                             <span className="font-bold text-green-600">{fmt(shippingCalc.profit)} ✅</span>
                           </div>
