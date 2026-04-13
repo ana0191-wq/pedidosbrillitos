@@ -46,10 +46,10 @@ export function useOrders() {
       };
 
       if (row.category === 'merchandise') {
-        return { ...base, category: 'merchandise' as const, unitsOrdered: row.units_ordered || 1, unitsReceived: row.units_received || 0, pricePerUnit: Number(row.price_per_unit) || 0, suggestedPrice: row.suggested_price != null ? Number(row.suggested_price) : null };
+        return { ...base, category: 'merchandise' as const, unitsOrdered: parseNum(row.units_ordered) ?? 1, unitsReceived: parseNum(row.units_received) ?? 0, pricePerUnit: parseNum(row.price_per_unit) ?? 0, suggestedPrice: parseNum(row.suggested_price) };
       }
       if (row.category === 'client') {
-        return { ...base, category: 'client' as const, clientName: row.client_name || '', shippingCost: Number(row.shipping_cost) || 0, amountCharged: Number(row.amount_charged) || 0 };
+        return { ...base, category: 'client' as const, clientName: row.client_name || '', shippingCost: parseNum(row.shipping_cost) ?? 0, amountCharged: parseNum(row.amount_charged) ?? 0 };
       }
       return { ...base, category: 'personal' as const };
     });
