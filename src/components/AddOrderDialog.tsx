@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Link2, PenLine, Loader2, Camera, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { parseNum } from '@/lib/utils';
 
 interface AddOrderDialogProps {
   open: boolean;
@@ -148,7 +149,7 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
       productName: productName.trim(),
       productPhoto,
       store,
-      pricePaid: parseFloat(pricePaid) || 0,
+      pricePaid: parseNum(pricePaid) ?? 0,
       orderDate,
       estimatedArrival,
       orderNumber,
@@ -160,9 +161,9 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
     if (category === 'personal') {
       order = { ...base, category: 'personal', status: 'Pendiente' };
     } else if (category === 'merchandise') {
-      order = { ...base, category: 'merchandise', status: 'Pendiente', unitsOrdered: parseInt(unitsOrdered) || 1, unitsReceived: 0, pricePerUnit: parseFloat(pricePerUnit) || parseFloat(pricePaid) || 0, suggestedPrice: null };
+      order = { ...base, category: 'merchandise', status: 'Pendiente', unitsOrdered: parseNum(unitsOrdered) ?? 1, unitsReceived: 0, pricePerUnit: parseNum(pricePerUnit) ?? (parseNum(pricePaid) ?? 0), suggestedPrice: null };
     } else {
-      order = { ...base, category: 'client', status: 'Pendiente', clientName, shippingCost: parseFloat(shippingCost) || 0, amountCharged: parseFloat(amountCharged) || 0 };
+      order = { ...base, category: 'client', status: 'Pendiente', clientName, shippingCost: parseNum(shippingCost) ?? 0, amountCharged: parseNum(amountCharged) ?? 0 };
     }
 
     onAdd(order);
