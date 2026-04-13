@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from 'react';
 import type { Order, MerchandiseOrder, ClientOrder, OrderCategory, PaymentMethod, PaymentCurrency } from '@/types/orders';
 import { parseNum, fmtMoney } from '@/lib/utils';
 import { EditableField } from '@/components/EditableField';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
