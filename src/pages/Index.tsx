@@ -31,6 +31,10 @@ const Index = () => {
   const { settings: shippingSettings, saveSettings } = useShippingSettings();
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
   const { signOut } = useAuth();
+  const {
+    collaborators, earnings, addCollaborator, updateCollaborator, deleteCollaborator,
+    upsertEarning, markPaid, getEarningsByCollaborator, getEarningForOrder,
+  } = useCollaborators();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogCategory, setDialogCategory] = useState<OrderCategory>('personal');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
