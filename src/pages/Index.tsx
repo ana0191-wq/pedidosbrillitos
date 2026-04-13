@@ -16,6 +16,7 @@ import { ClientOrdersList } from '@/components/ClientOrdersList';
 import { ShippingCalculator } from '@/components/ShippingCalculator';
 import { AIPricingCalculator } from '@/components/AIPricingCalculator';
 import { CatalogSection } from '@/components/CatalogSection';
+import { TeamSection } from '@/components/TeamSection';
 import { InventorySection } from '@/components/InventorySection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, Store, Boxes } from 'lucide-react';
