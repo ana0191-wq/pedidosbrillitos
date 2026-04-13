@@ -171,8 +171,8 @@ export function useOrders() {
 
   const getCounts = useCallback(() => {
     const personal = orders.filter(o => o.category === 'personal' && o.status !== 'Entregado').length;
-    const merchandise = orders.filter(o => o.category === 'merchandise' && o.status !== 'Completo').length;
-    const client = orders.filter(o => o.category === 'client' && o.status !== 'Entregado' && o.status !== 'Cliente Notificado').length;
+    const merchandise = orders.filter(o => o.category === 'merchandise' && o.status !== 'Entregado').length;
+    const client = orders.filter(o => o.category === 'client' && o.status !== 'Entregado').length;
     return { personal, merchandise, client, total: personal + merchandise + client };
   }, [orders]);
 
