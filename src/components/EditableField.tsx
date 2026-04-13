@@ -26,6 +26,7 @@ export function EditableField({
 }: EditableFieldProps) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [showCheck, setShowCheck] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const isOverridden = calculatedValue !== undefined && value != null && Math.abs(value - calculatedValue) > 0.001;
 
@@ -40,6 +41,10 @@ export function EditableField({
     const num = parseNum(editValue);
     onSave(num);
     setEditing(false);
+    if (num != null) {
+      setShowCheck(true);
+      setTimeout(() => setShowCheck(false), 1500);
+    }
   };
 
   if (editing) {
