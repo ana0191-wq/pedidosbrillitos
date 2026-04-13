@@ -229,21 +229,33 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                     />
 
                     {/* Inline invoice field — always visible */}
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">📄 Factura empresa:</span>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="Escribe lo que te cobró"
-                        defaultValue={invoiceAmt ?? ''}
-                        onBlur={(e) => {
-                          const val = parseNum(e.target.value);
-                          onUpdate(order.id, { companyInvoiceAmount: val } as any);
-                        }}
-                        className="h-6 w-28 text-xs text-right placeholder:text-primary/40"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
+                    {(() => {
+                      const [invoiceSaved, setInvoiceSaved] = React.useState(false);
+                      return (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">📄 Factura empresa:</span>
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="Escribe lo que te cobró"
+                              defaultValue={invoiceAmt ?? ''}
+                              onBlur={(e) => {
+                                const val = parseNum(e.target.value);
+                                onUpdate(order.id, { companyInvoiceAmount: val } as any);
+                                if (val != null) {
+                                  setInvoiceSaved(true);
+                                  setTimeout(() => setInvoiceSaved(false), 1500);
+                                }
+                              }}
+                              className="h-6 w-28 text-xs text-right placeholder:text-primary/40"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            {invoiceSaved && <Check className="h-3.5 w-3.5 text-green-600 animate-in fade-in zoom-in duration-300" />}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Ganancia:</span>
