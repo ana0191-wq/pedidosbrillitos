@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { FileText, Upload, Trash2, Eye, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { parseNum, fmtMoney } from '@/lib/utils';
 import type { Order, ClientOrder } from '@/types/orders';
 
 interface InvoiceSectionProps {
@@ -24,7 +25,6 @@ export function InvoiceSection({ order, onUpdate }: InvoiceSectionProps) {
   const isClient = order.category === 'client';
   const clientOrder = isClient ? (order as ClientOrder) : null;
 
-  // Calculate real profit: shipping_charge_client - company_invoice_amount
   const clientPays = clientOrder?.amountCharged ?? 0;
   const realProfit = invoiceAmount != null ? clientPays - invoiceAmount : null;
 
@@ -65,8 +65,6 @@ export function InvoiceSection({ order, onUpdate }: InvoiceSectionProps) {
     onUpdate(order.id, { invoiceFiles: updatedFiles } as any);
   };
 
-  const fmt = (n: number) => `$${n.toFixed(2)}`;
-
   return (
     <div className="space-y-3">
       <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
@@ -82,7 +80,7 @@ export function InvoiceSection({ order, onUpdate }: InvoiceSectionProps) {
             placeholder="Ej: 93.00"
             defaultValue={invoiceAmount ?? ''}
             onBlur={(e) => {
-              const val = e.target.value ? parseFloat(e.target.value) : null;
+              const val = parseNum(e.target.value);
               onUpdate(order.id, { companyInvoiceAmount: val } as any);
             }}
             className="h-8 text-sm"
@@ -99,22 +97,21 @@ export function InvoiceSection({ order, onUpdate }: InvoiceSectionProps) {
           />
         </div>
 
-        {/* Profit recalculation */}
         {isClient && invoiceAmount != null && (
           <div className="rounded-md bg-muted/40 border border-border p-2.5 space-y-1 text-xs">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Cliente paga:</span>
-              <span className="font-semibold">{fmt(clientPays)}</span>
+              <span className="font-semibold">{fmtMoney(clientPays)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Empresa cobró (real):</span>
-              <span className="font-semibold text-amber-600">-{fmt(invoiceAmount)}</span>
+              <span className="font-semibold text-amber-600">-{fmtMoney(invoiceAmount)}</span>
             </div>
             <div className="border-t border-dashed border-border my-1" />
             <div className="flex justify-between">
               <span className="text-muted-foreground font-medium">Tu ganancia real:</span>
               <span className={`font-bold text-base ${(realProfit ?? 0) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                {fmt(realProfit ?? 0)}
+                {fmtMoney(realProfit)}
               </span>
             </div>
           </div>
@@ -151,7 +148,6 @@ export function InvoiceSection({ order, onUpdate }: InvoiceSectionProps) {
           }}
         />
 
-        {/* Uploaded files list */}
         {files.length > 0 && (
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Archivos subidos:</p>
