@@ -109,6 +109,7 @@ export type Database = {
       clients: {
         Row: {
           created_at: string
+          deleted_at: string | null
           id: string
           name: string
           notes: string | null
@@ -118,6 +119,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -127,6 +129,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name?: string
           notes?: string | null
@@ -261,6 +264,7 @@ export type Database = {
           company_invoice_amount: number | null
           company_invoice_notes: string | null
           created_at: string
+          deleted_at: string | null
           delivered_at: string | null
           delivery_notes: string | null
           estimated_arrival: string | null
@@ -303,6 +307,7 @@ export type Database = {
           company_invoice_amount?: number | null
           company_invoice_notes?: string | null
           created_at?: string
+          deleted_at?: string | null
           delivered_at?: string | null
           delivery_notes?: string | null
           estimated_arrival?: string | null
@@ -345,6 +350,7 @@ export type Database = {
           company_invoice_amount?: number | null
           company_invoice_notes?: string | null
           created_at?: string
+          deleted_at?: string | null
           delivered_at?: string | null
           delivery_notes?: string | null
           estimated_arrival?: string | null
