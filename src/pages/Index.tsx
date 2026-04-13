@@ -43,6 +43,24 @@ const Index = () => {
 
   const counts = getCounts();
 
+  // Collaborator info helper for order cards
+  const getCollabInfo = (order: Order) => {
+    if (collaborators.length === 0) return null;
+    const collab = collaborators[0]; // primary collaborator
+    let profit = 0;
+    if (order.category === 'client') {
+      const co = order as any;
+      profit = (co.amountCharged || 0) - order.pricePaid - (co.shippingCost || 0);
+    } else if (order.category === 'merchandise') {
+      const mo = order as any;
+      const suggested = mo.suggestedPrice ?? (order.pricePaid / (mo.unitsOrdered || 1)) * 1.35;
+      profit = (suggested - (order.pricePaid / (mo.unitsOrdered || 1))) * (mo.unitsOrdered || 1);
+    }
+    if (profit <= 0) return null;
+    const cut = Math.round(profit * collab.percentage / 100 * 100) / 100;
+    return { name: collab.name, percentage: collab.percentage, cut };
+  };
+
   // Fetch exchange rate on mount
   useEffect(() => {
     supabase.functions.invoke('exchange-rate').then(({ data }) => {
