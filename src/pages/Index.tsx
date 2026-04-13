@@ -46,7 +46,9 @@ const Index = () => {
     let profit = 0;
     if (order.category === 'client') {
       const co = order as any;
-      profit = (co.amountCharged || 0) - order.pricePaid - (co.shippingCost || 0);
+      const invoiceAmt = order.companyInvoiceAmount;
+      if (invoiceAmt == null) return null; // No invoice = no profit calc
+      profit = (co.amountCharged || 0) - invoiceAmt;
     } else if (order.category === 'merchandise') {
       const mo = order as any;
       const suggested = mo.suggestedPrice ?? (order.pricePaid / (mo.unitsOrdered || 1)) * 1.35;
