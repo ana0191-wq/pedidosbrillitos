@@ -24,7 +24,7 @@ export function InvoiceSection({ order, onUpdate }: InvoiceSectionProps) {
   const isClient = order.category === 'client';
   const clientOrder = isClient ? (order as ClientOrder) : null;
 
-  // Calculate real profit when invoice amount is set
+  // Calculate real profit: shipping_charge_client - company_invoice_amount
   const clientPays = clientOrder?.amountCharged ?? 0;
   const realProfit = invoiceAmount != null ? clientPays - invoiceAmount : null;
 
