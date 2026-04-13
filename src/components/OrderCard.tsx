@@ -608,9 +608,16 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                   )}
 
                   <div className="flex gap-2">
-                    <Button size="sm" variant="ghost" className="text-destructive ml-auto" onClick={() => onDelete(order.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <ConfirmDeleteDialog
+                      onConfirm={() => onDelete(order.id)}
+                      title="¿Segura que quieres eliminar este pedido?"
+                      description="Esta acción no se puede deshacer."
+                      trigger={
+                        <Button size="sm" variant="ghost" className="text-destructive ml-auto">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
                   </div>
                 </div>
               )}
