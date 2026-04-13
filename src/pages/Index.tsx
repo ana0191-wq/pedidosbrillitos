@@ -5,7 +5,8 @@ import { useClientOrders } from '@/hooks/useClientOrders';
 import { useShippingSettings } from '@/hooks/useShippingSettings';
 import { useProducts } from '@/hooks/useProducts';
 import { useAuth } from '@/hooks/useAuth';
-import type { OrderCategory } from '@/types/orders';
+import { useCollaborators } from '@/hooks/useCollaborators';
+import type { Order, OrderCategory } from '@/types/orders';
 import { Dashboard } from '@/components/Dashboard';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { OrderSection } from '@/components/OrderSection';
@@ -15,9 +16,10 @@ import { ClientOrdersList } from '@/components/ClientOrdersList';
 import { ShippingCalculator } from '@/components/ShippingCalculator';
 import { AIPricingCalculator } from '@/components/AIPricingCalculator';
 import { CatalogSection } from '@/components/CatalogSection';
+import { TeamSection } from '@/components/TeamSection';
 import { InventorySection } from '@/components/InventorySection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, Store, Boxes } from 'lucide-react';
+import { ShoppingBag, Package, Users, LayoutDashboard, LogOut, Calculator, ClipboardList, Store, Boxes, UserCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,6 +31,10 @@ const Index = () => {
   const { settings: shippingSettings, saveSettings } = useShippingSettings();
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
   const { signOut } = useAuth();
+  const {
+    collaborators, earnings, addCollaborator, updateCollaborator, deleteCollaborator,
+    upsertEarning, markPaid, getEarningsByCollaborator, getEarningForOrder,
+  } = useCollaborators();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogCategory, setDialogCategory] = useState<OrderCategory>('personal');
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
@@ -36,6 +42,24 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const counts = getCounts();
+
+  // Collaborator info helper for order cards
+  const getCollabInfo = (order: Order) => {
+    if (collaborators.length === 0) return null;
+    const collab = collaborators[0]; // primary collaborator
+    let profit = 0;
+    if (order.category === 'client') {
+      const co = order as any;
+      profit = (co.amountCharged || 0) - order.pricePaid - (co.shippingCost || 0);
+    } else if (order.category === 'merchandise') {
+      const mo = order as any;
+      const suggested = mo.suggestedPrice ?? (order.pricePaid / (mo.unitsOrdered || 1)) * 1.35;
+      profit = (suggested - (order.pricePaid / (mo.unitsOrdered || 1))) * (mo.unitsOrdered || 1);
+    }
+    if (profit <= 0) return null;
+    const cut = Math.round(profit * collab.percentage / 100 * 100) / 100;
+    return { name: collab.name, percentage: collab.percentage, cut };
+  };
 
   // Fetch exchange rate on mount
   useEffect(() => {
@@ -88,7 +112,7 @@ const Index = () => {
 
       <main className="container max-w-4xl mx-auto px-4 py-4 pb-24">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full grid grid-cols-4 sm:grid-cols-8 mb-6">
+          <TabsList className="w-full grid grid-cols-5 sm:grid-cols-9 mb-6">
             <TabsTrigger value="dashboard" className="gap-1 text-xs">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Inicio</span>
@@ -119,6 +143,10 @@ const Index = () => {
               <Store className="h-4 w-4" />
               <span className="hidden sm:inline">Catálogo</span>
             </TabsTrigger>
+            <TabsTrigger value="team" className="gap-1 text-xs">
+              <UserCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Equipo</span>
+            </TabsTrigger>
             <TabsTrigger value="shipping" className="gap-1 text-xs">
               <Calculator className="h-4 w-4" />
               <span className="hidden sm:inline">Envíos</span>
@@ -139,6 +167,7 @@ const Index = () => {
               onUpdate={updateOrder}
               onDelete={deleteOrder}
               onAdd={() => openDialog('personal')}
+              getCollabInfo={getCollabInfo}
             />
           </TabsContent>
 
@@ -153,6 +182,7 @@ const Index = () => {
                 onUpdate={updateOrder}
                 onDelete={deleteOrder}
                 onAdd={() => openDialog('merchandise')}
+                getCollabInfo={getCollabInfo}
               />
               <AIPricingCalculator exchangeRate={exchangeRate} />
             </div>
@@ -205,6 +235,19 @@ const Index = () => {
               onUpdate={updateProduct}
               onDelete={deleteProduct}
               exchangeRate={exchangeRate}
+            />
+          </TabsContent>
+
+          <TabsContent value="team">
+            <TeamSection
+              collaborators={collaborators}
+              earnings={earnings}
+              orders={orders}
+              onAdd={addCollaborator}
+              onUpdate={updateCollaborator}
+              onDelete={deleteCollaborator}
+              onMarkPaid={markPaid}
+              getEarningsByCollaborator={getEarningsByCollaborator}
             />
           </TabsContent>
 

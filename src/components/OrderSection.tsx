@@ -5,6 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Filter } from 'lucide-react';
 
+interface CollabInfo {
+  name: string;
+  percentage: number;
+  cut: number;
+}
+
 interface OrderSectionProps {
   title: string;
   emoji: string;
@@ -14,9 +20,10 @@ interface OrderSectionProps {
   onUpdate: (id: string, updates: Partial<Order>) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  getCollabInfo?: (order: Order) => CollabInfo | null;
 }
 
-export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, onDelete, onAdd }: OrderSectionProps) {
+export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, onDelete, onAdd, getCollabInfo }: OrderSectionProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const filtered = useMemo(() => {
@@ -53,7 +60,7 @@ export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, on
       ) : (
         <div className="space-y-3">
           {filtered.map(order => (
-            <OrderCard key={order.id} order={order} onUpdate={onUpdate} onDelete={onDelete} />
+            <OrderCard key={order.id} order={order} onUpdate={onUpdate} onDelete={onDelete} collabInfo={getCollabInfo?.(order) || null} />
           ))}
         </div>
       )}

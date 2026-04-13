@@ -10,6 +10,12 @@ import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
 import { PaymentMethodSelector, CurrencySelector } from '@/components/PaymentMethodSelector';
 import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler, AlertTriangle, MapPin } from 'lucide-react';
 
+interface CollabInfo {
+  name: string;
+  percentage: number;
+  cut: number;
+}
+
 interface OrderCardProps {
   order: Order;
   onUpdate: (id: string, updates: Partial<Order>) => void;
@@ -18,9 +24,10 @@ interface OrderCardProps {
     airRatePerLb: number;
     airPricePerLb: number;
   };
+  collabInfo?: CollabInfo | null;
 }
 
-export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: OrderCardProps) {
+export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabInfo }: OrderCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
@@ -215,6 +222,19 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
                       {fmt(clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost)}
                     </span>
                   </div>
+                  {collabInfo && (clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost) > 0 && (
+                    <>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>{collabInfo.name} ({collabInfo.percentage}%):</span>
+                        <span className="text-amber-600 font-semibold">-{fmt(collabInfo.cut)}</span>
+                      </div>
+                      <div className="border-t border-dashed border-border my-0.5" />
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground font-medium">Ganancia neta:</span>
+                        <span className="font-bold text-green-700">{fmt(clientOrder.amountCharged - order.pricePaid - clientOrder.shippingCost - collabInfo.cut)}</span>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
