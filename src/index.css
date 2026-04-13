@@ -1,100 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 30 25% 97%;
-    --foreground: 20 15% 15%;
+    --background: 340 100% 97%;
+    --foreground: 234 50% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 20 15% 15%;
+    --card-foreground: 234 50% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 20 15% 15%;
+    --popover-foreground: 234 50% 14%;
 
-    --primary: 340 60% 75%;
-    --primary-foreground: 340 40% 20%;
+    --primary: 340 78% 55%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 168 40% 45%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 340 100% 95%;
+    --secondary-foreground: 340 78% 55%;
 
-    --muted: 30 15% 92%;
-    --muted-foreground: 20 10% 50%;
+    --muted: 340 30% 95%;
+    --muted-foreground: 234 20% 46%;
 
-    --accent: 38 80% 55%;
-    --accent-foreground: 20 15% 15%;
+    --accent: 340 100% 97%;
+    --accent-foreground: 234 50% 14%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 15% 88%;
-    --input: 30 15% 88%;
-    --ring: 340 60% 75%;
+    --border: 340 30% 92%;
+    --input: 340 30% 92%;
+    --ring: 340 78% 55%;
 
-    --radius: 0.75rem;
+    --radius: 1.25rem;
+
+    --pink: 340 78% 55%;
+    --pink-light: 340 100% 97%;
+    --pink-soft: 340 100% 92%;
+    --pink-glow: 340 90% 65%;
+    --dark-text: 234 50% 14%;
+    --profit-green: 152 60% 40%;
 
     --store-aliexpress: 24 95% 53%;
     --store-shein: 0 0% 13%;
     --store-temu: 14 90% 50%;
     --store-amazon: 195 100% 30%;
 
-    --status-pending: 220 9% 60%;
-    --status-transit: 210 70% 55%;
-    --status-arrived: 152 60% 45%;
+    --status-pending: 340 78% 55%;
+    --status-transit: 30 90% 55%;
+    --status-arrived: 210 70% 55%;
     --status-not-arrived: 0 72% 51%;
     --status-venezuela: 270 50% 55%;
-    --status-delivered-dark: 152 60% 32%;
+    --status-delivered-dark: 152 60% 40%;
     --status-partial: 30 80% 55%;
     --status-notified: 270 50% 55%;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 234 50% 14%;
+    --sidebar-primary: 340 78% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 340 100% 97%;
+    --sidebar-accent-foreground: 234 50% 14%;
+    --sidebar-border: 340 30% 92%;
+    --sidebar-ring: 340 78% 55%;
+
+    --card-shadow: 0 2px 14px rgba(255, 105, 140, 0.07);
   }
 
   .dark {
-    --background: 20 15% 10%;
-    --foreground: 30 15% 92%;
+    --background: 234 30% 8%;
+    --foreground: 340 20% 95%;
 
-    --card: 20 15% 14%;
-    --card-foreground: 30 15% 92%;
+    --card: 234 25% 12%;
+    --card-foreground: 340 20% 95%;
 
-    --popover: 20 15% 14%;
-    --popover-foreground: 30 15% 92%;
+    --popover: 234 25% 12%;
+    --popover-foreground: 340 20% 95%;
 
-    --primary: 340 50% 65%;
+    --primary: 340 78% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 168 40% 40%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 340 40% 20%;
+    --secondary-foreground: 340 78% 65%;
 
-    --muted: 20 10% 20%;
-    --muted-foreground: 30 10% 60%;
+    --muted: 234 20% 18%;
+    --muted-foreground: 234 15% 55%;
 
-    --accent: 38 80% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 234 20% 16%;
+    --accent-foreground: 340 20% 95%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 20 10% 22%;
-    --input: 20 10% 22%;
-    --ring: 340 50% 65%;
+    --border: 234 20% 20%;
+    --input: 234 20% 20%;
+    --ring: 340 78% 55%;
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-background: 234 25% 10%;
+    --sidebar-foreground: 340 20% 95%;
+    --sidebar-primary: 340 78% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 234 20% 16%;
+    --sidebar-accent-foreground: 340 20% 95%;
+    --sidebar-border: 234 20% 20%;
+    --sidebar-ring: 340 78% 55%;
   }
 }
 
@@ -125,5 +136,16 @@
   .store-badge-amazon {
     background-color: hsl(var(--store-amazon));
     color: white;
+  }
+
+  .card-brillitos {
+    background: white;
+    border-radius: 20px;
+    box-shadow: var(--card-shadow);
+    border: 1px solid hsl(var(--border));
+  }
+
+  .gradient-pink {
+    background: linear-gradient(135deg, hsl(var(--pink)), hsl(var(--pink-glow)));
   }
 }

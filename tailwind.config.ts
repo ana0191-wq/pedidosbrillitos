@@ -47,10 +47,18 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        pink: {
+          DEFAULT: "hsl(var(--pink))",
+          light: "hsl(var(--pink-light))",
+          soft: "hsl(var(--pink-soft))",
+          glow: "hsl(var(--pink-glow))",
+        },
+        profit: "hsl(var(--profit-green))",
         store: {
           aliexpress: "hsl(var(--store-aliexpress))",
           shein: "hsl(var(--store-shein))",
           temu: "hsl(var(--store-temu))",
+          amazon: "hsl(var(--store-amazon))",
         },
         status: {
           pending: "hsl(var(--status-pending))",
@@ -77,23 +85,21 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "1.25rem",
+        "2xl": "1.5rem",
+      },
+      boxShadow: {
+        brillitos: "0 2px 14px rgba(255, 105, 140, 0.07)",
+        "brillitos-lg": "0 4px 24px rgba(255, 105, 140, 0.12)",
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
       },
       animation: {

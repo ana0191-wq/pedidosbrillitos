@@ -1,234 +1,329 @@
-import { useState, useMemo } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ShoppingBag, Package, Users, Plus, TrendingUp, DollarSign, ClipboardList } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { useMemo } from 'react';
+import { Package, Clock, TrendingUp, Truck, ArrowUpRight } from 'lucide-react';
 import type { Order, ClientOrder, MerchandiseOrder } from '@/types/orders';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder as ClientOrderType } from '@/hooks/useClientOrders';
-import { ScreenshotImport } from '@/components/ScreenshotImport';
-import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
+import type { Collaborator, CollaboratorEarning } from '@/hooks/useCollaborators';
+import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
 
 interface DashboardProps {
-  counts: { personal: number; merchandise: number; client: number; total: number };
   orders: Order[];
   clients: Client[];
   clientOrders: ClientOrderType[];
-  onAddOrder: () => void;
-  onAddClientOrder: (clientId: string, data: Partial<ClientOrderType>) => Promise<string | null>;
-  onAddProduct: (order: Order, clientOrderId?: string) => Promise<void>;
-  onImportOrders: (orders: Order[]) => void;
+  collaborators: Collaborator[];
+  earnings: CollaboratorEarning[];
   onNavigate: (tab: string) => void;
+  onMarkPaid: (earningId: string) => void;
 }
 
-export function Dashboard({ counts, orders, clients, clientOrders, onAddOrder, onAddClientOrder, onAddProduct, onImportOrders, onNavigate }: DashboardProps) {
-  const [showClientOrderDialog, setShowClientOrderDialog] = useState(false);
-  const recentOrders = orders.slice(0, 5);
+export function Dashboard({ orders, clients, clientOrders, collaborators, earnings, onNavigate, onMarkPaid }: DashboardProps) {
+  const stats = useMemo(() => {
+    const totalOrders = orders.length;
+    const inTransit = orders.filter(o => o.status === 'En Tránsito').length;
 
-  const spending = useMemo(() => {
-    let personal = 0, merchandise = 0, client = 0, clientRevenue = 0, clientProfit = 0;
-    const clientBreakdown: Record<string, { spent: number; charged: number; items: number }> = {};
+    let totalProfit = 0;
+    let pendingCollection = 0;
 
-    for (const o of orders) {
-      if (o.category === 'personal') personal += o.pricePaid;
-      if (o.category === 'merchandise') {
-        merchandise += (o as MerchandiseOrder).pricePerUnit * (o as MerchandiseOrder).unitsOrdered;
-      }
-      // Don't count individual client products here — use clientOrders below
-    }
-
-    // Use clientOrders for accurate client financials
     for (const co of clientOrders) {
       const productCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
-      const name = co.clientName || clients.find(c => c.id === co.clientId)?.name || 'Sin cliente';
-      client += productCost;
-      clientRevenue += co.amountCharged;
-      clientProfit += co.amountCharged - productCost - co.shippingCost;
-      if (!clientBreakdown[name]) clientBreakdown[name] = { spent: 0, charged: 0, items: 0 };
-      clientBreakdown[name].spent += productCost + co.shippingCost;
-      clientBreakdown[name].charged += co.amountCharged;
-      clientBreakdown[name].items += co.products.length;
-    }
+      const profit = co.amountCharged - productCost - co.shippingCost;
+      totalProfit += profit;
 
-    // Also count loose client orders (no client_order_id) from orders
-    const linkedProductIds = new Set(clientOrders.flatMap(co => co.products.map(p => p.id)));
-    for (const o of orders) {
-      if (o.category === 'client' && !linkedProductIds.has(o.id)) {
-        const co = o as ClientOrder;
-        client += o.pricePaid;
-        clientRevenue += co.amountCharged;
-        clientProfit += co.amountCharged - o.pricePaid - co.shippingCost;
-        const name = co.clientName || 'Sin cliente';
-        if (!clientBreakdown[name]) clientBreakdown[name] = { spent: 0, charged: 0, items: 0 };
-        clientBreakdown[name].spent += o.pricePaid + co.shippingCost;
-        clientBreakdown[name].charged += co.amountCharged;
-        clientBreakdown[name].items += 1;
+      if (co.status !== 'Entregado' && co.amountCharged > 0) {
+        pendingCollection += co.amountCharged;
       }
     }
 
-    return { personal, merchandise, client, clientRevenue, clientProfit, clientBreakdown, total: personal + merchandise + client };
-  }, [orders, clientOrders, clients]);
+    // Loose client orders
+    const linkedIds = new Set(clientOrders.flatMap(co => co.products.map(p => p.id)));
+    for (const o of orders) {
+      if (o.category === 'client' && !linkedIds.has(o.id)) {
+        const co = o as ClientOrder;
+        totalProfit += co.amountCharged - o.pricePaid - co.shippingCost;
+        if (o.status !== 'Entregado' && co.amountCharged > 0) {
+          pendingCollection += co.amountCharged;
+        }
+      }
+    }
 
-  const summaryCards = [
-    { label: 'Mis Pedidos', count: counts.personal, icon: ShoppingBag, color: 'text-primary', tab: 'personal' },
-    { label: 'Mercancía', count: counts.merchandise, icon: Package, color: 'text-secondary', tab: 'merchandise' },
-    { label: 'Clientes', count: clients.length, icon: Users, color: 'text-accent', tab: 'clients' },
-    { label: 'Total Pendiente', count: counts.total, icon: TrendingUp, color: 'text-foreground', tab: 'client-orders' },
-  ];
+    // Subtract collaborator cuts
+    const collabTotal = earnings.filter(e => !e.paid).reduce((s, e) => s + e.collaboratorCut, 0);
+    const netProfit = totalProfit - collabTotal;
+
+    return { totalOrders, inTransit, pendingCollection, netProfit, totalProfit, collabTotal };
+  }, [orders, clientOrders, earnings]);
+
+  // Monthly revenue data for chart (last 6 months)
+  const chartData = useMemo(() => {
+    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const now = new Date();
+    const data: { label: string; value: number }[] = [];
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const month = d.getMonth();
+      const year = d.getFullYear();
+
+      let revenue = 0;
+      for (const co of clientOrders) {
+        const created = new Date(co.createdAt);
+        if (created.getMonth() === month && created.getFullYear() === year) {
+          revenue += co.amountCharged;
+        }
+      }
+      data.push({ label: months[month], value: revenue });
+    }
+    return data;
+  }, [clientOrders]);
+
+  const maxChart = Math.max(...chartData.map(d => d.value), 1);
+
+  // Recent orders for the table
+  const recentOrders = orders.slice(0, 8);
+
+  // Tracking orders (in transit)
+  const trackingOrders = orders
+    .filter(o => ['En Tránsito', 'Llegó', 'En Venezuela'].includes(o.status))
+    .slice(0, 5);
+
+  // Collaborator summary
+  const primaryCollab = collaborators[0] || null;
+  const collabUnpaid = primaryCollab
+    ? earnings.filter(e => e.collaboratorId === primaryCollab.id && !e.paid)
+    : [];
+  const collabUnpaidTotal = collabUnpaid.reduce((s, e) => s + e.collaboratorCut, 0);
 
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
+  const getOrderName = (orderId: string) => orders.find(o => o.id === orderId)?.productName || 'Pedido';
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-foreground">📊 Resumen</h2>
-        <div className="flex items-center gap-2">
-          <Button onClick={onAddOrder}>
-            <Plus className="h-4 w-4 mr-1" /> Agregar Pedido
-          </Button>
-          <Button variant="outline" onClick={() => setShowClientOrderDialog(true)}>
-            <ClipboardList className="h-4 w-4 mr-1" /> Pedido Cliente
-          </Button>
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-[18px] h-full">
+      {/* Row 1: 4 stat cards */}
+      <StatCard
+        icon={<Package className="h-5 w-5" />}
+        label="Total Pedidos"
+        value={String(stats.totalOrders)}
+        onClick={() => onNavigate('personal')}
+      />
+      <StatCard
+        icon={<Clock className="h-5 w-5" />}
+        label="Pendiente de cobro"
+        value={fmt(stats.pendingCollection)}
+        onClick={() => onNavigate('client-orders')}
+      />
+      <div className="card-brillitos gradient-pink p-5 flex flex-col justify-between cursor-pointer hover:shadow-brillitos-lg transition-shadow" onClick={() => onNavigate('client-orders')}>
+        <div className="flex items-center justify-between">
+          <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
+            <TrendingUp className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <ArrowUpRight className="h-4 w-4 text-primary-foreground/60" />
+        </div>
+        <div className="mt-3">
+          <p className="text-2xl lg:text-3xl font-extrabold text-primary-foreground">{fmt(stats.netProfit)}</p>
+          <p className="text-xs text-primary-foreground/70 font-medium mt-0.5">Tu ganancia neta</p>
+        </div>
+      </div>
+      <StatCard
+        icon={<Truck className="h-5 w-5" />}
+        label="En Tránsito"
+        value={String(stats.inTransit)}
+        onClick={() => onNavigate('personal')}
+      />
+
+      {/* Row 2: Revenue chart (2 cols) + Ganancias (1 col) + Tracking (1 col, spans 2 rows) */}
+      <div className="card-brillitos p-5 lg:col-span-2">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Revenue</h3>
+            <p className="text-2xl font-extrabold text-foreground mt-1">{fmt(chartData.reduce((s, d) => s + d.value, 0))}</p>
+          </div>
+          <span className="text-xs font-semibold text-profit bg-profit/10 px-2 py-1 rounded-full">↑ Activo</span>
+        </div>
+        {/* Bar chart */}
+        <div className="flex items-end gap-2 h-32">
+          {chartData.map((d, i) => {
+            const height = maxChart > 0 ? (d.value / maxChart) * 100 : 0;
+            const isLast = i === chartData.length - 1;
+            return (
+              <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className={`w-full rounded-t-lg transition-all ${isLast ? 'bg-primary' : 'bg-pink-soft'}`}
+                  style={{ height: `${Math.max(height, 4)}%` }}
+                />
+                <span className="text-[10px] text-muted-foreground">{d.label}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {summaryCards.map(card => (
-          <Card
-            key={card.label}
-            className="hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => onNavigate(card.tab)}
-          >
-            <CardContent className="p-4 text-center">
-              <card.icon className={`h-8 w-8 mx-auto mb-2 ${card.color}`} />
-              <p className="text-3xl font-bold text-foreground">{card.count}</p>
-              <p className="text-sm text-muted-foreground">{card.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Ganancias breakdown */}
+      <div className="card-brillitos p-5">
+        <h3 className="text-sm font-semibold text-foreground mb-4">Ganancias</h3>
+        <div className="space-y-4">
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-muted-foreground">Por envíos</span>
+              <span className="font-semibold text-foreground">{fmt(stats.totalProfit)}</span>
+            </div>
+            <div className="h-2 bg-secondary rounded-full overflow-hidden">
+              <div className="h-full bg-primary rounded-full" style={{ width: `${stats.totalProfit > 0 ? 70 : 0}%` }} />
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-muted-foreground">Le toca al equipo</span>
+              <span className="font-semibold text-primary">-{fmt(stats.collabTotal)}</span>
+            </div>
+            <div className="h-2 bg-secondary rounded-full overflow-hidden">
+              <div className="h-full bg-pink-soft rounded-full" style={{ width: `${stats.totalProfit > 0 ? (stats.collabTotal / stats.totalProfit * 100) : 0}%` }} />
+            </div>
+          </div>
+          <div className="border-t border-border pt-3">
+            <div className="flex justify-between">
+              <span className="text-xs text-muted-foreground font-medium">Total neto</span>
+              <span className="text-lg font-extrabold text-foreground">{fmt(stats.netProfit)}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Spending Summary */}
-      <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="p-4 space-y-3">
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-primary" /> Gastos y Compras
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-            <div className="space-y-0.5">
-              <p className="text-muted-foreground">🛍️ Personal</p>
-              <p className="text-lg font-bold text-foreground">{fmt(spending.personal)}</p>
-            </div>
-            <div className="space-y-0.5">
-              <p className="text-muted-foreground">📦 Mercancía</p>
-              <p className="text-lg font-bold text-foreground">{fmt(spending.merchandise)}</p>
-            </div>
-            <div className="space-y-0.5">
-              <p className="text-muted-foreground">👤 Clientes (costo)</p>
-              <p className="text-lg font-bold text-foreground">{fmt(spending.client)}</p>
-            </div>
-            <div className="space-y-0.5">
-              <p className="text-muted-foreground">💰 Ganancia clientes</p>
-              <p className={`text-lg font-bold ${spending.clientProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>{fmt(spending.clientProfit)}</p>
-            </div>
-          </div>
-          <div className="border-t border-border pt-2 flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Total invertido</span>
-            <span className="text-xl font-bold text-foreground">{fmt(spending.total)}</span>
-          </div>
-
-          {/* Client breakdown */}
-          {Object.keys(spending.clientBreakdown).length > 0 && (
-            <div className="border-t border-border pt-2 space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">Desglose por cliente:</p>
-              {Object.entries(spending.clientBreakdown).map(([name, data]) => (
-                <div key={name} className="flex items-center justify-between text-xs">
-                  <span className="text-foreground font-medium">{name} <span className="text-muted-foreground">({data.items} art.)</span></span>
-                  <span className={`font-semibold ${(data.charged - data.spent) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                    {fmt(data.charged - data.spent)} ganancia
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Screenshot Import */}
-      <ScreenshotImport onImportOrders={onImportOrders} />
-
-      {/* Recent activity */}
-      <div>
-        <h3 className="text-lg font-semibold text-foreground mb-3">🕐 Actividad Reciente</h3>
-        {recentOrders.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-center text-muted-foreground">
-              <p>No hay pedidos aún. ¡Agrega tu primero!</p>
-            </CardContent>
-          </Card>
+      {/* Tracking card (spans rows 2-3) */}
+      <div className="card-brillitos p-5 lg:row-span-2">
+        <h3 className="text-sm font-semibold text-foreground mb-4">📦 Tracking</h3>
+        {trackingOrders.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6">Sin envíos activos</p>
         ) : (
-          <div className="space-y-2">
-            {recentOrders.map(order => (
-              <Card key={order.id} className="hover:shadow-sm transition-shadow">
-                <CardContent className="p-3 flex items-center gap-3">
-                  <div className="h-14 w-14 rounded-md bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {order.productPhoto ? (
-                      <img src={order.productPhoto} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <Package className="h-6 w-6 text-muted-foreground" />
+          <div className="space-y-4">
+            {trackingOrders.map((order, idx) => (
+              <div key={order.id} className="relative">
+                {idx < trackingOrders.length - 1 && (
+                  <div className="absolute left-[11px] top-8 w-0.5 h-full bg-primary/20" />
+                )}
+                <div className="flex items-start gap-3">
+                  <div className="h-6 w-6 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-foreground truncate">{order.productName}</p>
+                    {order.orderNumber && (
+                      <p className="text-[10px] text-primary font-medium bg-primary/10 inline-block px-1.5 py-0.5 rounded mt-0.5">#{order.orderNumber}</p>
                     )}
+                    <StatusBadge status={order.status} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{order.productName}</p>
-                    <p className="text-xs text-muted-foreground">{order.store} · {order.status}</p>
-                  </div>
-                  <span className="text-sm font-semibold text-primary">${order.pricePaid.toFixed(2)}</span>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Client Orders Summary */}
-      {clientOrders.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold text-foreground mb-3">📋 Pedidos de Clientes</h3>
-          <div className="space-y-2">
-            {clientOrders.slice(0, 5).map(co => {
-              const clientName = clients.find(c => c.id === co.clientId)?.name || co.clientName || 'Sin cliente';
-              const totalProductCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
-              return (
-                <Card key={co.id} className="hover:shadow-sm transition-shadow cursor-pointer" onClick={() => onNavigate('client-orders')}>
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground">{clientName}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <Badge variant="outline" className="text-xs">{co.status}</Badge>
-                        <span className="text-xs text-muted-foreground">{co.products.length} producto(s)</span>
+      {/* Row 3: Orders table (3 cols) */}
+      <div className="card-brillitos p-5 lg:col-span-3">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-foreground">Pedidos Recientes</h3>
+          <button onClick={() => onNavigate('personal')} className="text-xs text-primary font-medium hover:underline">Ver todos →</button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-muted-foreground border-b border-border">
+                <th className="text-left py-2 font-medium">Producto</th>
+                <th className="text-left py-2 font-medium hidden sm:table-cell">Cliente</th>
+                <th className="text-left py-2 font-medium hidden md:table-cell">Tienda</th>
+                <th className="text-left py-2 font-medium">Estado</th>
+                <th className="text-right py-2 font-medium">Precio</th>
+                <th className="text-right py-2 font-medium hidden sm:table-cell">Envío</th>
+                <th className="text-right py-2 font-medium hidden md:table-cell">Ganancia</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentOrders.map(order => {
+                const isClient = order.category === 'client';
+                const co = isClient ? (order as ClientOrder) : null;
+                const profit = co ? co.amountCharged - order.pricePaid - co.shippingCost : 0;
+                return (
+                  <tr key={order.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                    <td className="py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {order.productPhoto ? (
+                            <img src={order.productPhoto} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                          )}
+                        </div>
+                        <span className="font-medium text-foreground truncate max-w-[120px]">{order.productName}</span>
                       </div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-semibold text-foreground">${co.amountCharged.toFixed(2)}</p>
-                      <p className={`text-xs font-medium ${(co.amountCharged - totalProductCost - co.shippingCost) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                        ${(co.amountCharged - totalProductCost - co.shippingCost).toFixed(2)}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                    </td>
+                    <td className="py-2.5 hidden sm:table-cell text-muted-foreground">
+                      {co?.clientName || '—'}
+                    </td>
+                    <td className="py-2.5 hidden md:table-cell">
+                      <StoreBadge store={order.store} />
+                    </td>
+                    <td className="py-2.5">
+                      <StatusBadge status={order.status} />
+                    </td>
+                    <td className="py-2.5 text-right font-bold text-foreground">{fmt(order.pricePaid)}</td>
+                    <td className="py-2.5 text-right font-semibold text-primary hidden sm:table-cell">
+                      {co ? fmt(co.shippingCost) : '—'}
+                    </td>
+                    <td className="py-2.5 text-right font-bold text-profit hidden md:table-cell">
+                      {isClient ? fmt(profit) : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Equipo card (col 4, in row 3 area) - only shows if there's a collaborator */}
+      {primaryCollab && (
+        <div className="card-brillitos p-5">
+          <h3 className="text-sm font-semibold text-foreground mb-3">👤 {primaryCollab.name}</h3>
+          <p className="text-2xl font-extrabold text-primary">{fmt(collabUnpaidTotal)}</p>
+          <p className="text-[10px] text-muted-foreground mb-3">Le debes ahora</p>
+          {collabUnpaid.length > 0 && (
+            <>
+              <button
+                className="w-full rounded-full bg-primary text-primary-foreground text-xs font-medium py-2 hover:bg-primary/90 transition-colors mb-3"
+                onClick={() => onNavigate('team')}
+              >
+                Marcar pagado
+              </button>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                {collabUnpaid.slice(0, 5).map(e => (
+                  <div key={e.id} className="flex justify-between text-[11px]">
+                    <span className="truncate text-muted-foreground">{getOrderName(e.orderId)}</span>
+                    <span className="font-semibold text-primary flex-shrink-0 ml-2">{fmt(e.collaboratorCut)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
+    </div>
+  );
+}
 
-      <AddClientOrderDialog
-        open={showClientOrderDialog}
-        onOpenChange={setShowClientOrderDialog}
-        clients={clients}
-        onAddOrder={onAddClientOrder}
-        onAddProduct={onAddProduct}
-      />
+function StatCard({ icon, label, value, onClick }: { icon: React.ReactNode; label: string; value: string; onClick: () => void }) {
+  return (
+    <div className="card-brillitos p-5 flex flex-col justify-between cursor-pointer hover:shadow-brillitos-lg transition-shadow" onClick={onClick}>
+      <div className="flex items-center justify-between">
+        <div className="h-10 w-10 rounded-xl bg-secondary flex items-center justify-center text-primary">
+          {icon}
+        </div>
+        <ArrowUpRight className="h-4 w-4 text-muted-foreground/40" />
+      </div>
+      <div className="mt-3">
+        <p className="text-2xl lg:text-3xl font-extrabold text-foreground">{value}</p>
+        <p className="text-xs text-muted-foreground font-medium mt-0.5">{label}</p>
+      </div>
     </div>
   );
 }
