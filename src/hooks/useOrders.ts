@@ -39,6 +39,9 @@ export function useOrders() {
         euroRate: row.euro_rate != null ? Number(row.euro_rate) : null,
         deliveryNotes: row.delivery_notes || null,
         deliveredAt: row.delivered_at || null,
+        companyInvoiceAmount: row.company_invoice_amount != null ? Number(row.company_invoice_amount) : null,
+        companyInvoiceNotes: row.company_invoice_notes || null,
+        invoiceFiles: Array.isArray(row.invoice_files) ? row.invoice_files : [],
       };
 
       if (row.category === 'merchandise') {
@@ -142,6 +145,9 @@ export function useOrders() {
     if ((updates as any).euroRate !== undefined) row.euro_rate = (updates as any).euroRate;
     if ((updates as any).deliveryNotes !== undefined) row.delivery_notes = (updates as any).deliveryNotes;
     if ((updates as any).deliveredAt !== undefined) row.delivered_at = (updates as any).deliveredAt;
+    if ((updates as any).companyInvoiceAmount !== undefined) row.company_invoice_amount = (updates as any).companyInvoiceAmount;
+    if ((updates as any).companyInvoiceNotes !== undefined) row.company_invoice_notes = (updates as any).companyInvoiceNotes;
+    if ((updates as any).invoiceFiles !== undefined) row.invoice_files = (updates as any).invoiceFiles;
 
     // Auto-set delivered_at when status changes to Entregado
     if (updates.status === 'Entregado' && !row.delivered_at) {
