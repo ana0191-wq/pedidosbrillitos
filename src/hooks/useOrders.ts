@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Order, OrderCategory } from '@/types/orders';
 import { useToast } from '@/hooks/use-toast';
+import { parseNum } from '@/lib/utils';
 
 export function useOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
