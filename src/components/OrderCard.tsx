@@ -328,7 +328,7 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: Order
 
                   {/* Inline shipping dimensions — always visible if no shipping cost */}
                   {(order.category === 'client' || order.category === 'merchandise') && (
-                    <div className="rounded-md bg-muted/40 border border-border p-2.5 space-y-2">
+                    <div data-order-shipping={order.id} className="rounded-md bg-muted/40 border border-border p-2.5 space-y-2">
                       <p className="text-xs font-semibold text-foreground flex items-center gap-1">
                         <Ruler className="h-3.5 w-3.5" /> 📐 Peso y medidas para calcular envío
                       </p>
