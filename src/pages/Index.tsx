@@ -18,6 +18,8 @@ import { AIPricingCalculator } from '@/components/AIPricingCalculator';
 import { CatalogSection } from '@/components/CatalogSection';
 import { TeamSection } from '@/components/TeamSection';
 import { InventorySection } from '@/components/InventorySection';
+import { PorCobrarSection } from '@/components/PorCobrarSection';
+import { QuickCalculator } from '@/components/QuickCalculator';
 import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
