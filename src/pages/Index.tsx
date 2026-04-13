@@ -167,6 +167,7 @@ const Index = () => {
               onUpdate={updateOrder}
               onDelete={deleteOrder}
               onAdd={() => openDialog('personal')}
+              getCollabInfo={getCollabInfo}
             />
           </TabsContent>
 
