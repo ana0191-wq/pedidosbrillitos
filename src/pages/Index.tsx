@@ -182,6 +182,7 @@ const Index = () => {
                 onUpdate={updateOrder}
                 onDelete={deleteOrder}
                 onAdd={() => openDialog('merchandise')}
+                getCollabInfo={getCollabInfo}
               />
               <AIPricingCalculator exchangeRate={exchangeRate} />
             </div>
