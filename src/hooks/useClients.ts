@@ -19,6 +19,7 @@ export function useClients() {
     const { data, error } = await supabase
       .from('clients')
       .select('*')
+      .is('deleted_at', null)
       .order('name');
 
     if (error) {
@@ -61,7 +62,7 @@ export function useClients() {
   }, [fetchClients, toast]);
 
   const deleteClient = useCallback(async (id: string) => {
-    const { error } = await supabase.from('clients').delete().eq('id', id);
+    const { error } = await supabase.from('clients').update({ deleted_at: new Date().toISOString() }).eq('id', id);
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
     else await fetchClients();
   }, [fetchClients, toast]);

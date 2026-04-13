@@ -13,6 +13,7 @@ export function useOrders() {
     const { data, error } = await supabase
       .from('orders')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -164,7 +165,7 @@ export function useOrders() {
   }, [fetchOrders, toast]);
 
   const deleteOrder = useCallback(async (id: string) => {
-    const { error } = await supabase.from('orders').delete().eq('id', id);
+    const { error } = await supabase.from('orders').update({ deleted_at: new Date().toISOString() }).eq('id', id);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
       return;
