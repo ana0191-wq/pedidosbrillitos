@@ -26,7 +26,7 @@ interface OrderCardProps {
   collabInfo?: CollabInfo | null;
 }
 
-export function OrderCard({ order, onUpdate, onDelete, shippingSettings }: OrderCardProps) {
+export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabInfo }: OrderCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
