@@ -8,7 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
 import { PaymentMethodSelector, CurrencySelector } from '@/components/PaymentMethodSelector';
-import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler, AlertTriangle, MapPin } from 'lucide-react';
+import { InvoiceSection } from '@/components/InvoiceSection';
+import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler, AlertTriangle, MapPin, FileText } from 'lucide-react';
 
 interface CollabInfo {
   name: string;
