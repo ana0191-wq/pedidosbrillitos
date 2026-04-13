@@ -205,6 +205,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       sale_price_usd: p.pricePaid,
       sale_price_ves: exchangeRate ? p.pricePaid * exchangeRate : 0,
       shipping_charge_client: c.clientPaysShipping,
+      company_invoice_amount: c.anaPaysFreight,
       prices_confirmed: true,
     }).eq('id', productId);
 
