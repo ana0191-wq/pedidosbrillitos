@@ -218,19 +218,26 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     const companyAmt = parseNum(invoiceCompanyAmount);
     const clientAmt = parseNum(invoiceClientCharge);
 
+    if (companyAmt == null || clientAmt == null) return;
+
+    const profit = clientAmt - companyAmt;
+    const brotherCut = profit * 0.30;
+
     onUpdateOrder(order.id, {
       shippingCostCompany: companyAmt,
       shippingChargeToClient: clientAmt,
-      amountCharged: totals.totalProductCost + (clientAmt ?? 0),
+      amountCharged: totals.totalProductCost + clientAmt,
     });
 
-    // Also save company_invoice_amount on the linked orders
+    // Also save on linked orders
     for (const p of products) {
       await supabase.from('orders').update({
         company_invoice_amount: companyAmt,
         shipping_charge_client: clientAmt,
       }).eq('id', p.id);
     }
+
+    toast.success(`✅ Factura guardada: Empresa $${companyAmt.toFixed(2)} · Cobro $${clientAmt.toFixed(2)} · Ganancia $${profit.toFixed(2)}`);
   };
 
   const deriveStatus = (pPay: string, sPay: string) => {
