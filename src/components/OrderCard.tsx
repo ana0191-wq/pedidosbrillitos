@@ -449,6 +449,11 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                 </>
               )}
 
+              {/* Invoice/Documentation section */}
+              {!editing && (
+                <InvoiceSection order={order} onUpdate={onUpdate} />
+              )}
+
               {/* Status change actions */}
               {!editing && (
                 <div className="space-y-2 pt-1">
