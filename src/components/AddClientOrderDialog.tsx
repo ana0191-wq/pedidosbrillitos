@@ -85,6 +85,8 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [payRef, setPayRef] = useState('');
   const [shipping, setShipping] = useState('');
   const [charged, setCharged] = useState('');
+  const [companyInvoice, setCompanyInvoice] = useState('');
+  const [clientShippingCharge, setClientShippingCharge] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
