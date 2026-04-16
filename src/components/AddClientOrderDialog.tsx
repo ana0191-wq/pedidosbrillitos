@@ -88,6 +88,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [companyInvoice, setCompanyInvoice] = useState('');
   const [clientShippingCharge, setClientShippingCharge] = useState('');
   const [notes, setNotes] = useState('');
+  const [orderStatus, setOrderStatus] = useState('Pendiente');
   const [submitting, setSubmitting] = useState(false);
 
   // Screenshot import state
@@ -110,6 +111,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setCharged('');
     setCompanyInvoice('');
     setClientShippingCharge('');
+    setOrderStatus('Pendiente');
     setNotes('');
     setProducts([]);
     setProcessing(false);
@@ -209,6 +211,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
       const companyInv = parseFloat(companyInvoice) || null;
       const clientShipCharge = parseFloat(clientShippingCharge) || null;
       const orderId = await onAddOrder(selectedClient, {
+        status: orderStatus,
         paymentMethod: payment,
         paymentReference: payRef,
         shippingCost: parseFloat(shipping) || 0,
@@ -242,7 +245,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
             orderNumber: p.orderNumber,
             notes: '',
             createdAt: new Date().toISOString(),
-            status: 'Pendiente',
+            status: orderStatus as any,
             clientName,
             shippingCost: 0,
             amountCharged: 0,
@@ -294,6 +297,21 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
               {clients.length === 0 && <p className="text-xs text-muted-foreground mt-1">Primero agrega un cliente en la pestaña Clientes</p>}
             </div>
           )}
+
+          {/* Status selector */}
+          <div>
+            <Label>Estado del pedido</Label>
+            <Select value={orderStatus} onValueChange={setOrderStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Pendiente">⏳ Pendiente</SelectItem>
+                <SelectItem value="En Tránsito">🚚 En Tránsito</SelectItem>
+                <SelectItem value="Llegó">📦 Llegó</SelectItem>
+                <SelectItem value="En Venezuela">🇻🇪 En Venezuela</SelectItem>
+                <SelectItem value="Entregado">✅ Entregado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           <div>
             <Label>Método de pago</Label>
