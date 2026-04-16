@@ -153,6 +153,8 @@ export function useClientOrders() {
       amount_charged: data.amountCharged || 0,
       shipping_type: data.shippingType || '',
       notes: data.notes || '',
+      shipping_cost_company: data.shippingCostCompany ?? null,
+      shipping_charge_to_client: data.shippingChargeToClient ?? null,
     }).select('id').single();
 
     if (error) {
