@@ -298,6 +298,21 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
             </div>
           )}
 
+          {/* Status selector */}
+          <div>
+            <Label>Estado del pedido</Label>
+            <Select value={orderStatus} onValueChange={setOrderStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Pendiente">⏳ Pendiente</SelectItem>
+                <SelectItem value="En Tránsito">🚚 En Tránsito</SelectItem>
+                <SelectItem value="Llegó">📦 Llegó</SelectItem>
+                <SelectItem value="En Venezuela">🇻🇪 En Venezuela</SelectItem>
+                <SelectItem value="Entregado">✅ Entregado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div>
             <Label>Método de pago</Label>
             <Select value={payment} onValueChange={setPayment}>
