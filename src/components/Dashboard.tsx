@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Package, Clock, TrendingUp, Truck, ArrowUpRight } from 'lucide-react';
+import { Package, Clock, TrendingUp, Truck, ArrowUpRight, AlertTriangle } from 'lucide-react';
 import type { Order, ClientOrder, MerchandiseOrder } from '@/types/orders';
 import { fmtMoney } from '@/lib/utils';
 import type { Client } from '@/hooks/useClients';
@@ -22,18 +22,28 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
     const totalOrders = orders.length;
     const inTransit = orders.filter(o => o.status === 'En Tránsito').length;
 
-    let totalAnaProfit = 0; // SUM of ana_profit (shipping only) where company_invoice_amount IS NOT NULL
-    let pendingCollection = 0; // SUM of client_owes
+    let totalShippingRevenue = 0; // SUM of shipping_charge_client (NOT product price)
+    let totalAnaProfit = 0;
+    let pendingCollection = 0;
+    let ordersWithInvoice = 0;
+    let totalClientOrders = 0;
 
     for (const co of clientOrders) {
+      totalClientOrders++;
       const productCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
       const shippingChargeClient = co.shippingChargeToClient;
       const companyInvoiceAmount = co.shippingCostCompany;
 
-      // PROFIT: only from shipping, only when company_invoice_amount is known
+      // Revenue = only shipping charged to clients (product is passthrough)
+      if (shippingChargeClient != null) {
+        totalShippingRevenue += shippingChargeClient;
+      }
+
+      // PROFIT: only from shipping, only when both values are known
       if (companyInvoiceAmount != null && shippingChargeClient != null) {
         const anaProfit = shippingChargeClient - companyInvoiceAmount;
         totalAnaProfit += anaProfit;
+        ordersWithInvoice++;
       }
 
       // POR COBRAR: what client still owes
@@ -44,12 +54,13 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
 
     // Brother cut = SUM of unpaid collaborator_earnings
     const collabTotal = earnings.filter(e => !e.paid).reduce((s, e) => s + e.collaboratorCut, 0);
-    const netProfit = totalAnaProfit - collabTotal;
+    // Net profit = ana_profit * 0.70 (she keeps 70%)
+    const netProfit = totalAnaProfit * 0.70;
 
-    return { totalOrders, inTransit, pendingCollection, netProfit, totalAnaProfit, collabTotal };
+    return { totalOrders, inTransit, pendingCollection, netProfit, totalAnaProfit, collabTotal, totalShippingRevenue, ordersWithInvoice, totalClientOrders };
   }, [orders, clientOrders, earnings]);
 
-  // Monthly revenue data for chart (last 6 months)
+  // Monthly shipping revenue data for chart (last 6 months)
   const chartData = useMemo(() => {
     const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const now = new Date();
@@ -64,7 +75,10 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
       for (const co of clientOrders) {
         const created = new Date(co.createdAt);
         if (created.getMonth() === month && created.getFullYear() === year) {
-          revenue += co.amountCharged;
+          // Only count shipping revenue, NOT product passthrough
+          if (co.shippingChargeToClient != null) {
+            revenue += co.shippingChargeToClient;
+          }
         }
       }
       data.push({ label: months[month], value: revenue });
@@ -86,6 +100,12 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
 
   const fmt = fmtMoney;
   const getOrderName = (orderId: string) => orders.find(o => o.id === orderId)?.productName || 'Pedido';
+
+  // Data confidence: show warning if some orders are missing invoice data
+  const hasPartialData = stats.ordersWithInvoice < stats.totalClientOrders && stats.totalClientOrders > 0;
+  const confidenceLabel = hasPartialData
+    ? `⚠️ basado en ${stats.ordersWithInvoice} de ${stats.totalClientOrders} pedidos con factura`
+    : null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-[18px] h-full">
@@ -112,6 +132,9 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
         <div className="mt-3">
           <p className="text-2xl lg:text-3xl font-extrabold text-primary-foreground">{fmt(stats.netProfit)}</p>
           <p className="text-xs text-primary-foreground/70 font-medium mt-0.5">Tu ganancia neta</p>
+          {confidenceLabel && (
+            <p className="text-[10px] text-primary-foreground/50 mt-0.5">{confidenceLabel}</p>
+          )}
         </div>
       </div>
       <StatCard
@@ -125,8 +148,14 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
       <div className="card-brillitos p-5 lg:col-span-2">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Revenue</h3>
-            <p className="text-2xl font-extrabold text-foreground mt-1">{fmt(chartData.reduce((s, d) => s + d.value, 0))}</p>
+            <h3 className="text-sm font-semibold text-foreground">Total cobrado en envíos</h3>
+            <p className="text-2xl font-extrabold text-foreground mt-1">{fmt(stats.totalShippingRevenue)}</p>
+            {hasPartialData && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3 text-amber-500" />
+                {confidenceLabel}
+              </p>
+            )}
           </div>
           <span className="text-xs font-semibold text-profit bg-profit/10 px-2 py-1 rounded-full">↑ Activo</span>
         </div>
@@ -154,7 +183,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-muted-foreground">Por envíos</span>
-              <span className="font-semibold text-foreground">{fmt(stats.totalAnaProfit)}</span>
+              <span className="font-semibold text-foreground">{stats.ordersWithInvoice > 0 ? fmt(stats.totalAnaProfit) : '—'}</span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? 70 : 0}%` }} />
@@ -162,18 +191,21 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
           </div>
           <div>
             <div className="flex justify-between text-xs mb-1">
-              <span className="text-muted-foreground">Le toca al equipo</span>
-              <span className="font-semibold text-primary">-{fmt(stats.collabTotal)}</span>
+              <span className="text-muted-foreground">Le toca al equipo (30%)</span>
+              <span className="font-semibold text-primary">-{stats.ordersWithInvoice > 0 ? fmt(stats.totalAnaProfit * 0.30) : '—'}</span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full bg-pink-soft rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? (stats.collabTotal / stats.totalAnaProfit * 100) : 0}%` }} />
+              <div className="h-full bg-pink-soft rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? 30 : 0}%` }} />
             </div>
           </div>
           <div className="border-t border-border pt-3">
             <div className="flex justify-between">
               <span className="text-xs text-muted-foreground font-medium">Total neto</span>
-              <span className="text-lg font-extrabold text-foreground">{fmt(stats.netProfit)}</span>
+              <span className="text-lg font-extrabold text-foreground">{stats.ordersWithInvoice > 0 ? fmt(stats.netProfit) : '—'}</span>
             </div>
+            {confidenceLabel && (
+              <p className="text-[10px] text-amber-500 mt-1">{confidenceLabel}</p>
+            )}
           </div>
         </div>
       </div>
@@ -229,7 +261,6 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
             </thead>
             <tbody>
               {recentOrders.map(order => {
-                // Find the parent client order for this product
                 const parentCO = clientOrders.find(co => co.products.some(p => p.id === order.id));
                 const shippingChargeClient = parentCO?.shippingChargeToClient;
                 const companyInvoice = parentCO?.shippingCostCompany;
