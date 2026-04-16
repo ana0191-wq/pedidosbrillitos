@@ -88,6 +88,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [companyInvoice, setCompanyInvoice] = useState('');
   const [clientShippingCharge, setClientShippingCharge] = useState('');
   const [notes, setNotes] = useState('');
+  const [orderStatus, setOrderStatus] = useState('Pendiente');
   const [submitting, setSubmitting] = useState(false);
 
   // Screenshot import state
