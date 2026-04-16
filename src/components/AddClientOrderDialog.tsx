@@ -108,6 +108,8 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setPayRef('');
     setShipping('');
     setCharged('');
+    setCompanyInvoice('');
+    setClientShippingCharge('');
     setNotes('');
     setProducts([]);
     setProcessing(false);
@@ -204,12 +206,16 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setSubmitting(true);
     try {
       // Create the client order first
+      const companyInv = parseFloat(companyInvoice) || null;
+      const clientShipCharge = parseFloat(clientShippingCharge) || null;
       const orderId = await onAddOrder(selectedClient, {
         paymentMethod: payment,
         paymentReference: payRef,
         shippingCost: parseFloat(shipping) || 0,
         amountCharged: parseFloat(charged) || 0,
         notes,
+        shippingCostCompany: companyInv,
+        shippingChargeToClient: clientShipCharge,
       });
 
       if (!orderId) {
