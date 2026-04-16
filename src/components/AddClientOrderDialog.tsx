@@ -111,6 +111,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setCharged('');
     setCompanyInvoice('');
     setClientShippingCharge('');
+    setOrderStatus('Pendiente');
     setNotes('');
     setProducts([]);
     setProcessing(false);
@@ -210,6 +211,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
       const companyInv = parseFloat(companyInvoice) || null;
       const clientShipCharge = parseFloat(clientShippingCharge) || null;
       const orderId = await onAddOrder(selectedClient, {
+        status: orderStatus,
         paymentMethod: payment,
         paymentReference: payRef,
         shippingCost: parseFloat(shipping) || 0,
@@ -243,7 +245,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
             orderNumber: p.orderNumber,
             notes: '',
             createdAt: new Date().toISOString(),
-            status: 'Pendiente',
+            status: orderStatus,
             clientName,
             shippingCost: 0,
             amountCharged: 0,
