@@ -85,6 +85,8 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [payRef, setPayRef] = useState('');
   const [shipping, setShipping] = useState('');
   const [charged, setCharged] = useState('');
+  const [companyInvoice, setCompanyInvoice] = useState('');
+  const [clientShippingCharge, setClientShippingCharge] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -106,6 +108,8 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setPayRef('');
     setShipping('');
     setCharged('');
+    setCompanyInvoice('');
+    setClientShippingCharge('');
     setNotes('');
     setProducts([]);
     setProcessing(false);
@@ -202,12 +206,16 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setSubmitting(true);
     try {
       // Create the client order first
+      const companyInv = parseFloat(companyInvoice) || null;
+      const clientShipCharge = parseFloat(clientShippingCharge) || null;
       const orderId = await onAddOrder(selectedClient, {
         paymentMethod: payment,
         paymentReference: payRef,
         shippingCost: parseFloat(shipping) || 0,
         amountCharged: parseFloat(charged) || 0,
         notes,
+        shippingCostCompany: companyInv,
+        shippingChargeToClient: clientShipCharge,
       });
 
       if (!orderId) {
@@ -297,9 +305,25 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
             </Select>
           </div>
           <div><Label>Referencia de pago</Label><Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="N° de transacción..." /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Costo envío ($)</Label><Input type="number" step="0.01" value={shipping} onChange={e => setShipping(e.target.value)} /></div>
-            <div><Label>Cobrado ($)</Label><Input type="number" step="0.01" value={charged} onChange={e => setCharged(e.target.value)} /></div>
+          {/* Pre-calculated shipping fields */}
+          <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/10">
+            <p className="text-xs font-semibold text-foreground">📦 Envío (si ya tienes los datos calculados)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">Factura empresa ($)</Label><Input type="number" step="0.01" value={companyInvoice} onChange={e => setCompanyInvoice(e.target.value)} placeholder="Lo que cobró Total Envíos" /></div>
+              <div><Label className="text-xs">Cobro al cliente ($)</Label><Input type="number" step="0.01" value={clientShippingCharge} onChange={e => setClientShippingCharge(e.target.value)} placeholder="Lo que le cobras" /></div>
+            </div>
+            {companyInvoice && clientShippingCharge && parseFloat(clientShippingCharge) > 0 && parseFloat(companyInvoice) > 0 && (() => {
+              const profit = parseFloat(clientShippingCharge) - parseFloat(companyInvoice);
+              const brotherCut = profit * 0.30;
+              const net = profit - brotherCut;
+              return (
+                <div className="text-xs space-y-0.5 bg-muted/30 rounded p-2">
+                  <p className="text-muted-foreground">→ Ganancia: <span className="font-semibold text-foreground">${profit.toFixed(2)}</span></p>
+                  <p className="text-muted-foreground">→ Equipo (30%): <span className="font-semibold text-primary">-${brotherCut.toFixed(2)}</span></p>
+                  <p className="text-muted-foreground">→ Tu neto: <span className="font-bold text-profit">${net.toFixed(2)}</span></p>
+                </div>
+              );
+            })()}
           </div>
           <div><Label>Notas</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} /></div>
 
