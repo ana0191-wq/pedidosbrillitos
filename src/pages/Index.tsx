@@ -89,7 +89,7 @@ const Index = () => {
               onNavigate={setActiveTab}
               onMarkPaid={markPaid}
             />
-            <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} />
+            <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} clientOrders={clientOrders} />
           </div>
         );
       case 'por-cobrar':

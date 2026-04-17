@@ -179,7 +179,7 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
                 <div className="border-t border-border pt-1 mt-1 space-y-0.5">
                   <p>Empresa cobra: <strong>{fmt(aiResult.my_cost)}</strong></p>
                   <p>Cobrar al cliente: <strong className="text-primary">{fmt(aiResult.client_charge)}</strong></p>
-                  <p>Ganancia bruta: <strong className="text-green-600">{fmt(aiResult.profit)}</strong></p>
+                  <p>Ganancia bruta: <strong className="text-profit">{fmt(aiResult.profit)}</strong></p>
                 </div>
                 <p className="text-[10px] text-muted-foreground">Confianza: {aiResult.confidence}</p>
               </div>
@@ -243,7 +243,7 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Ganancia</span>
-                  <span className="text-green-600 font-semibold">{fmt(totalProfit)}</span>
+                  <span className="text-profit font-semibold">{fmt(totalProfit)}</span>
                 </div>
               </div>
             )}
