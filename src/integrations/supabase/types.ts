@@ -17,6 +17,7 @@ export type Database = {
       client_orders: {
         Row: {
           amount_charged: number | null
+          brother_involved: boolean
           client_id: string
           created_at: string
           id: string
@@ -44,6 +45,7 @@ export type Database = {
         }
         Insert: {
           amount_charged?: number | null
+          brother_involved?: boolean
           client_id: string
           created_at?: string
           id?: string
@@ -71,6 +73,7 @@ export type Database = {
         }
         Update: {
           amount_charged?: number | null
+          brother_involved?: boolean
           client_id?: string
           created_at?: string
           id?: string
@@ -258,6 +261,7 @@ export type Database = {
           amount_charged: number | null
           amount_paid: number | null
           arrived: boolean
+          brother_involved: boolean
           category: string
           client_name: string | null
           client_order_id: string | null
@@ -301,6 +305,7 @@ export type Database = {
           amount_charged?: number | null
           amount_paid?: number | null
           arrived?: boolean
+          brother_involved?: boolean
           category: string
           client_name?: string | null
           client_order_id?: string | null
@@ -344,6 +349,7 @@ export type Database = {
           amount_charged?: number | null
           amount_paid?: number | null
           arrived?: boolean
+          brother_involved?: boolean
           category?: string
           client_name?: string | null
           client_order_id?: string | null
