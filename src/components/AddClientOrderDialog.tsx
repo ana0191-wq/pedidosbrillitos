@@ -89,6 +89,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [clientShippingCharge, setClientShippingCharge] = useState('');
   const [notes, setNotes] = useState('');
   const [orderStatus, setOrderStatus] = useState('Pendiente');
+  const [brotherInvolved, setBrotherInvolved] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   // Screenshot import state
@@ -112,6 +113,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setCompanyInvoice('');
     setClientShippingCharge('');
     setOrderStatus('Pendiente');
+    setBrotherInvolved(true);
     setNotes('');
     setProducts([]);
     setProcessing(false);
@@ -219,6 +221,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
         notes,
         shippingCostCompany: companyInv,
         shippingChargeToClient: clientShipCharge,
+        brotherInvolved,
       });
 
       if (!orderId) {
@@ -311,6 +314,21 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
                 <SelectItem value="Entregado">✅ Entregado</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Brother toggle */}
+          <div className="flex items-center justify-between border border-border rounded-lg p-2 bg-muted/20">
+            <div>
+              <Label className="text-xs font-semibold">👨 Hermano participa (30%)</Label>
+              <p className="text-[10px] text-muted-foreground">Si está apagado, no recibe comisión por este pedido</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setBrotherInvolved(v => !v)}
+              className={`relative h-5 w-9 rounded-full transition-colors ${brotherInvolved ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+            >
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-transform ${brotherInvolved ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </button>
           </div>
 
           <div>
