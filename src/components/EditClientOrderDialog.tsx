@@ -61,6 +61,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const [notes, setNotes] = useState('');
   const [products, setProducts] = useState<ClientOrderProduct[]>([]);
   const [productDims, setProductDims] = useState<Record<string, ProductDims>>({});
+  const [brotherInvolved, setBrotherInvolved] = useState(true);
 
   // Stage 1 payment — initialized from DB
   const [prodPayStatus, setProdPayStatus] = useState('Pendiente');
@@ -88,6 +89,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       setStatus(order.status);
       setNotes(order.notes);
       setProducts([...order.products]);
+      setBrotherInvolved(order.brotherInvolved !== false);
 
       // Stage 1 — persist saved state
       setProdPayStatus(order.productPaymentStatus || 'Pendiente');
