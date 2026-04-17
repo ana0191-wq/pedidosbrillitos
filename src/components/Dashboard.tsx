@@ -15,15 +15,17 @@ interface DashboardProps {
   earnings: CollaboratorEarning[];
   onNavigate: (tab: string) => void;
   onMarkPaid: (earningId: string) => void;
+  onOrderClick?: (order: Order, parentClientOrder: ClientOrderType | null) => void;
 }
 
-export function Dashboard({ orders, clients, clientOrders, collaborators, earnings, onNavigate, onMarkPaid }: DashboardProps) {
+export function Dashboard({ orders, clients, clientOrders, collaborators, earnings, onNavigate, onMarkPaid, onOrderClick }: DashboardProps) {
   const stats = useMemo(() => {
     const totalOrders = orders.length;
     const inTransit = orders.filter(o => o.status === 'En Tránsito').length;
 
     let totalShippingRevenue = 0; // SUM of shipping_charge_client (NOT product price)
     let totalAnaProfit = 0;
+    let netProfitAccum = 0; // Net profit honoring brother_involved per-order
     let pendingCollection = 0;
     let ordersWithInvoice = 0;
     let totalClientOrders = 0;
@@ -44,6 +46,12 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
         const anaProfit = shippingChargeClient - companyInvoiceAmount;
         totalAnaProfit += anaProfit;
         ordersWithInvoice++;
+        // If brother NOT involved on this order, all profit is hers; otherwise 30% goes to brother
+        if (co.brotherInvolved === false) {
+          netProfitAccum += anaProfit;
+        } else {
+          netProfitAccum += anaProfit * 0.70;
+        }
       }
 
       // POR COBRAR: what client still owes
@@ -54,8 +62,8 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
 
     // Brother cut = SUM of unpaid collaborator_earnings
     const collabTotal = earnings.filter(e => !e.paid).reduce((s, e) => s + e.collaboratorCut, 0);
-    // Net profit = ana_profit * 0.70 (she keeps 70%)
-    const netProfit = totalAnaProfit * 0.70;
+    // Net profit respects per-order brother_involved flag
+    const netProfit = netProfitAccum;
 
     return { totalOrders, inTransit, pendingCollection, netProfit, totalAnaProfit, collabTotal, totalShippingRevenue, ordersWithInvoice, totalClientOrders };
   }, [orders, clientOrders, earnings]);
@@ -269,7 +277,12 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
                   : null;
 
                 return (
-                  <tr key={order.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                  <tr
+                    key={order.id}
+                    onClick={() => onOrderClick ? onOrderClick(order, parentCO || null) : onNavigate(parentCO ? 'client-orders' : 'personal')}
+                    className="border-b border-border/50 hover:bg-secondary/50 transition-colors cursor-pointer"
+                    title="Click para editar"
+                  >
                     <td className="py-2.5">
                       <div className="flex items-center gap-2">
                         <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">

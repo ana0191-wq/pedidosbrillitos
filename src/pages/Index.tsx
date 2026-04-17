@@ -20,6 +20,8 @@ import { TeamSection } from '@/components/TeamSection';
 import { InventorySection } from '@/components/InventorySection';
 import { PorCobrarSection } from '@/components/PorCobrarSection';
 import { QuickCalculator } from '@/components/QuickCalculator';
+import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
+import type { ClientOrder as ClientOrderRow } from '@/hooks/useClientOrders';
 import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
@@ -38,6 +40,7 @@ const Index = () => {
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingClientOrder, setEditingClientOrder] = useState<ClientOrderRow | null>(null);
 
   const counts = getCounts();
 
@@ -88,8 +91,15 @@ const Index = () => {
               earnings={earnings}
               onNavigate={setActiveTab}
               onMarkPaid={markPaid}
+              onOrderClick={(order, parentCO) => {
+                if (parentCO) {
+                  setEditingClientOrder(parentCO);
+                } else {
+                  setActiveTab(order.category === 'merchandise' ? 'merchandise' : 'personal');
+                }
+              }}
             />
-            <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} />
+            <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} clientOrders={clientOrders} />
           </div>
         );
       case 'por-cobrar':
@@ -220,6 +230,16 @@ const Index = () => {
         onOpenChange={setDialogOpen}
         onAdd={addOrder}
         defaultCategory={dialogCategory}
+      />
+
+      <EditClientOrderDialog
+        open={!!editingClientOrder}
+        onOpenChange={(v) => { if (!v) setEditingClientOrder(null); }}
+        order={editingClientOrder}
+        onUpdateOrder={updateClientOrder}
+        onDeleteOrder={deleteClientOrder}
+        exchangeRate={exchangeRate}
+        shippingSettings={shippingSettings}
       />
     </div>
   );

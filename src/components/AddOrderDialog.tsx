@@ -59,6 +59,7 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
   const [clientName, setClientName] = useState('');
   const [shippingCost, setShippingCost] = useState('');
   const [amountCharged, setAmountCharged] = useState('');
+  const [initialStatus, setInitialStatus] = useState<'Pendiente' | 'En Tránsito' | 'Llegó' | 'En Venezuela' | 'Entregado'>('Pendiente');
 
   const applyExtractedData = (data: any) => {
     if (data.productName) setProductName(data.productName);
@@ -136,6 +137,7 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
     setAmountCharged('');
     setCategory(defaultCategory);
     setReceiptImage(null);
+    setInitialStatus('Pendiente');
   };
 
   const handleSubmit = () => {
@@ -159,11 +161,11 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
 
     let order: Order;
     if (category === 'personal') {
-      order = { ...base, category: 'personal', status: 'Pendiente' };
+      order = { ...base, category: 'personal', status: initialStatus };
     } else if (category === 'merchandise') {
-      order = { ...base, category: 'merchandise', status: 'Pendiente', unitsOrdered: parseNum(unitsOrdered) ?? 1, unitsReceived: 0, pricePerUnit: parseNum(pricePerUnit) ?? (parseNum(pricePaid) ?? 0), suggestedPrice: null };
+      order = { ...base, category: 'merchandise', status: initialStatus, unitsOrdered: parseNum(unitsOrdered) ?? 1, unitsReceived: 0, pricePerUnit: parseNum(pricePerUnit) ?? (parseNum(pricePaid) ?? 0), suggestedPrice: null };
     } else {
-      order = { ...base, category: 'client', status: 'Pendiente', clientName, shippingCost: parseNum(shippingCost) ?? 0, amountCharged: parseNum(amountCharged) ?? 0 };
+      order = { ...base, category: 'client', status: initialStatus, clientName, shippingCost: parseNum(shippingCost) ?? 0, amountCharged: parseNum(amountCharged) ?? 0 };
     }
 
     onAdd(order);
@@ -316,6 +318,22 @@ export function AddOrderDialog({ open, onOpenChange, onAdd, defaultCategory = 'p
                 <Label>Llegada estimada</Label>
                 <Input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)} />
               </div>
+            </div>
+
+            {/* Initial Status — for registering past/already-arrived orders */}
+            <div>
+              <Label>Estado inicial</Label>
+              <Select value={initialStatus} onValueChange={(v) => setInitialStatus(v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Pendiente">⏳ Pendiente</SelectItem>
+                  <SelectItem value="En Tránsito">🚚 En Tránsito</SelectItem>
+                  <SelectItem value="Llegó">📦 Llegó</SelectItem>
+                  <SelectItem value="En Venezuela">🇻🇪 En Venezuela</SelectItem>
+                  <SelectItem value="Entregado">✅ Entregado</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">Útil si registras un pedido que ya llegó o ya está en camino</p>
             </div>
 
             {/* Merchandise fields */}
