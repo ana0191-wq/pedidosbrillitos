@@ -265,6 +265,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     const updates: Record<string, any> = {
       status: finalStatus,
       notes,
+      brotherInvolved,
       productPaymentStatus: prodPayStatus,
       productPaymentAmount: prodPayAmount ? parseFloat(prodPayAmount) : totals.totalProductCost,
       productPaymentMethod: prodPayMethod || null,
@@ -712,6 +713,20 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
 
           {/* Notes + Quotation + Save */}
           <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between border border-border rounded-lg p-3 bg-muted/20">
+              <div>
+                <Label className="text-sm font-semibold">👨 Hermano participa (30%)</Label>
+                <p className="text-[11px] text-muted-foreground">Si está apagado, no se calcula su comisión en este pedido</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBrotherInvolved(v => !v)}
+                className={`relative h-6 w-11 rounded-full transition-colors ${brotherInvolved ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                aria-label="Toggle hermano"
+              >
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform ${brotherInvolved ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
             <div>
               <Label className="text-xs text-muted-foreground">Notas</Label>
               <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="text-sm" />
