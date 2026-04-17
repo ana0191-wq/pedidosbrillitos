@@ -50,6 +50,7 @@ export interface ClientOrder {
   shippingPaymentDate: string | null;
   shippingCostCompany: number | null;
   shippingChargeToClient: number | null;
+  brotherInvolved: boolean;
 }
 
 export function useClientOrders() {
@@ -133,6 +134,7 @@ export function useClientOrders() {
       shippingPaymentDate: r.shipping_payment_date || null,
       shippingCostCompany: r.shipping_cost_company != null ? Number(r.shipping_cost_company) : null,
       shippingChargeToClient: r.shipping_charge_to_client != null ? Number(r.shipping_charge_to_client) : null,
+      brotherInvolved: r.brother_involved !== false,
     })));
     setLoading(false);
   }, []);
@@ -155,6 +157,7 @@ export function useClientOrders() {
       notes: data.notes || '',
       shipping_cost_company: data.shippingCostCompany ?? null,
       shipping_charge_to_client: data.shippingChargeToClient ?? null,
+      brother_involved: data.brotherInvolved !== false,
     }).select('id').single();
 
     if (error) {
@@ -187,6 +190,7 @@ export function useClientOrders() {
     if (updates.shippingPaymentDate !== undefined) row.shipping_payment_date = updates.shippingPaymentDate;
     if (updates.shippingCostCompany !== undefined) row.shipping_cost_company = updates.shippingCostCompany;
     if (updates.shippingChargeToClient !== undefined) row.shipping_charge_to_client = updates.shippingChargeToClient;
+    if (updates.brotherInvolved !== undefined) row.brother_involved = updates.brotherInvolved;
 
     const { error } = await supabase.from('client_orders').update(row).eq('id', id);
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
