@@ -25,6 +25,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
 
     let totalShippingRevenue = 0; // SUM of shipping_charge_client (NOT product price)
     let totalAnaProfit = 0;
+    let netProfitAccum = 0; // Net profit honoring brother_involved per-order
     let pendingCollection = 0;
     let ordersWithInvoice = 0;
     let totalClientOrders = 0;
@@ -45,6 +46,12 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
         const anaProfit = shippingChargeClient - companyInvoiceAmount;
         totalAnaProfit += anaProfit;
         ordersWithInvoice++;
+        // If brother NOT involved on this order, all profit is hers; otherwise 30% goes to brother
+        if (co.brotherInvolved === false) {
+          netProfitAccum += anaProfit;
+        } else {
+          netProfitAccum += anaProfit * 0.70;
+        }
       }
 
       // POR COBRAR: what client still owes
@@ -55,8 +62,8 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
 
     // Brother cut = SUM of unpaid collaborator_earnings
     const collabTotal = earnings.filter(e => !e.paid).reduce((s, e) => s + e.collaboratorCut, 0);
-    // Net profit = ana_profit * 0.70 (she keeps 70%)
-    const netProfit = totalAnaProfit * 0.70;
+    // Net profit respects per-order brother_involved flag
+    const netProfit = netProfitAccum;
 
     return { totalOrders, inTransit, pendingCollection, netProfit, totalAnaProfit, collabTotal, totalShippingRevenue, ordersWithInvoice, totalClientOrders };
   }, [orders, clientOrders, earnings]);
