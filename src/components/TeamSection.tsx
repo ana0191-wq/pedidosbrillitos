@@ -1,171 +1,146 @@
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Check, Trash2, Users } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { fmtMoney } from '@/lib/utils';
 import type { Collaborator, CollaboratorEarning } from '@/hooks/useCollaborators';
-import type { Order } from '@/types/orders';
+import type { ClientOrder } from '@/hooks/useClientOrders';
 
 interface TeamSectionProps {
   collaborators: Collaborator[];
   earnings: CollaboratorEarning[];
-  orders: Order[];
-  onAdd: (name: string, percentage: number) => void;
-  onUpdate: (id: string, updates: Partial<Pick<Collaborator, 'name' | 'percentage'>>) => void;
-  onDelete: (id: string) => void;
+  clientOrders: ClientOrder[];
   onMarkPaid: (earningId: string) => void;
   getEarningsByCollaborator: (id: string) => CollaboratorEarning[];
 }
 
-export function TeamSection({
-  collaborators, earnings, orders, onAdd, onUpdate, onDelete, onMarkPaid, getEarningsByCollaborator,
-}: TeamSectionProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [percentage, setPercentage] = useState('30');
+export function TeamSection({ collaborators, earnings, clientOrders, onMarkPaid, getEarningsByCollaborator }: TeamSectionProps) {
+  const [showHistory, setShowHistory] = useState(false);
   const fmt = fmtMoney;
 
-  const handleAdd = () => {
-    if (!name.trim()) return;
-    onAdd(name.trim(), parseFloat(percentage) || 30);
-    setName('');
-    setPercentage('30');
-    setDialogOpen(false);
+  // Get the brother (first collaborator)
+  const brother = collaborators[0] ?? null;
+
+  const brotherEarnings = brother ? getEarningsByCollaborator(brother.id) : [];
+  const unpaid = brotherEarnings.filter(e => !e.paid);
+  const paid = brotherEarnings.filter(e => e.paid);
+  const totalOwed = unpaid.reduce((s, e) => s + e.collaboratorCut, 0);
+  const totalPaidAll = paid.reduce((s, e) => s + e.collaboratorCut, 0);
+
+  // Map orderId → client name + product names
+  const getOrderLabel = (orderId: string) => {
+    // orderId could be a product order id or client_order id
+    for (const co of clientOrders) {
+      if (co.id === orderId) return co.clientName || 'Cliente';
+      const prod = co.products.find(p => p.id === orderId);
+      if (prod) return `${co.clientName || 'Cliente'} — ${prod.productName}`;
+    }
+    return 'Pedido';
   };
 
-  const getOrderName = (orderId: string) => {
-    const o = orders.find(o => o.id === orderId);
-    return o?.productName || 'Pedido';
-  };
-
-  // Global stats
-  const totalUnpaidAll = earnings.filter(e => !e.paid).reduce((s, e) => s + e.collaboratorCut, 0);
+  if (!brother) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-muted-foreground space-y-2">
+          <p className="text-4xl">🐵</p>
+          <p className="font-semibold text-foreground">No hay colaborador configurado</p>
+          <p className="text-sm">Contacta al soporte para agregar a tu hermano.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-          <Users className="h-5 w-5" /> Equipo
-        </h2>
-        <Button size="sm" onClick={() => setDialogOpen(true)} className="gap-1">
-          <Plus className="h-4 w-4" /> Agregar
-        </Button>
+
+      {/* Banner de lo que se le debe */}
+      <div className={`rounded-2xl px-5 py-4 ${totalOwed > 0 ? 'gradient-pink card-brillitos' : 'bg-green-50 border border-green-200'}`}>
+        <p className={`text-sm font-semibold mb-1 ${totalOwed > 0 ? 'text-primary-foreground/80' : 'text-green-700'}`}>
+          {totalOwed > 0 ? `Le debes a ${brother.name}` : `✅ Todo pagado a ${brother.name}`}
+        </p>
+        <p className={`text-4xl font-black ${totalOwed > 0 ? 'text-primary-foreground' : 'text-green-700'}`}>
+          {fmt(totalOwed)}
+        </p>
+        {totalOwed > 0 && (
+          <p className="text-xs text-primary-foreground/60 mt-1">{unpaid.length} pedido{unpaid.length !== 1 ? 's' : ''} sin pagar</p>
+        )}
       </div>
 
-      {/* Total owed banner */}
-      {totalUnpaidAll > 0 && (
-        <div className="card-brillitos gradient-pink px-4 py-3 rounded-xl">
-          <p className="text-xs text-primary-foreground/70">Total que le debes al equipo</p>
-          <p className="text-2xl font-extrabold text-primary-foreground">{fmt(totalUnpaidAll)}</p>
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-center">
+          <p className="text-xs text-amber-600 font-semibold uppercase tracking-wide mb-1">Pendiente</p>
+          <p className="text-2xl font-black text-amber-700">{fmt(totalOwed)}</p>
+          <p className="text-[11px] text-amber-500 mt-1">{unpaid.length} pedido{unpaid.length !== 1 ? 's' : ''}</p>
         </div>
-      )}
+        <div className="rounded-xl bg-green-50 border border-green-200 p-4 text-center">
+          <p className="text-xs text-green-600 font-semibold uppercase tracking-wide mb-1">Ya pagado</p>
+          <p className="text-2xl font-black text-green-700">{fmt(totalPaidAll)}</p>
+          <p className="text-[11px] text-green-500 mt-1">{paid.length} pedido{paid.length !== 1 ? 's' : ''}</p>
+        </div>
+      </div>
 
-      {collaborators.length === 0 ? (
+      {/* Pedidos pendientes de pago */}
+      {unpaid.length > 0 && (
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            <Users className="h-10 w-10 mx-auto mb-2 opacity-40" />
-            <p className="text-sm">No hay colaboradores aún</p>
-            <Button size="sm" variant="outline" className="mt-3" onClick={() => setDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Agregar colaborador
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        collaborators.map((collab) => {
-          const collabEarnings = getEarningsByCollaborator(collab.id);
-          const unpaid = collabEarnings.filter(e => !e.paid);
-          const paid = collabEarnings.filter(e => e.paid);
-          const totalUnpaid = unpaid.reduce((s, e) => s + e.collaboratorCut, 0);
-          const totalPaid = paid.reduce((s, e) => s + e.collaboratorCut, 0);
-
-          return (
-            <Card key={collab.id}>
-              <CardContent className="p-4 space-y-3">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-foreground text-base">
-                    👤 {collab.name} — {collab.percentage}%
-                  </h3>
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => onDelete(collab.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
+          <CardContent className="p-4 space-y-2">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">💸 Pendientes de pagar</p>
+            {unpaid.map(e => (
+              <div key={e.id} className="flex items-center justify-between bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{getOrderLabel(e.orderId)}</p>
+                  <p className="text-[11px] text-muted-foreground">Ganancia total: {fmt(e.anaProfit)} · Su parte: {brother.percentage}%</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <p className="text-base font-black text-amber-700">{fmt(e.collaboratorCut)}</p>
+                  <Button size="sm" className="h-7 text-[11px] px-2 gap-1" onClick={() => onMarkPaid(e.id)}>
+                    <Check className="h-3 w-3" /> Pagué
                   </Button>
                 </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
-                    <p className="text-xs text-muted-foreground">Le debes ahora</p>
-                    <p className="font-extrabold text-amber-700 dark:text-amber-400 text-xl">{fmt(totalUnpaid)}</p>
-                  </div>
-                  <div className="rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 p-3">
-                    <p className="text-xs text-muted-foreground">Ya pagado</p>
-                    <p className="font-extrabold text-green-700 dark:text-green-400 text-xl">{fmt(totalPaid)}</p>
-                  </div>
-                </div>
-
-                {/* Earnings list */}
-                {collabEarnings.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-2">
-                    Sin ganancias registradas aún. Las ganancias se calculan automáticamente cuando registras envíos.
-                  </p>
-                ) : (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Historial</p>
-                    <div className="space-y-1 max-h-64 overflow-y-auto">
-                      {collabEarnings.map((earning) => (
-                        <div key={earning.id} className="flex items-center justify-between text-xs bg-muted/30 rounded-lg px-3 py-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span>📦</span>
-                            <span className="truncate text-foreground font-medium">{getOrderName(earning.orderId)}</span>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className="font-bold">{fmt(earning.collaboratorCut)}</span>
-                            {earning.paid ? (
-                              <span className="text-green-600 text-[10px] font-medium">✅ Pagado</span>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-6 text-[10px] px-2"
-                                onClick={() => onMarkPaid(earning.id)}
-                              >
-                                <Check className="h-3 w-3 mr-0.5" /> Pagar
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Agregar colaborador</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">Nombre</label>
-              <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Mi hermano" className="mt-1" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Porcentaje de ganancia (%)</label>
-              <Input type="number" value={percentage} onChange={e => setPercentage(e.target.value)} placeholder="30" className="mt-1" />
-            </div>
-            <Button onClick={handleAdd} className="w-full">
-              <Plus className="h-4 w-4 mr-1" /> Agregar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Historial colapsable */}
+      {paid.length > 0 && (
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <button
+              className="w-full flex items-center justify-between"
+              onClick={() => setShowHistory(h => !h)}
+            >
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">✅ Historial pagado ({paid.length})</p>
+              {showHistory ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            {showHistory && paid.map(e => (
+              <div key={e.id} className="flex items-center justify-between bg-muted/30 rounded-xl px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{getOrderLabel(e.orderId)}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {e.paidAt ? new Date(e.paidAt).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : ''}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <p className="text-sm font-bold text-green-700">{fmt(e.collaboratorCut)}</p>
+                  <p className="text-[10px] text-green-500">✅ Pagado</p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {brotherEarnings.length === 0 && (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground space-y-1">
+            <p className="text-3xl">📦</p>
+            <p className="text-sm">Aún no hay ganancias registradas.</p>
+            <p className="text-xs">Se calculan automáticamente cuando guardas el envío de un pedido con hermano activo.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

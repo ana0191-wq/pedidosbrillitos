@@ -6,6 +6,11 @@ export interface ClientOrderProduct {
   id: string;
   productName: string;
   productPhoto: string;
+  productLink: string | null;
+  trackingNumber: string | null;
+  sizeColor: string | null;
+  arrivalPhoto: string | null;
+  estimatedArrivalDate: string | null;
   store: string;
   pricePaid: number;
   orderNumber: string;
@@ -51,6 +56,8 @@ export interface ClientOrder {
   shippingCostCompany: number | null;
   shippingChargeToClient: number | null;
   brotherInvolved: boolean;
+  trackingNumber: string | null;
+  estimatedArrivalDate: string | null;
 }
 
 export function useClientOrders() {
@@ -89,6 +96,11 @@ export function useClientOrders() {
           id: p.id,
           productName: p.product_name,
           productPhoto: p.product_photo || '',
+          productLink: p.product_link || null,
+          trackingNumber: p.tracking_number || null,
+          sizeColor: p.size_color || null,
+          arrivalPhoto: p.arrival_photo || null,
+          estimatedArrivalDate: p.estimated_arrival_date || null,
           store: p.store,
           pricePaid: Number(p.price_paid),
           orderNumber: p.order_number || '',
@@ -135,6 +147,8 @@ export function useClientOrders() {
       shippingCostCompany: r.shipping_cost_company != null ? Number(r.shipping_cost_company) : null,
       shippingChargeToClient: r.shipping_charge_to_client != null ? Number(r.shipping_charge_to_client) : null,
       brotherInvolved: r.brother_involved !== false,
+      trackingNumber: r.tracking_number || null,
+      estimatedArrivalDate: r.estimated_arrival_date || null,
     })));
     setLoading(false);
   }, []);
@@ -191,6 +205,8 @@ export function useClientOrders() {
     if (updates.shippingCostCompany !== undefined) row.shipping_cost_company = updates.shippingCostCompany;
     if (updates.shippingChargeToClient !== undefined) row.shipping_charge_to_client = updates.shippingChargeToClient;
     if (updates.brotherInvolved !== undefined) row.brother_involved = updates.brotherInvolved;
+    if (updates.trackingNumber !== undefined) row.tracking_number = updates.trackingNumber;
+    if (updates.estimatedArrivalDate !== undefined) row.estimated_arrival_date = updates.estimatedArrivalDate;
 
     const { error } = await supabase.from('client_orders').update(row).eq('id', id);
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });

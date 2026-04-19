@@ -75,6 +75,10 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const [shipPayMethod, setShipPayMethod] = useState('');
   const [shipPayAmount, setShipPayAmount] = useState('');
 
+  // Order-level tracking
+  const [orderTracking, setOrderTracking] = useState('');
+  const [orderArrivalDate, setOrderArrivalDate] = useState('');
+
   // Stage 2 mode: 'choose' | 'invoice' | 'weight'
   const [stage2Mode, setStage2Mode] = useState<'choose' | 'invoice' | 'weight'>('choose');
   // Factura rápida fields
@@ -90,6 +94,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     if (order && open) {
       setStatus(order.status);
       setNotes(order.notes);
+      setOrderTracking(order.trackingNumber || '');
+      setOrderArrivalDate(order.estimatedArrivalDate || '');
       setProducts([...order.products]);
       setBrotherInvolved(order.brotherInvolved !== false);
 
@@ -268,6 +274,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       status: finalStatus,
       notes,
       brotherInvolved,
+      trackingNumber: orderTracking || null,
+      estimatedArrivalDate: orderArrivalDate || null,
       productPaymentStatus: prodPayStatus,
       productPaymentAmount: prodPayAmount ? parseFloat(prodPayAmount) : totals.totalProductCost,
       productPaymentMethod: prodPayMethod || null,
@@ -548,6 +556,106 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                       </Button>
                     </div>
 
+                    {/* Extra product info */}
+                    <div className="px-4 py-3 space-y-2 border-b border-border bg-muted/20">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">🔗 Link del producto</label>
+                          <input
+                            className="mt-1 w-full text-xs bg-background border border-border rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary"
+                            defaultValue={p.productLink || ''}
+                            placeholder="https://shein.com/..."
+                            onBlur={e => {
+                              const val = e.target.value.trim();
+                              supabase.from('orders').update({ product_link: val || null }).eq('id', p.id).then();
+                              setProducts(prev => prev.map(x => x.id === p.id ? { ...x, productLink: val || null } : x));
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">👗 Talla / Color</label>
+                          <input
+                            className="mt-1 w-full text-xs bg-background border border-border rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary"
+                            defaultValue={p.sizeColor || ''}
+                            placeholder="ej: M, Rojo, XL Azul"
+                            onBlur={e => {
+                              const val = e.target.value.trim();
+                              supabase.from('orders').update({ size_color: val || null }).eq('id', p.id).then();
+                              setProducts(prev => prev.map(x => x.id === p.id ? { ...x, sizeColor: val || null } : x));
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">📦 # Tracking</label>
+                          <input
+                            className="mt-1 w-full text-xs bg-background border border-border rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary"
+                            defaultValue={p.trackingNumber || ''}
+                            placeholder="Número de seguimiento"
+                            onBlur={e => {
+                              const val = e.target.value.trim();
+                              supabase.from('orders').update({ tracking_number: val || null }).eq('id', p.id).then();
+                              setProducts(prev => prev.map(x => x.id === p.id ? { ...x, trackingNumber: val || null } : x));
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">📅 Llegada estimada</label>
+                          <input
+                            type="date"
+                            className="mt-1 w-full text-xs bg-background border border-border rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary"
+                            defaultValue={p.estimatedArrivalDate || ''}
+                            onBlur={e => {
+                              const val = e.target.value;
+                              supabase.from('orders').update({ estimated_arrival_date: val || null }).eq('id', p.id).then();
+                              setProducts(prev => prev.map(x => x.id === p.id ? { ...x, estimatedArrivalDate: val || null } : x));
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Foto de llegada */}
+                      <div>
+                        <label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">📸 Foto cuando llegó</label>
+                        <div className="mt-1 flex items-center gap-2">
+                          {p.arrivalPhoto ? (
+                            <div className="relative h-14 w-14 flex-shrink-0">
+                              <img src={p.arrivalPhoto} alt="Llegada" className="h-14 w-14 rounded-lg object-cover border border-border" />
+                              <button
+                                className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-white text-[9px] flex items-center justify-center"
+                                onClick={() => {
+                                  supabase.from('orders').update({ arrival_photo: null }).eq('id', p.id).then();
+                                  setProducts(prev => prev.map(x => x.id === p.id ? { ...x, arrivalPhoto: null } : x));
+                                }}
+                              >✕</button>
+                            </div>
+                          ) : (
+                            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground bg-background border border-dashed border-border rounded-lg px-3 py-2 hover:border-primary hover:text-primary transition-colors">
+                              <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const { data: { user } } = await supabase.auth.getUser();
+                                if (!user) return;
+                                const path = `${user.id}/arrival_${p.id}_${Date.now()}`;
+                                const { error: upErr } = await supabase.storage.from('order-photos').upload(path, file, { upsert: true });
+                                if (upErr) { toast({ title: 'Error subiendo foto', variant: 'destructive' }); return; }
+                                const { data: urlData } = supabase.storage.from('order-photos').getPublicUrl(path);
+                                const url = urlData.publicUrl;
+                                await supabase.from('orders').update({ arrival_photo: url }).eq('id', p.id);
+                                setProducts(prev => prev.map(x => x.id === p.id ? { ...x, arrivalPhoto: url } : x));
+                              }} />
+                              📸 Subir foto de llegada
+                            </label>
+                          )}
+                          {p.productLink && (
+                            <a href={p.productLink} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-primary underline truncate max-w-[120px]">
+                              Ver producto 🔗
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                     {d.pricesConfirmed ? (
                       <div className="p-4 bg-green-50 dark:bg-green-950/20 flex items-center justify-between">
                         <div className="text-sm space-y-0.5">
@@ -760,6 +868,27 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
               >
                 <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform ${brotherInvolved ? 'translate-x-5' : 'translate-x-0.5'}`} />
               </button>
+            </div>
+            {/* Order tracking + arrival */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs text-muted-foreground">📦 Tracking general</Label>
+                <Input
+                  value={orderTracking}
+                  onChange={e => setOrderTracking(e.target.value)}
+                  placeholder="Número de tracking"
+                  className="text-sm h-8 mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">📅 Llegada estimada</Label>
+                <Input
+                  type="date"
+                  value={orderArrivalDate}
+                  onChange={e => setOrderArrivalDate(e.target.value)}
+                  className="text-sm h-8 mt-1"
+                />
+              </div>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Notas</Label>

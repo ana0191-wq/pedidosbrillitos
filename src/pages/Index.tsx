@@ -247,10 +247,7 @@ const Index = () => {
             <TeamSection
               collaborators={collaborators}
               earnings={earnings}
-              orders={orders}
-              onAdd={addCollaborator}
-              onUpdate={updateCollaborator}
-              onDelete={deleteCollaborator}
+              clientOrders={clientOrders}
               onMarkPaid={markPaid}
               getEarningsByCollaborator={getEarningsByCollaborator}
             />
