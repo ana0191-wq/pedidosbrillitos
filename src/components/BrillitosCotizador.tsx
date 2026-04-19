@@ -106,6 +106,8 @@ export function BrillitosCotizador({ exchangeRate }: { exchangeRate: number | nu
     // Paso 5: Total cliente paga y ganancia
     const totalCliente = cobraProducto + envio;
     const ganancia = totalCliente - costoTotal;
+    const corteBrother = ganancia > 0 ? ganancia * 0.30 : 0;
+    const gananciaTuya = ganancia > 0 ? ganancia - corteBrother : ganancia;
 
     return {
       pesoCobrable,
@@ -118,6 +120,8 @@ export function BrillitosCotizador({ exchangeRate }: { exchangeRate: number | nu
       costoTotal,
       totalCliente,
       ganancia,
+      corteBrother,
+      gananciaTuya,
     };
   }, [s]);
 
@@ -270,20 +274,44 @@ export function BrillitosCotizador({ exchangeRate }: { exchangeRate: number | nu
               )}
             </div>
 
-            {/* Ganancia */}
-            <div className={`rounded-lg p-3 text-center ${result.ganancia >= 0 ? 'bg-green-50 dark:bg-green-950/30 border border-green-200' : 'bg-red-50 dark:bg-red-950/30 border border-red-200'}`}>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">
-                {result.ganancia >= 0 ? '✅ Tu ganancia' : '⚠️ Perderías dinero'}
+            {/* Ganancia total */}
+            <div className={`rounded-lg p-4 ${result.ganancia >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                {result.ganancia >= 0 ? '✅ Ganancia total del pedido' : '⚠️ Perderías dinero'}
               </p>
-              <p className={`text-3xl font-black ${result.ganancia >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>
+              <p className={`text-4xl font-black mb-1 ${result.ganancia >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                 {fmt(result.ganancia)}
               </p>
-              {bsRate && result.ganancia > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
+              {bsRate && result.ganancia !== 0 && (
+                <p className="text-xs text-muted-foreground">
                   ≈ {(result.ganancia * bsRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs
                 </p>
               )}
             </div>
+
+            {/* Distribución del equipo */}
+            {result.ganancia > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-center">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 mb-1">🐒 Hermano (30%)</p>
+                  <p className="text-2xl font-black text-amber-700">{fmt(result.corteBrother)}</p>
+                  {bsRate && (
+                    <p className="text-[10px] text-amber-500 mt-0.5">
+                      ≈ {(result.corteBrother * bsRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-lg bg-pink-50 border border-pink-200 p-3 text-center">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-primary mb-1">🌸 Tú (70%)</p>
+                  <p className="text-2xl font-black text-primary">{fmt(result.gananciaTuya)}</p>
+                  {bsRate && (
+                    <p className="text-[10px] text-primary/60 mt-0.5">
+                      ≈ {(result.gananciaTuya * bsRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Reset */}
             <Button
