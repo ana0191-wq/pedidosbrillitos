@@ -17,6 +17,7 @@ import { ShippingCalculator } from '@/components/ShippingCalculator';
 import { AIPricingCalculator } from '@/components/AIPricingCalculator';
 import { CatalogSection } from '@/components/CatalogSection';
 import { TeamSection } from '@/components/TeamSection';
+import { ComprasPersonalesSection } from '@/components/ComprasPersonalesSection';
 import { InventorySection } from '@/components/InventorySection';
 import { PorCobrarSection } from '@/components/PorCobrarSection';
 import { QuickCalculator } from '@/components/QuickCalculator';
@@ -140,18 +141,28 @@ const Index = () => {
       case 'personal':
         return (
           <>
-            <BackBar label="🛍️ Mis Pedidos" />
-            <OrderSection
-              title="Mis Pedidos"
-              emoji="🛍️"
-              category="personal"
+            <BackBar label="🛍️ Compras Personales" />
+            <ComprasPersonalesSection
               orders={getByCategory('personal')}
-              statusOptions={['Pendiente', 'En Tránsito', 'Llegó', 'No Llegó', 'En Venezuela', 'Entregado']}
+              onAdd={async (data) => {
+                const order: any = {
+                  id: Math.random().toString(36).substring(2),
+                  category: 'personal',
+                  productName: data.productName,
+                  productPhoto: '',
+                  store: (data as any).store || 'Shein',
+                  pricePaid: (data as any).pricePaid || 0,
+                  orderDate: '',
+                  estimatedArrival: '',
+                  orderNumber: (data as any).orderNumber || '',
+                  notes: (data as any).notes || '',
+                  status: 'Pendiente',
+                  createdAt: new Date().toISOString(),
+                };
+                await addOrder(order);
+              }}
               onUpdate={updateOrder}
               onDelete={deleteOrder}
-              onArchive={archiveOrder}
-              onAdd={() => openDialog('personal')}
-              getCollabInfo={getCollabInfo}
             />
           </>
         );
