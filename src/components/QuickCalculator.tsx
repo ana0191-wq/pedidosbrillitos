@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import type { ClientOrder } from '@/hooks/useClientOrders';
+import { toPng } from 'html-to-image';
 
 interface QuickCalculatorProps {
   shippingSettings?: ShippingSettings;
