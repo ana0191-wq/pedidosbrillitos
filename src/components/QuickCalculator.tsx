@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import type { ClientOrder } from '@/hooks/useClientOrders';
+import { toPng } from 'html-to-image';
 
 interface QuickCalculatorProps {
   shippingSettings?: ShippingSettings;
@@ -151,40 +152,26 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
     }
   };
 
-  const downloadCSV = (result: any) => {
-    const items = result.items || [];
-    const esc = (v: any) => {
-      if (v == null) return '';
-      const s = String(v).replace(/"/g, '""');
-      return /[",\n]/.test(s) ? `"${s}"` : s;
-    };
-    const headers = ['Producto', 'Cantidad', 'Peso (lb)', 'Precio unitario USD', 'Precio total producto USD', 'Envío proporcional USD', 'Total con envío USD', 'Total por unidad USD'];
-    const rows = items.map((it: any) => [
-      esc(it.name), it.quantity, it.weight_lb,
-      it.unit_price_usd ?? '', it.total_price_usd ?? '',
-      it.shipping_share_usd ?? '', it.full_total_usd ?? '', it.full_per_unit_usd ?? '',
-    ].join(','));
-    const summary = [
-      '',
-      `Peso total estimado (lb),${result.estimated_weight_lb}`,
-      `Peso facturable (lb),${result.billable_weight_lb}`,
-      `Subtotal productos USD,${result.products_subtotal_usd ?? ''}`,
-      `Envío empresa USD,${result.my_cost}`,
-      `Envío al cliente USD,${result.client_charge}`,
-      `Ganancia envío USD,${result.profit}`,
-      `Gran total cliente USD,${result.grand_total_usd ?? ''}`,
-    ];
-    const csv = '\uFEFF' + [headers.join(','), ...rows, ...summary].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `calculadora-envio-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast({ title: '✅ CSV descargado', description: `${items.length} productos exportados` });
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  const downloadImage = async () => {
+    if (!resultRef.current) return;
+    try {
+      const dataUrl = await toPng(resultRef.current, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+      });
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `calculadora-envio-${new Date().toISOString().slice(0, 10)}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast({ title: '✅ Imagen descargada' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'No se pudo generar la imagen', variant: 'destructive' });
+    }
   };
 
   // ====== TAB 2: Distribute invoice between clients ======
@@ -339,19 +326,18 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
               {aiLoading ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Estimando...</> : <><Sparkles className="h-3 w-3 mr-1" /> Estimar con IA</>}
             </Button>
             {adjustedResult && (
-              <div className="text-xs space-y-1 p-2 rounded-md border-l-2 border-primary bg-primary/5">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold">⚖️ ~{adjustedResult.estimated_weight_lb} lbs ({adjustedResult.billable_weight_lb} lbs facturables)</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-[10px]"
-                    onClick={() => downloadCSV(adjustedResult)}
-                  >
-                    <Download className="h-3 w-3 mr-1" /> CSV
-                  </Button>
-                </div>
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-7 text-xs"
+                  onClick={downloadImage}
+                >
+                  <Download className="h-3 w-3 mr-1" /> Descargar imagen
+                </Button>
+              <div ref={resultRef} className="text-xs space-y-1 p-3 rounded-md border-l-2 border-primary bg-primary/5">
+                <p className="font-semibold">⚖️ ~{adjustedResult.estimated_weight_lb} lbs ({adjustedResult.billable_weight_lb} lbs facturables)</p>
 
                 {/* Manual weight override */}
                 <div className="flex items-center gap-1 bg-background/60 rounded p-1 border border-border/50">
@@ -424,6 +410,7 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
                 </div>
                 <p className="text-[10px] text-muted-foreground">Confianza: {aiResult.confidence}</p>
               </div>
+              </>
             )}
           </TabsContent>
 
