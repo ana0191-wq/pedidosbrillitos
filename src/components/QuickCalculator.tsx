@@ -154,20 +154,217 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
   const resultRef = useRef<HTMLDivElement>(null);
 
   const downloadImage = async () => {
-    if (!resultRef.current) return;
+    if (!adjustedResult) return;
     try {
-      const dataUrl = await toPng(resultRef.current, {
-        pixelRatio: 2,
-        backgroundColor: '#ffffff',
-        cacheBust: true,
+      const items = (adjustedResult.items || []) as any[];
+      const W = 900;
+      const padding = 40;
+      const lineH = 22;
+      const itemBlockH = 96; // each product card height
+      const headerH = 200;
+      const summaryH = 260;
+      const H = headerH + items.length * itemBlockH + summaryH;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d')!;
+
+      // Background gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, '#FFF0F5');
+      grad.addColorStop(1, '#FFFFFF');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Top pink bar
+      ctx.fillStyle = '#EC4899';
+      ctx.fillRect(0, 0, W, 8);
+
+      // Header
+      ctx.fillStyle = '#EC4899';
+      ctx.font = 'bold 30px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✨ Brillitos Store — Cotización', W / 2, 56);
+
+      ctx.fillStyle = '#6B7280';
+      ctx.font = '13px system-ui, -apple-system, sans-serif';
+      ctx.fillText(`Generada ${new Date().toLocaleDateString('es')}`, W / 2, 78);
+
+      // Weight banner
+      ctx.fillStyle = '#FCE7F3';
+      ctx.fillRect(padding, 100, W - padding * 2, 56);
+      ctx.fillStyle = '#831843';
+      ctx.font = 'bold 16px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`⚖️ Peso estimado: ${adjustedResult.estimated_weight_lb} lbs (${adjustedResult.billable_weight_lb} lbs facturables)`, padding + 16, 125);
+      ctx.font = '13px system-ui, -apple-system, sans-serif';
+      ctx.fillStyle = '#6B7280';
+      ctx.fillText(`Tarifa: $${clientRate.toFixed(2)}/lb · Confianza IA: ${adjustedResult.confidence || 'media'}`, padding + 16, 145);
+
+      // Section title: per-product
+      let y = 180;
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+      ctx.fillText('📦 Detalle por producto', padding, y);
+      ctx.fillStyle = '#6B7280';
+      ctx.font = 'italic 12px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('Compra individual vs en carrito', W - padding, y);
+      ctx.textAlign = 'left';
+      y += 16;
+
+      // Per-product cards — TWO scenarios per product
+      items.forEach((it: any, idx: number) => {
+        const cardY = y;
+        // card bg
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = '#F9A8D4';
+        ctx.lineWidth = 1;
+        ctx.fillRect(padding, cardY, W - padding * 2, itemBlockH - 8);
+        ctx.strokeRect(padding, cardY, W - padding * 2, itemBlockH - 8);
+
+        // Product name + qty
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+        const name = it.name.length > 70 ? it.name.slice(0, 70) + '...' : it.name;
+        ctx.fillText(`${idx + 1}. ${name}`, padding + 12, cardY + 22);
+
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '12px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`x${it.quantity} · ${it.weight_lb} lb/u`, W - padding - 12, cardY + 22);
+        ctx.textAlign = 'left';
+
+        // Scenario A: cart purchase (proportional shipping)
+        const productPrice = it.total_price_usd ?? 0;
+        const cartShipping = it.shipping_share_usd ?? 0;
+        const cartTotal = it.full_total_usd ?? (productPrice + cartShipping);
+
+        // Scenario B: individual purchase — pays FULL shipping for ONLY their item's weight
+        const itemWeight = (it.weight_lb || 0) * (it.quantity || 1);
+        const individualBillable = Math.max(1, Math.ceil(itemWeight));
+        const individualShipping = Math.round(individualBillable * clientRate * 100) / 100;
+        const individualTotal = Math.round((productPrice + individualShipping) * 100) / 100;
+        const individualPerUnit = it.quantity > 0 ? individualTotal / it.quantity : individualTotal;
+
+        // Two columns
+        const colY = cardY + 46;
+        const colW = (W - padding * 2 - 24) / 2;
+        const col1X = padding + 12;
+        const col2X = padding + 12 + colW + 12;
+
+        // Column 1: cart
+        ctx.fillStyle = '#831843';
+        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        ctx.fillText('🛒 EN CARRITO COMPLETO', col1X, colY);
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px system-ui, -apple-system, sans-serif';
+        ctx.fillText(`Producto ${fmtMoney(productPrice)} + envío ${fmtMoney(cartShipping)}`, col1X, colY + 18);
+        ctx.fillStyle = '#EC4899';
+        ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+        const cartLabel = it.quantity > 1
+          ? `= ${fmtMoney(cartTotal)} (${fmtMoney(cartTotal / it.quantity)}/u)`
+          : `= ${fmtMoney(cartTotal)}`;
+        ctx.fillText(cartLabel, col1X, colY + 38);
+
+        // Column 2: individual
+        ctx.fillStyle = '#831843';
+        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        ctx.fillText('📦 COMPRA INDIVIDUAL', col2X, colY);
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px system-ui, -apple-system, sans-serif';
+        ctx.fillText(`Producto ${fmtMoney(productPrice)} + envío ${fmtMoney(individualShipping)}`, col2X, colY + 18);
+        ctx.fillStyle = '#9333EA';
+        ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+        const indivLabel = it.quantity > 1
+          ? `= ${fmtMoney(individualTotal)} (${fmtMoney(individualPerUnit)}/u)`
+          : `= ${fmtMoney(individualTotal)}`;
+        ctx.fillText(indivLabel, col2X, colY + 38);
+
+        y += itemBlockH;
       });
+
+      // Summary section
+      y += 12;
+      ctx.strokeStyle = '#EC4899';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padding, y);
+      ctx.lineTo(W - padding, y);
+      ctx.stroke();
+      y += 28;
+
+      const subtotal = adjustedResult.products_subtotal_usd ?? items.reduce((s, it) => s + (it.total_price_usd || 0), 0);
+      const shipping = adjustedResult.client_charge ?? 0;
+      const grandTotal = adjustedResult.grand_total_usd ?? (subtotal + shipping);
+
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 16px system-ui, -apple-system, sans-serif';
+      ctx.fillText('💰 RESUMEN COMPRA EN CARRITO', padding, y);
+      y += 28;
+
+      const rows = [
+        { label: 'Subtotal productos (sin envío):', value: fmtMoney(subtotal), bold: false },
+        { label: 'Envío estimado:', value: fmtMoney(shipping), bold: false },
+      ];
+      rows.forEach(r => {
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '14px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(r.label, padding, y);
+        ctx.fillStyle = '#374151';
+        ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(r.value, W - padding, y);
+        ctx.textAlign = 'left';
+        y += lineH;
+      });
+
+      y += 6;
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+      ctx.fillText('TOTAL si compra TODO el carrito:', padding, y);
+      ctx.fillStyle = '#EC4899';
+      ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(fmtMoney(grandTotal), W - padding, y);
+      ctx.textAlign = 'left';
+
+      if (exchangeRate) {
+        y += 22;
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '13px system-ui, -apple-system, sans-serif';
+        ctx.fillText('En Bs aprox:', padding, y);
+        ctx.textAlign = 'right';
+        ctx.fillText(`≈ ${(grandTotal * exchangeRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs`, W - padding, y);
+        ctx.textAlign = 'left';
+      }
+
+      y += 32;
+      ctx.fillStyle = '#D97706';
+      ctx.font = '12px system-ui, -apple-system, sans-serif';
+      ctx.fillText('⚠️ Precios tentativos. El envío puede variar según peso y dimensiones reales.', padding, y);
+      y += 16;
+      ctx.fillText('💡 Comprar todo en carrito siempre sale más económico que pieza por pieza.', padding, y);
+
+      // Footer
+      ctx.fillStyle = '#F9A8D4';
+      ctx.fillRect(0, H - 40, W, 40);
+      ctx.fillStyle = '#831843';
+      ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Brillitos Store 📱 04249006350', W / 2, H - 16);
+
+      // Download
+      const dataUrl = canvas.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = `calculadora-envio-${new Date().toISOString().slice(0, 10)}.png`;
+      a.download = `cotizacion-brillitos-${new Date().toISOString().slice(0, 10)}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      toast({ title: '✅ Imagen descargada' });
+      toast({ title: '✅ Cotización descargada' });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message || 'No se pudo generar la imagen', variant: 'destructive' });
     }
