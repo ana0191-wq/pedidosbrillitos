@@ -151,6 +151,41 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
     }
   };
 
+  const downloadCSV = (result: any) => {
+    const items = result.items || [];
+    const esc = (v: any) => {
+      if (v == null) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const headers = ['Producto', 'Cantidad', 'Peso (lb)', 'Precio unitario USD', 'Precio total producto USD', 'Envío proporcional USD', 'Total con envío USD', 'Total por unidad USD'];
+    const rows = items.map((it: any) => [
+      esc(it.name), it.quantity, it.weight_lb,
+      it.unit_price_usd ?? '', it.total_price_usd ?? '',
+      it.shipping_share_usd ?? '', it.full_total_usd ?? '', it.full_per_unit_usd ?? '',
+    ].join(','));
+    const summary = [
+      '',
+      `Peso total estimado (lb),${result.estimated_weight_lb}`,
+      `Peso facturable (lb),${result.billable_weight_lb}`,
+      `Subtotal productos USD,${result.products_subtotal_usd ?? ''}`,
+      `Envío empresa USD,${result.my_cost}`,
+      `Envío al cliente USD,${result.client_charge}`,
+      `Ganancia envío USD,${result.profit}`,
+      `Gran total cliente USD,${result.grand_total_usd ?? ''}`,
+    ];
+    const csv = '\uFEFF' + [headers.join(','), ...rows, ...summary].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `calculadora-envio-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: '✅ CSV descargado', description: `${items.length} productos exportados` });
+
   // ====== TAB 2: Distribute invoice between clients ======
   const [invoiceTotal, setInvoiceTotal] = useState('');
   const eligibleOrders = useMemo(
