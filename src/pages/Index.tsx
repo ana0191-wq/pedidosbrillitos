@@ -18,6 +18,7 @@ import { AIPricingCalculator } from '@/components/AIPricingCalculator';
 import { CatalogSection } from '@/components/CatalogSection';
 import { TeamSection } from '@/components/TeamSection';
 import { ComprasPersonalesSection } from '@/components/ComprasPersonalesSection';
+import { MercanciaSection } from '@/components/MercanciaSection';
 import { InventorySection } from '@/components/InventorySection';
 import { PorCobrarSection } from '@/components/PorCobrarSection';
 import { QuickCalculator } from '@/components/QuickCalculator';
@@ -170,21 +171,32 @@ const Index = () => {
         return (
           <>
             <BackBar label="📦 Mercancía" />
-            <div className="space-y-6">
-              <OrderSection
-                title="Mercancía"
-                emoji="📦"
-                category="merchandise"
-                orders={getByCategory('merchandise')}
-                statusOptions={['Pendiente', 'En Tránsito', 'Llegó', 'No Llegó', 'En Venezuela', 'Entregado']}
-                onUpdate={updateOrder}
-                onDelete={deleteOrder}
-                onArchive={archiveOrder}
-                onAdd={() => openDialog('merchandise')}
-                getCollabInfo={getCollabInfo}
-              />
-              <AIPricingCalculator exchangeRate={exchangeRate} />
-            </div>
+            <MercanciaSection
+              orders={getByCategory('merchandise')}
+              onAdd={async (data) => {
+                const order: any = {
+                  id: Math.random().toString(36).substring(2),
+                  category: 'merchandise',
+                  productName: (data as any).productName,
+                  productPhoto: '',
+                  store: (data as any).store || 'Shein',
+                  pricePaid: (data as any).pricePaid || 0,
+                  orderDate: '',
+                  estimatedArrival: '',
+                  orderNumber: (data as any).orderNumber || '',
+                  notes: (data as any).notes || '',
+                  status: 'Pendiente',
+                  createdAt: new Date().toISOString(),
+                  unitsOrdered: (data as any).unitsOrdered || 1,
+                  unitsReceived: 0,
+                  pricePerUnit: (data as any).pricePerUnit || 0,
+                  suggestedPrice: (data as any).suggestedPrice || null,
+                };
+                await addOrder(order);
+              }}
+              onUpdate={updateOrder}
+              onDelete={deleteOrder}
+            />
           </>
         );
       case 'clients':
