@@ -504,11 +504,35 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                       <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
                         {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-5 w-5 m-2.5 text-muted-foreground" />}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{p.productName}</p>
-                        <p className="text-xs text-muted-foreground">{p.store}</p>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <input
+                          className="font-semibold text-sm w-full bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none truncate"
+                          defaultValue={p.productName}
+                          placeholder="Nombre del producto"
+                          onBlur={e => {
+                            const val = e.target.value.trim();
+                            if (val && val !== p.productName) {
+                              updateProduct(p.id, { productName: val } as any);
+                              setProducts(prev => prev.map(x => x.id === p.id ? { ...x, productName: val } : x));
+                            }
+                          }}
+                        />
+                        <input
+                          className="text-xs text-muted-foreground w-full bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none"
+                          defaultValue={p.store}
+                          placeholder="Tienda (Shein, Temu...)"
+                          onBlur={e => {
+                            const val = e.target.value.trim();
+                            if (val !== p.store) {
+                              updateProduct(p.id, { store: val } as any);
+                              setProducts(prev => prev.map(x => x.id === p.id ? { ...x, store: val } : x));
+                            }
+                          }}
+                        />
                       </div>
-                      <span className="text-lg font-bold">{fmt(p.pricePaid)}</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-lg font-bold">{fmt(p.pricePaid)}</span>
+                      </div>
                       <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(p.id)} className="h-7 w-7 p-0 text-destructive">
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

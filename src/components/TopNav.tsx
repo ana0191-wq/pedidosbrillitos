@@ -17,7 +17,6 @@ const NAV_ITEMS = [
   { id: 'por-cobrar', label: '💰 Por Cobrar' },
   { id: 'clients', label: 'Clientes' },
   { id: 'personal', label: 'Pedidos' },
-  { id: 'inventory', label: 'Género' },
   { id: 'team', label: 'Equipo' },
 ];
 
