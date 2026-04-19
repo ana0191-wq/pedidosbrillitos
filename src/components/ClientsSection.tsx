@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ChevronDown, ChevronUp, Trash2, Package, Phone, Pencil, Send, Calendar } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Trash2, Package, Phone, Pencil, Send, Calendar, Archive } from 'lucide-react';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
@@ -42,6 +42,7 @@ interface ClientsSectionProps {
   onAddProduct: (order: any, clientOrderId?: string) => Promise<void>;
   onUpdateOrder: (id: string, updates: Record<string, any>) => void;
   onDeleteOrder: (id: string) => void;
+  onArchiveOrder?: (id: string) => void;
   getOrdersByClient: (clientId: string) => ClientOrder[];
   exchangeRate: number | null;
   shippingSettings?: ShippingSettings;
@@ -92,7 +93,7 @@ function isToday(dateStr: string): boolean {
 
 export function ClientsSection({
   clients, clientOrders, onAddClient, onUpdateClient, onDeleteClient,
-  onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, getOrdersByClient, exchangeRate, shippingSettings
+  onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, onArchiveOrder, getOrdersByClient, exchangeRate, shippingSettings
 }: ClientsSectionProps) {
   const { toast } = useToast();
   const [expandedClients, setExpandedClients] = useState<Set<string>>(loadExpanded);
@@ -318,6 +319,18 @@ export function ClientsSection({
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
                               <Pencil className="h-3 w-3" />
                             </Button>
+                            {onArchiveOrder && (
+                              <ConfirmDeleteDialog
+                                onConfirm={() => onArchiveOrder(order.id)}
+                                title="¿Archivar este pedido?"
+                                description="Se archiva y desaparece de la lista activa."
+                                trigger={
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-500" title="Archivar">
+                                    <Archive className="h-3 w-3" />
+                                  </Button>
+                                }
+                              />
+                            )}
                             <ConfirmDeleteDialog
                               onConfirm={() => onDeleteOrder(order.id)}
                               title="¿Segura que quieres eliminar este pedido?"

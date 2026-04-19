@@ -14,6 +14,7 @@ export function useOrders() {
       .from('orders')
       .select('*')
       .is('deleted_at', null)
+      .is('archived_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -184,5 +185,14 @@ export function useOrders() {
     return { personal, merchandise, client, total: personal + merchandise + client };
   }, [orders]);
 
-  return { orders, loading, addOrder, updateOrder, deleteOrder, getByCategory, getCounts };
+  const archiveOrder = useCallback(async (id: string) => {
+    const { error } = await supabase.from('orders').update({ archived_at: new Date().toISOString() }).eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    await fetchOrders();
+  }, [fetchOrders, toast]);
+
+  return { orders, loading, addOrder, updateOrder, deleteOrder, archiveOrder, getByCategory, getCounts };
 }

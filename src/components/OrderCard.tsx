@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
 import { PaymentMethodSelector, CurrencySelector } from '@/components/PaymentMethodSelector';
 import { InvoiceSection } from '@/components/InvoiceSection';
-import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler, AlertTriangle, MapPin, FileText } from 'lucide-react';
+import { Package, Truck, Check, Bell, Trash2, Calendar, Hash, ChevronDown, ChevronUp, ArrowRightLeft, Pencil, Save, X, DollarSign, Ruler, AlertTriangle, MapPin, FileText, Archive } from 'lucide-react';
 
 function InvoiceInput({ defaultValue, onSave }: { defaultValue: number | null; onSave: (v: number | null) => void }) {
   const [saved, setSaved] = useState(false);
@@ -51,6 +51,7 @@ interface OrderCardProps {
   order: Order;
   onUpdate: (id: string, updates: Partial<Order>) => void;
   onDelete: (id: string) => void;
+  onArchive?: (id: string) => void;
   shippingSettings?: {
     airRatePerLb: number;
     airPricePerLb: number;
@@ -58,7 +59,7 @@ interface OrderCardProps {
   collabInfo?: CollabInfo | null;
 }
 
-export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabInfo }: OrderCardProps) {
+export function OrderCard({ order, onUpdate, onDelete, onArchive, shippingSettings, collabInfo }: OrderCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
@@ -608,13 +609,25 @@ export function OrderCard({ order, onUpdate, onDelete, shippingSettings, collabI
                     </div>
                   )}
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 ml-auto">
+                    {onArchive && (
+                      <ConfirmDeleteDialog
+                        onConfirm={() => onArchive(order.id)}
+                        title="¿Archivar este pedido?"
+                        description="El pedido se archiva y desaparece de la lista activa. Puedes recuperarlo desde los archivados."
+                        trigger={
+                          <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-amber-600" title="Archivar">
+                            <Archive className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
+                    )}
                     <ConfirmDeleteDialog
                       onConfirm={() => onDelete(order.id)}
                       title="¿Segura que quieres eliminar este pedido?"
                       description="Esta acción no se puede deshacer."
                       trigger={
-                        <Button size="sm" variant="ghost" className="text-destructive ml-auto">
+                        <Button size="sm" variant="ghost" className="text-destructive">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       }

@@ -15,6 +15,7 @@ interface QuickCalculatorProps {
   shippingSettings?: ShippingSettings;
   exchangeRate: number | null;
   clientOrders: ClientOrder[];
+  fullWidth?: boolean;
 }
 
 interface DistributionRow {
@@ -26,7 +27,7 @@ interface DistributionRow {
   charge: number;
 }
 
-export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }: QuickCalculatorProps) {
+export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders, fullWidth }: QuickCalculatorProps) {
   const { toast } = useToast();
   const freightRate = shippingSettings?.airRatePerLb ?? 6.50;
   const clientRate = shippingSettings?.airPricePerLb ?? 12.00;
@@ -454,10 +455,10 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
   const fmt = fmtMoney;
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-4 space-y-3">
-        <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-          <Calculator className="h-4 w-4" /> Calculadora Rápida
+    <Card className={`overflow-hidden ${fullWidth ? 'w-full shadow-md' : ''}`}>
+      <CardContent className={`${fullWidth ? 'p-6 space-y-4' : 'p-4 space-y-3'}`}>
+        <h3 className={`${fullWidth ? 'text-base' : 'text-sm'} font-bold text-foreground flex items-center gap-2`}>
+          <Calculator className={fullWidth ? 'h-5 w-5' : 'h-4 w-4'} /> Calculadora Rápida
         </h3>
 
         <Tabs defaultValue="ai-estimate">

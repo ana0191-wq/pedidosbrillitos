@@ -203,6 +203,12 @@ export function useClientOrders() {
     else await fetchClientOrders();
   }, [fetchClientOrders, toast]);
 
+  const archiveClientOrder = useCallback(async (id: string) => {
+    const { error } = await supabase.from('client_orders').update({ archived_at: new Date().toISOString() }).eq('id', id);
+    if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    else await fetchClientOrders();
+  }, [fetchClientOrders, toast]);
+
   const linkProductToOrder = useCallback(async (productId: string, clientOrderId: string) => {
     const { error } = await supabase.from('orders').update({ client_order_id: clientOrderId }).eq('id', productId);
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -213,5 +219,5 @@ export function useClientOrders() {
     return clientOrders.filter(co => co.clientId === clientId);
   }, [clientOrders]);
 
-  return { clientOrders, loading, addClientOrder, updateClientOrder, deleteClientOrder, linkProductToOrder, getByClient, refetch: fetchClientOrders };
+  return { clientOrders, loading, addClientOrder, updateClientOrder, deleteClientOrder, archiveClientOrder, linkProductToOrder, getByClient, refetch: fetchClientOrders };
 }

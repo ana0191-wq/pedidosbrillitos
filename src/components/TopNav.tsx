@@ -1,4 +1,4 @@
-import { Search, Plus, LogOut } from 'lucide-react';
+import { Search, Plus, LogOut, ShoppingBag } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
@@ -9,6 +9,7 @@ interface TopNavProps {
   onSignOut: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  onQuickAddClientOrder?: () => void;
 }
 
 const NAV_ITEMS = [
@@ -20,7 +21,7 @@ const NAV_ITEMS = [
   { id: 'team', label: 'Equipo' },
 ];
 
-export function TopNav({ activeTab, onNavigate, onAddOrder, onSignOut, searchQuery, onSearchChange }: TopNavProps) {
+export function TopNav({ activeTab, onNavigate, onAddOrder, onSignOut, searchQuery, onSearchChange, onQuickAddClientOrder }: TopNavProps) {
   return (
     <header className="sticky top-0 z-50 px-4 pt-3 pb-2">
       <div className="card-brillitos max-w-[1400px] mx-auto flex items-center justify-between gap-4 px-5 py-2.5">
@@ -64,6 +65,16 @@ export function TopNav({ activeTab, onNavigate, onAddOrder, onSignOut, searchQue
           >
             <Plus className="h-3.5 w-3.5" /> Nuevo pedido
           </Button>
+          {onQuickAddClientOrder && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full gap-1 text-xs h-8 px-3 border-primary text-primary hover:bg-primary/10"
+              onClick={onQuickAddClientOrder}
+            >
+              <ShoppingBag className="h-3.5 w-3.5" /> Pedido cliente
+            </Button>
+          )}
           <button
             onClick={onSignOut}
             className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"

@@ -21,13 +21,18 @@ import { InventorySection } from '@/components/InventorySection';
 import { PorCobrarSection } from '@/components/PorCobrarSection';
 import { QuickCalculator } from '@/components/QuickCalculator';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
+import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import type { ClientOrder as ClientOrderRow } from '@/hooks/useClientOrders';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, Plus } from 'lucide-react';
+
+const NON_DASHBOARD_TABS = ['por-cobrar', 'personal', 'merchandise', 'clients', 'client-orders', 'inventory', 'catalog', 'team', 'shipping'];
 
 const Index = () => {
-  const { orders, loading, addOrder, updateOrder, deleteOrder, getByCategory, getCounts } = useOrders();
+  const { orders, loading, addOrder, updateOrder, deleteOrder, archiveOrder, getByCategory, getCounts } = useOrders();
   const { clients, addClient, updateClient, deleteClient } = useClients();
-  const { clientOrders, addClientOrder, updateClientOrder, deleteClientOrder, getByClient } = useClientOrders();
+  const { clientOrders, addClientOrder, updateClientOrder, deleteClientOrder, archiveClientOrder, getByClient } = useClientOrders();
   const { settings: shippingSettings, saveSettings } = useShippingSettings();
   const { products, addProduct, updateProduct, deleteProduct } = useProducts();
   const { signOut } = useAuth();
@@ -41,6 +46,7 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [editingClientOrder, setEditingClientOrder] = useState<ClientOrderRow | null>(null);
+  const [quickAddClientOrderOpen, setQuickAddClientOrderOpen] = useState(false);
 
   const counts = getCounts();
 
@@ -78,6 +84,23 @@ const Index = () => {
     setDialogOpen(true);
   };
 
+  const isSubPage = NON_DASHBOARD_TABS.includes(activeTab);
+
+  // Back button bar shown on all sub-pages
+  const BackBar = ({ label }: { label: string }) => (
+    <div className="flex items-center gap-3 mb-4">
+      <Button
+        variant="outline"
+        size="sm"
+        className="rounded-full gap-1.5 text-xs h-8 px-3"
+        onClick={() => setActiveTab('dashboard')}
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Regresar
+      </Button>
+      <span className="text-sm font-semibold text-foreground">{label}</span>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -99,112 +122,148 @@ const Index = () => {
                 }
               }}
             />
-            <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} clientOrders={clientOrders} />
+            {/* Quick Calculator — full width, prominent */}
+            <div className="w-full">
+              <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} clientOrders={clientOrders} fullWidth />
+            </div>
           </div>
         );
       case 'por-cobrar':
         return (
-          <PorCobrarSection
-            clientOrders={clientOrders}
-            onUpdateOrder={updateClientOrder}
-          />
+          <>
+            <BackBar label="💰 Por Cobrar" />
+            <PorCobrarSection
+              clientOrders={clientOrders}
+              onUpdateOrder={updateClientOrder}
+            />
+          </>
         );
       case 'personal':
         return (
-          <OrderSection
-            title="Mis Pedidos"
-            emoji="🛍️"
-            category="personal"
-            orders={getByCategory('personal')}
-            statusOptions={['Pendiente', 'En Tránsito', 'Llegó', 'No Llegó', 'En Venezuela', 'Entregado']}
-            onUpdate={updateOrder}
-            onDelete={deleteOrder}
-            onAdd={() => openDialog('personal')}
-            getCollabInfo={getCollabInfo}
-          />
-        );
-      case 'merchandise':
-        return (
-          <div className="space-y-6">
+          <>
+            <BackBar label="🛍️ Mis Pedidos" />
             <OrderSection
-              title="Mercancía"
-              emoji="📦"
-              category="merchandise"
-              orders={getByCategory('merchandise')}
+              title="Mis Pedidos"
+              emoji="🛍️"
+              category="personal"
+              orders={getByCategory('personal')}
               statusOptions={['Pendiente', 'En Tránsito', 'Llegó', 'No Llegó', 'En Venezuela', 'Entregado']}
               onUpdate={updateOrder}
               onDelete={deleteOrder}
-              onAdd={() => openDialog('merchandise')}
+              onArchive={archiveOrder}
+              onAdd={() => openDialog('personal')}
               getCollabInfo={getCollabInfo}
             />
-            <AIPricingCalculator exchangeRate={exchangeRate} />
-          </div>
+          </>
+        );
+      case 'merchandise':
+        return (
+          <>
+            <BackBar label="📦 Mercancía" />
+            <div className="space-y-6">
+              <OrderSection
+                title="Mercancía"
+                emoji="📦"
+                category="merchandise"
+                orders={getByCategory('merchandise')}
+                statusOptions={['Pendiente', 'En Tránsito', 'Llegó', 'No Llegó', 'En Venezuela', 'Entregado']}
+                onUpdate={updateOrder}
+                onDelete={deleteOrder}
+                onArchive={archiveOrder}
+                onAdd={() => openDialog('merchandise')}
+                getCollabInfo={getCollabInfo}
+              />
+              <AIPricingCalculator exchangeRate={exchangeRate} />
+            </div>
+          </>
         );
       case 'clients':
         return (
-          <ClientsSection
-            clients={clients}
-            clientOrders={clientOrders}
-            onAddClient={addClient}
-            onUpdateClient={updateClient}
-            onDeleteClient={deleteClient}
-            onAddOrder={addClientOrder}
-            onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
-            onUpdateOrder={updateClientOrder}
-            onDeleteOrder={deleteClientOrder}
-            getOrdersByClient={getByClient}
-            exchangeRate={exchangeRate}
-            shippingSettings={shippingSettings}
-          />
+          <>
+            <BackBar label="👥 Clientes" />
+            <ClientsSection
+              clients={clients}
+              clientOrders={clientOrders}
+              onAddClient={addClient}
+              onUpdateClient={updateClient}
+              onDeleteClient={deleteClient}
+              onAddOrder={addClientOrder}
+              onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
+              onUpdateOrder={updateClientOrder}
+              onDeleteOrder={deleteClientOrder}
+              onArchiveOrder={archiveClientOrder}
+              getOrdersByClient={getByClient}
+              exchangeRate={exchangeRate}
+              shippingSettings={shippingSettings}
+            />
+          </>
         );
       case 'client-orders':
         return (
-          <ClientOrdersList
-            clientOrders={clientOrders}
-            clients={clients}
-            onAddOrder={addClientOrder}
-            onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
-            onUpdateOrder={updateClientOrder}
-            onDeleteOrder={deleteClientOrder}
-            exchangeRate={exchangeRate}
-            shippingSettings={shippingSettings}
-          />
+          <>
+            <BackBar label="📋 Pedidos de Clientes" />
+            <ClientOrdersList
+              clientOrders={clientOrders}
+              clients={clients}
+              onAddOrder={addClientOrder}
+              onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
+              onUpdateOrder={updateClientOrder}
+              onDeleteOrder={deleteClientOrder}
+              onArchiveOrder={archiveClientOrder}
+              exchangeRate={exchangeRate}
+              shippingSettings={shippingSettings}
+            />
+          </>
         );
       case 'inventory':
         return (
-          <InventorySection
-            products={products}
-            onAdd={addProduct}
-            onUpdate={updateProduct}
-            onDelete={deleteProduct}
-            exchangeRate={exchangeRate}
-          />
+          <>
+            <BackBar label="🗂️ Género / Inventario" />
+            <InventorySection
+              products={products}
+              onAdd={addProduct}
+              onUpdate={updateProduct}
+              onDelete={deleteProduct}
+              exchangeRate={exchangeRate}
+            />
+          </>
         );
       case 'catalog':
         return (
-          <CatalogSection
-            products={products}
-            onAdd={addProduct}
-            onUpdate={updateProduct}
-            onDelete={deleteProduct}
-            exchangeRate={exchangeRate}
-          />
+          <>
+            <BackBar label="📖 Catálogo" />
+            <CatalogSection
+              products={products}
+              onAdd={addProduct}
+              onUpdate={updateProduct}
+              onDelete={deleteProduct}
+              exchangeRate={exchangeRate}
+            />
+          </>
         );
       case 'team':
         return (
-          <TeamSection
-            collaborators={collaborators}
-            earnings={earnings}
-            orders={orders}
-            onAdd={addCollaborator}
-            onUpdate={updateCollaborator}
-            onDelete={deleteCollaborator}
-            onMarkPaid={markPaid}
-            getEarningsByCollaborator={getEarningsByCollaborator}
-          />
+          <>
+            <BackBar label="👫 Equipo" />
+            <TeamSection
+              collaborators={collaborators}
+              earnings={earnings}
+              orders={orders}
+              onAdd={addCollaborator}
+              onUpdate={updateCollaborator}
+              onDelete={deleteCollaborator}
+              onMarkPaid={markPaid}
+              getEarningsByCollaborator={getEarningsByCollaborator}
+            />
+          </>
         );
       case 'shipping':
-        return <ShippingCalculator settings={shippingSettings} onSaveSettings={saveSettings} />;
+        return (
+          <>
+            <BackBar label="✈️ Calculadora de Envío" />
+            <ShippingCalculator settings={shippingSettings} onSaveSettings={saveSettings} />
+          </>
+        );
       default:
         return null;
     }
@@ -219,6 +278,7 @@ const Index = () => {
         onSignOut={signOut}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        onQuickAddClientOrder={() => setQuickAddClientOrderOpen(true)}
       />
 
       <main className="max-w-[1400px] mx-auto px-4 py-4 pb-24">
@@ -231,6 +291,19 @@ const Index = () => {
         onAdd={addOrder}
         defaultCategory={dialogCategory}
       />
+
+      {/* Quick add client order from any page */}
+      {clients.length > 0 && (
+        <AddClientOrderDialog
+          open={quickAddClientOrderOpen}
+          onOpenChange={setQuickAddClientOrderOpen}
+          clients={clients}
+          onAdd={addClientOrder}
+          onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
+          exchangeRate={exchangeRate}
+          shippingSettings={shippingSettings}
+        />
+      )}
 
       <EditClientOrderDialog
         open={!!editingClientOrder}

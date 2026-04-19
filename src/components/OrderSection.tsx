@@ -19,11 +19,12 @@ interface OrderSectionProps {
   statusOptions: string[];
   onUpdate: (id: string, updates: Partial<Order>) => void;
   onDelete: (id: string) => void;
+  onArchive?: (id: string) => void;
   onAdd: () => void;
   getCollabInfo?: (order: Order) => CollabInfo | null;
 }
 
-export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, onDelete, onAdd, getCollabInfo }: OrderSectionProps) {
+export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, onDelete, onArchive, onAdd, getCollabInfo }: OrderSectionProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const filtered = useMemo(() => {
@@ -60,7 +61,7 @@ export function OrderSection({ title, emoji, orders, statusOptions, onUpdate, on
       ) : (
         <div className="space-y-3">
           {filtered.map(order => (
-            <OrderCard key={order.id} order={order} onUpdate={onUpdate} onDelete={onDelete} collabInfo={getCollabInfo?.(order) || null} />
+            <OrderCard key={order.id} order={order} onUpdate={onUpdate} onDelete={onDelete} onArchive={onArchive} collabInfo={getCollabInfo?.(order) || null} />
           ))}
         </div>
       )}
