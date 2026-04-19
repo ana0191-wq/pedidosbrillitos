@@ -36,6 +36,8 @@ interface EditClientOrderDialogProps {
   onDeleteOrder: (id: string) => void;
   exchangeRate: number | null;
   shippingSettings?: ShippingSettings;
+  collaborators?: { id: string; name: string; percentage: number }[];
+  onUpsertEarning?: (collaboratorId: string, orderId: string, anaProfit: number, percentage: number) => void;
 }
 
 function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -54,7 +56,7 @@ function Pill({ label, active, onClick }: { label: string; active: boolean; onCl
   );
 }
 
-export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings }: EditClientOrderDialogProps) {
+export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder, onDeleteOrder, exchangeRate, shippingSettings, collaborators, onUpsertEarning }: EditClientOrderDialogProps) {
   const { updateOrder: updateProduct, deleteOrder: deleteProduct } = useOrders();
   const [status, setStatus] = useState('');
   const [quotationData, setQuotationData] = useState<any>(null);
@@ -291,6 +293,14 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     console.log('💾 Guardando pedido:', updates);
 
     onUpdateOrder(order.id, updates);
+
+    // Auto-upsert collaborator earning if profit is known and brother is involved
+    if (anaProfit != null && anaProfit > 0 && brotherInvolved && collaborators && collaborators.length > 0 && onUpsertEarning) {
+      const collab = collaborators[0];
+      // Use first product id as a proxy order_id linkage, or order.id if no products
+      const linkId = products[0]?.id || order.id;
+      onUpsertEarning(collab.id, linkId, anaProfit, collab.percentage);
+    }
 
     // Save per-product dims
     for (const p of products) {

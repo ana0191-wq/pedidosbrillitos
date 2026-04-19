@@ -16,7 +16,9 @@ const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'por-cobrar', label: '💰 Por Cobrar' },
   { id: 'clients', label: 'Clientes' },
-  { id: 'personal', label: 'Pedidos' },
+  { id: 'personal', label: 'Compras' },
+  { id: 'merchandise', label: 'Mercancía' },
+  { id: 'calculator', label: '🧮 Calculadora' },
   { id: 'team', label: 'Equipo' },
 ];
 

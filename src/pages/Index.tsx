@@ -27,7 +27,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Plus } from 'lucide-react';
 
-const NON_DASHBOARD_TABS = ['por-cobrar', 'personal', 'merchandise', 'clients', 'client-orders', 'inventory', 'catalog', 'team', 'shipping'];
+const NON_DASHBOARD_TABS = ['por-cobrar', 'personal', 'merchandise', 'clients', 'client-orders', 'inventory', 'catalog', 'team', 'shipping', 'calculator'];
 
 const Index = () => {
   const { orders, loading, addOrder, updateOrder, deleteOrder, archiveOrder, getByCategory, getCounts } = useOrders();
@@ -122,10 +122,7 @@ const Index = () => {
                 }
               }}
             />
-            {/* Quick Calculator — full width, prominent */}
-            <div className="w-full">
-              <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} clientOrders={clientOrders} fullWidth />
-            </div>
+
           </div>
         );
       case 'por-cobrar':
@@ -257,6 +254,15 @@ const Index = () => {
             />
           </>
         );
+      case 'calculator':
+        return (
+          <>
+            <BackBar label="🧮 Calculadora Rápida" />
+            <div className="max-w-md">
+              <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} clientOrders={clientOrders} />
+            </div>
+          </>
+        );
       case 'shipping':
         return (
           <>
@@ -313,6 +319,8 @@ const Index = () => {
         onDeleteOrder={deleteClientOrder}
         exchangeRate={exchangeRate}
         shippingSettings={shippingSettings}
+        collaborators={collaborators}
+        onUpsertEarning={upsertEarning}
       />
     </div>
   );
