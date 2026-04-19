@@ -130,6 +130,7 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
     if (!aiDescription.trim() && !aiImage) return;
     setAiLoading(true);
     setAiResult(null);
+    setWeightOverride(null);
     try {
       const { data, error } = await supabase.functions.invoke('ai-shipping-estimate', {
         body: {
