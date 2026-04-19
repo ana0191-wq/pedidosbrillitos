@@ -298,7 +298,7 @@ const Index = () => {
           open={quickAddClientOrderOpen}
           onOpenChange={setQuickAddClientOrderOpen}
           clients={clients}
-          onAdd={addClientOrder}
+          onAddOrder={addClientOrder}
           onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
           exchangeRate={exchangeRate}
           shippingSettings={shippingSettings}
