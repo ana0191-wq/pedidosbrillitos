@@ -89,7 +89,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [clientShippingCharge, setClientShippingCharge] = useState('');
   const [notes, setNotes] = useState('');
   const [orderStatus, setOrderStatus] = useState('Pendiente');
-  const [brotherInvolved, setBrotherInvolved] = useState(true);
+  const [brotherInvolved, setBrotherInvolved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Screenshot import state

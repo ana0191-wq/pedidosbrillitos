@@ -63,7 +63,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const [notes, setNotes] = useState('');
   const [products, setProducts] = useState<ClientOrderProduct[]>([]);
   const [productDims, setProductDims] = useState<Record<string, ProductDims>>({});
-  const [brotherInvolved, setBrotherInvolved] = useState(true);
+  const [brotherInvolved, setBrotherInvolved] = useState(false);
 
   // Stage 1 payment — initialized from DB
   const [prodPayStatus, setProdPayStatus] = useState('Pendiente');

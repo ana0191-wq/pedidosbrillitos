@@ -171,6 +171,8 @@ export function ClientsSection({
           let totalProdAmount = 0;
           let totalShipCharge = 0;
           let totalProfit = 0;
+          let brotherProfit = 0;  // profit only from orders where brotherInvolved=true
+          let anyBrotherInvolved = false;
           let allProdPaid = orders.length > 0;
           let allShipPaid = orders.length > 0;
           let anyShipMissing = false;
@@ -193,10 +195,12 @@ export function ClientsSection({
             if (o.shippingPaymentStatus === 'Pagado') {
               totalShipCharge += o.shippingPaymentAmount || ship.totalClientPays;
               totalProfit += ship.profit;
+              if (o.brotherInvolved !== false) { brotherProfit += ship.profit; anyBrotherInvolved = true; }
             } else if (ship.totalClientPays > 0) {
               allShipPaid = false;
               totalShipCharge += ship.totalClientPays;
               totalProfit += ship.profit;
+              if (o.brotherInvolved !== false) { brotherProfit += ship.profit; anyBrotherInvolved = true; }
             } else {
               allShipPaid = false;
               anyShipMissing = true;
@@ -240,8 +244,8 @@ export function ClientsSection({
                         {bothFullyPaid ? (
                           <>
                             <p className="text-green-600 font-medium">✅ Todo cobrado · Ganancia: {fmt(totalProfit)}</p>
-                            {totalProfit > 0 && (
-                              <p className="text-[11px] text-muted-foreground">🌸 Tú: {fmt(totalProfit * 0.7)} · 🐒 Hermano: {fmt(totalProfit * 0.3)}</p>
+                            {anyBrotherInvolved && brotherProfit > 0 && (
+                              <p className="text-[11px] text-muted-foreground">🌸 Tú: {fmt(totalProfit - brotherProfit * 0.3)} · 🐒 Hermano: {fmt(brotherProfit * 0.3)}</p>
                             )}
                           </>
                         ) : anyShipMissing && totalShipCharge === 0 ? (
@@ -249,8 +253,8 @@ export function ClientsSection({
                         ) : (
                           <>
                             <p className="text-blue-600 font-medium">⏳ Cobrar: {fmt(totalShipCharge)} · Ganancia: {fmt(totalProfit)}</p>
-                            {totalProfit > 0 && (
-                              <p className="text-[11px] text-muted-foreground">🌸 Tú: {fmt(totalProfit * 0.7)} · 🐒 Hermano: {fmt(totalProfit * 0.3)}</p>
+                            {anyBrotherInvolved && brotherProfit > 0 && (
+                              <p className="text-[11px] text-muted-foreground">🌸 Tú: {fmt(totalProfit - brotherProfit * 0.3)} · 🐒 Hermano: {fmt(brotherProfit * 0.3)}</p>
                             )}
                             {exchangeRate && totalShipCharge > 0 && (
                               <p className="text-muted-foreground">≈ {(totalShipCharge * exchangeRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs</p>

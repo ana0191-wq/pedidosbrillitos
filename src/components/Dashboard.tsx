@@ -26,6 +26,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
     let totalShippingRevenue = 0; // SUM of shipping_charge_client (NOT product price)
     let totalAnaProfit = 0;
     let netProfitAccum = 0; // Net profit honoring brother_involved per-order
+    let brotherCutTotal = 0;  // 30% only from orders where brotherInvolved=true
     let pendingCollection = 0;
     let ordersWithInvoice = 0;
     let totalClientOrders = 0;
@@ -51,6 +52,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
           netProfitAccum += anaProfit;
         } else {
           netProfitAccum += anaProfit * 0.70;
+          brotherCutTotal += anaProfit * 0.30;
         }
       }
 
@@ -65,7 +67,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
     // Net profit respects per-order brother_involved flag
     const netProfit = netProfitAccum;
 
-    return { totalOrders, inTransit, pendingCollection, netProfit, totalAnaProfit, collabTotal, totalShippingRevenue, ordersWithInvoice, totalClientOrders };
+    return { totalOrders, inTransit, pendingCollection, netProfit, totalAnaProfit, collabTotal, brotherCutTotal, totalShippingRevenue, ordersWithInvoice, totalClientOrders };
   }, [orders, clientOrders, earnings]);
 
   // Monthly shipping revenue data for chart (last 6 months)
@@ -200,7 +202,7 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="text-muted-foreground">Le toca al equipo (30%)</span>
-              <span className="font-semibold text-primary">-{stats.ordersWithInvoice > 0 ? fmt(stats.totalAnaProfit * 0.30) : '—'}</span>
+              <span className="font-semibold text-primary">-{stats.ordersWithInvoice > 0 ? fmt(stats.brotherCutTotal) : '—'}</span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
               <div className="h-full bg-pink-soft rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? 30 : 0}%` }} />
