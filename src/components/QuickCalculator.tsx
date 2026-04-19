@@ -16,6 +16,7 @@ interface QuickCalculatorProps {
   exchangeRate: number | null;
   clientOrders: ClientOrder[];
   fullWidth?: boolean;
+  distributeOnly?: boolean;
 }
 
 interface DistributionRow {
@@ -27,7 +28,7 @@ interface DistributionRow {
   charge: number;
 }
 
-export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders, fullWidth }: QuickCalculatorProps) {
+export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders, fullWidth, distributeOnly }: QuickCalculatorProps) {
   const { toast } = useToast();
   const freightRate = shippingSettings?.airRatePerLb ?? 6.50;
   const clientRate = shippingSettings?.airPricePerLb ?? 12.00;
@@ -461,7 +462,7 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders, 
           <Calculator className={fullWidth ? 'h-5 w-5' : 'h-4 w-4'} /> Calculadora Rápida
         </h3>
 
-        <Tabs defaultValue="ai-estimate">
+        <Tabs defaultValue={distributeOnly ? 'distribute' : 'ai-estimate'}>
           <TabsList className="grid grid-cols-3 w-full h-8">
             <TabsTrigger value="ai-estimate" className="text-xs gap-1">
               <Sparkles className="h-3 w-3" /> Estimar IA

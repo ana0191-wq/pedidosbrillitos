@@ -20,6 +20,7 @@ import { TeamSection } from '@/components/TeamSection';
 import { InventorySection } from '@/components/InventorySection';
 import { PorCobrarSection } from '@/components/PorCobrarSection';
 import { QuickCalculator } from '@/components/QuickCalculator';
+import { BrillitosCotizador } from '@/components/BrillitosCotizador';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import type { ClientOrder as ClientOrderRow } from '@/hooks/useClientOrders';
@@ -47,6 +48,7 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingClientOrder, setEditingClientOrder] = useState<ClientOrderRow | null>(null);
   const [quickAddClientOrderOpen, setQuickAddClientOrderOpen] = useState(false);
+  const [calcTab, setCalcTab] = useState<'cotizar' | 'distribuir'>('cotizar');
 
   const counts = getCounts();
 
@@ -257,9 +259,28 @@ const Index = () => {
       case 'calculator':
         return (
           <>
-            <BackBar label="🧮 Calculadora Rápida" />
-            <div className="max-w-md">
-              <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} clientOrders={clientOrders} />
+            <BackBar label="🧮 Calculadora" />
+            <div className="max-w-md space-y-4">
+              <div className="flex gap-2 border-b border-border pb-3">
+                <button
+                  onClick={() => setCalcTab('cotizar')}
+                  className={`text-sm font-semibold pb-1 border-b-2 transition-colors ${
+                    calcTab === 'cotizar' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  💰 Cotizar producto
+                </button>
+                <button
+                  onClick={() => setCalcTab('distribuir')}
+                  className={`text-sm font-semibold pb-1 border-b-2 transition-colors ${
+                    calcTab === 'distribuir' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  🧳 Distribuir factura
+                </button>
+              </div>
+              {calcTab === 'cotizar' && <BrillitosCotizador exchangeRate={exchangeRate} />}
+              {calcTab === 'distribuir' && <QuickCalculator shippingSettings={shippingSettings} exchangeRate={exchangeRate} clientOrders={clientOrders} distributeOnly />}
             </div>
           </>
         );
