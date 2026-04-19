@@ -410,6 +410,7 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
                 </div>
                 <p className="text-[10px] text-muted-foreground">Confianza: {aiResult.confidence}</p>
               </div>
+              </>
             )}
           </TabsContent>
 
