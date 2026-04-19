@@ -140,18 +140,31 @@ Sé conservador. Mejor subestimar peso que sobreestimarlo.`;
     const args = JSON.parse(toolCall.function.arguments);
     const items = Array.isArray(args.items) ? args.items : [];
 
-    const weightLb = Math.max(0.1, Number(args.estimated_weight_lb) || 0.5);
+    // Recalculate total weight from items (weight per unit × quantity) — more reliable than IA's total
+    const itemsTotalWeight = items.reduce((s: number, it: any) => {
+      const w = Number(it.weight_lb) || 0;
+      const q = Math.max(1, Number(it.quantity) || 1);
+      return s + w * q;
+    }, 0);
+    const aiTotalWeight = Math.max(0.1, Number(args.estimated_weight_lb) || 0.5);
+    // Use the smaller of the two — prevents AI from inflating
+    const weightLb = itemsTotalWeight > 0 ? Math.min(itemsTotalWeight, aiTotalWeight) : aiTotalWeight;
     const billableLb = Math.ceil(weightLb);
     const myCost = billableLb * Number(ratePerLb);
     const charge = billableLb * Number(pricePerLb);
 
-    // Per-item shipping allocation (proportional to weight)
-    const totalItemWeight = items.reduce((s: number, it: any) => s + (Number(it.weight_lb) || 0), 0) || weightLb;
+    // Per-item shipping allocation (proportional to weight × qty)
+    const totalItemWeightForShare = items.reduce((s: number, it: any) => {
+      const w = Number(it.weight_lb) || 0;
+      const q = Math.max(1, Number(it.quantity) || 1);
+      return s + w * q;
+    }, 0) || weightLb;
     const enrichedItems = items.map((it: any) => {
       const w = Number(it.weight_lb) || 0;
-      const share = totalItemWeight > 0 ? w / totalItemWeight : 0;
-      const itemShipping = Math.round(charge * share * 100) / 100;
       const qty = Math.max(1, Number(it.quantity) || 1);
+      const itemTotalWeight = w * qty;
+      const share = totalItemWeightForShare > 0 ? itemTotalWeight / totalItemWeightForShare : 0;
+      const itemShipping = Math.round(charge * share * 100) / 100;
       const totalPrice = it.total_price_usd != null ? Number(it.total_price_usd) : (it.unit_price_usd != null ? Number(it.unit_price_usd) * qty : null);
       const unitPrice = it.unit_price_usd != null ? Number(it.unit_price_usd) : (totalPrice != null ? totalPrice / qty : null);
       const fullTotal = totalPrice != null ? totalPrice + itemShipping : null;
