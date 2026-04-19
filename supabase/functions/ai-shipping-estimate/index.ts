@@ -18,17 +18,36 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY no configurada');
 
-    const systemPrompt = `Eres un experto en logística de courier desde USA hacia Venezuela para Brillitos Store. Ana importa productos de AliExpress, Shein, Temu y Amazon.
+    const systemPrompt = `Eres un experto en logística de courier USA→Venezuela para Brillitos Store. Ana importa de AliExpress, Shein, Temu y Amazon.
 
-Tu trabajo: dada una descripción de productos Y/O una captura de carrito/factura, identifica CADA producto individual con:
+REGLA CRÍTICA DE PESO: SIEMPRE usa el peso REAL del producto en sí (sin empaque pesado). NO infles. Si dudas, escoge el rango BAJO. Una libra de más son varios dólares de envío de más.
+
+Pesos típicos REALISTAS por unidad (úsalos como referencia base):
+- Ropa interior, medias, accesorios pequeños (aretes, anillos): 0.05-0.1 lb
+- Camisetas, tops, blusas livianas: 0.2-0.3 lb
+- Vestidos, jeans, suéteres: 0.4-0.6 lb
+- Chaquetas, abrigos: 0.8-1.2 lb
+- Zapatos planos/sandalias: 0.8-1.2 lb (par)
+- Tenis/botas: 1.5-2 lb (par)
+- Bolsos pequeños/clutch: 0.3-0.5 lb
+- Bolsos medianos/carteras: 0.6-1 lb
+- Electrónicos pequeños (cables, cargadores): 0.2-0.4 lb
+- Maquillaje individual: 0.05-0.15 lb
+- Sets de maquillaje: 0.3-0.6 lb
+- Juguetes pequeños: 0.2-0.5 lb
+- Libros: 0.5-1 lb
+
+Si ves el peso explícito en la imagen, ÚSALO sin modificar.
+
+Para CADA producto devuelve:
 - nombre breve
 - cantidad de unidades (si es set/pack)
-- precio unitario en USD si se ve en la imagen (sino null)
-- precio total del item (precio_unitario × cantidad) si se puede inferir
-- peso estimado en libras por item (considera empaque): ropa liviana 0.3-0.5, zapatos 1.5-2, electrónicos pequeños 0.5, accesorios pequeños 0.1-0.2, bolsos 0.8-1.5
+- precio unitario en USD si se ve (sino null) — NUNCA inventes precios
+- precio total del item (unitario × cantidad) si se puede inferir
+- peso estimado en libras por unidad de ese item (no del set completo si son varios)
 
-Luego calcula el peso TOTAL sumando todos los items y devuelve también el subtotal de productos si se ve.
-Sé realista y conservador.`;
+Luego suma el peso total = Σ(weight_lb × quantity) y devuelve también el subtotal de productos si se ve.
+Sé conservador. Mejor subestimar peso que sobreestimarlo.`;
 
     const userParts: any[] = [];
     if (imageBase64) {
@@ -121,18 +140,31 @@ Sé realista y conservador.`;
     const args = JSON.parse(toolCall.function.arguments);
     const items = Array.isArray(args.items) ? args.items : [];
 
-    const weightLb = Math.max(0.1, Number(args.estimated_weight_lb) || 0.5);
+    // Recalculate total weight from items (weight per unit × quantity) — more reliable than IA's total
+    const itemsTotalWeight = items.reduce((s: number, it: any) => {
+      const w = Number(it.weight_lb) || 0;
+      const q = Math.max(1, Number(it.quantity) || 1);
+      return s + w * q;
+    }, 0);
+    const aiTotalWeight = Math.max(0.1, Number(args.estimated_weight_lb) || 0.5);
+    // Use the smaller of the two — prevents AI from inflating
+    const weightLb = itemsTotalWeight > 0 ? Math.min(itemsTotalWeight, aiTotalWeight) : aiTotalWeight;
     const billableLb = Math.ceil(weightLb);
     const myCost = billableLb * Number(ratePerLb);
     const charge = billableLb * Number(pricePerLb);
 
-    // Per-item shipping allocation (proportional to weight)
-    const totalItemWeight = items.reduce((s: number, it: any) => s + (Number(it.weight_lb) || 0), 0) || weightLb;
+    // Per-item shipping allocation (proportional to weight × qty)
+    const totalItemWeightForShare = items.reduce((s: number, it: any) => {
+      const w = Number(it.weight_lb) || 0;
+      const q = Math.max(1, Number(it.quantity) || 1);
+      return s + w * q;
+    }, 0) || weightLb;
     const enrichedItems = items.map((it: any) => {
       const w = Number(it.weight_lb) || 0;
-      const share = totalItemWeight > 0 ? w / totalItemWeight : 0;
-      const itemShipping = Math.round(charge * share * 100) / 100;
       const qty = Math.max(1, Number(it.quantity) || 1);
+      const itemTotalWeight = w * qty;
+      const share = totalItemWeightForShare > 0 ? itemTotalWeight / totalItemWeightForShare : 0;
+      const itemShipping = Math.round(charge * share * 100) / 100;
       const totalPrice = it.total_price_usd != null ? Number(it.total_price_usd) : (it.unit_price_usd != null ? Number(it.unit_price_usd) * qty : null);
       const unitPrice = it.unit_price_usd != null ? Number(it.unit_price_usd) : (totalPrice != null ? totalPrice / qty : null);
       const fullTotal = totalPrice != null ? totalPrice + itemShipping : null;

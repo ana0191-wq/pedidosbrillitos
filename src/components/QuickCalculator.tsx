@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Sparkles, Loader2, Calculator, Receipt, Tag, Upload, X, ImageIcon } from 'lucide-react';
+import { Sparkles, Loader2, Calculator, Receipt, Tag, Upload, X, ImageIcon, Download, Minus, Plus } from 'lucide-react';
 import { fmtMoney } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -36,8 +36,41 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
   const [aiImage, setAiImage] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
+  const [weightOverride, setWeightOverride] = useState<number | null>(null);
   const aiTabRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Recalculate everything when user overrides the weight
+  const adjustedResult = useMemo(() => {
+    if (!aiResult) return null;
+    if (weightOverride == null) return aiResult;
+    const newWeight = Math.max(0.1, weightOverride);
+    const billable = Math.ceil(newWeight);
+    const myCost = Math.round(billable * freightRate * 100) / 100;
+    const charge = Math.round(billable * clientRate * 100) / 100;
+    const items = (aiResult.items || []) as any[];
+    const totalItemW = items.reduce((s, it) => s + (it.weight_lb || 0) * (it.quantity || 1), 0) || newWeight;
+    const enriched = items.map((it: any) => {
+      const itemW = (it.weight_lb || 0) * (it.quantity || 1);
+      const share = totalItemW > 0 ? itemW / totalItemW : 0;
+      const itemShipping = Math.round(charge * share * 100) / 100;
+      const totalPrice = it.total_price_usd;
+      const fullTotal = totalPrice != null ? Math.round((totalPrice + itemShipping) * 100) / 100 : null;
+      const fullPerUnit = fullTotal != null ? Math.round((fullTotal / it.quantity) * 100) / 100 : null;
+      return { ...it, shipping_share_usd: itemShipping, full_total_usd: fullTotal, full_per_unit_usd: fullPerUnit };
+    });
+    const subtotal = aiResult.products_subtotal_usd;
+    return {
+      ...aiResult,
+      items: enriched,
+      estimated_weight_lb: Math.round(newWeight * 100) / 100,
+      billable_weight_lb: billable,
+      my_cost: myCost,
+      client_charge: charge,
+      profit: Math.round((charge - myCost) * 100) / 100,
+      grand_total_usd: subtotal != null ? Math.round((subtotal + charge) * 100) / 100 : null,
+    };
+  }, [aiResult, weightOverride, freightRate, clientRate]);
 
   const compressImage = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -97,6 +130,7 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
     if (!aiDescription.trim() && !aiImage) return;
     setAiLoading(true);
     setAiResult(null);
+    setWeightOverride(null);
     try {
       const { data, error } = await supabase.functions.invoke('ai-shipping-estimate', {
         body: {
@@ -115,6 +149,42 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const downloadCSV = (result: any) => {
+    const items = result.items || [];
+    const esc = (v: any) => {
+      if (v == null) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const headers = ['Producto', 'Cantidad', 'Peso (lb)', 'Precio unitario USD', 'Precio total producto USD', 'Envío proporcional USD', 'Total con envío USD', 'Total por unidad USD'];
+    const rows = items.map((it: any) => [
+      esc(it.name), it.quantity, it.weight_lb,
+      it.unit_price_usd ?? '', it.total_price_usd ?? '',
+      it.shipping_share_usd ?? '', it.full_total_usd ?? '', it.full_per_unit_usd ?? '',
+    ].join(','));
+    const summary = [
+      '',
+      `Peso total estimado (lb),${result.estimated_weight_lb}`,
+      `Peso facturable (lb),${result.billable_weight_lb}`,
+      `Subtotal productos USD,${result.products_subtotal_usd ?? ''}`,
+      `Envío empresa USD,${result.my_cost}`,
+      `Envío al cliente USD,${result.client_charge}`,
+      `Ganancia envío USD,${result.profit}`,
+      `Gran total cliente USD,${result.grand_total_usd ?? ''}`,
+    ];
+    const csv = '\uFEFF' + [headers.join(','), ...rows, ...summary].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `calculadora-envio-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: '✅ CSV descargado', description: `${items.length} productos exportados` });
   };
 
   // ====== TAB 2: Distribute invoice between clients ======
@@ -268,16 +338,51 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
             <Button onClick={runAIEstimate} disabled={(!aiDescription.trim() && !aiImage) || aiLoading} size="sm" className="w-full h-7 text-xs">
               {aiLoading ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Estimando...</> : <><Sparkles className="h-3 w-3 mr-1" /> Estimar con IA</>}
             </Button>
-            {aiResult && (
+            {adjustedResult && (
               <div className="text-xs space-y-1 p-2 rounded-md border-l-2 border-primary bg-primary/5">
-                <p className="font-semibold">⚖️ ~{aiResult.estimated_weight_lb} lbs ({aiResult.billable_weight_lb} lbs facturables)</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold">⚖️ ~{adjustedResult.estimated_weight_lb} lbs ({adjustedResult.billable_weight_lb} lbs facturables)</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => downloadCSV(adjustedResult)}
+                  >
+                    <Download className="h-3 w-3 mr-1" /> CSV
+                  </Button>
+                </div>
+
+                {/* Manual weight override */}
+                <div className="flex items-center gap-1 bg-background/60 rounded p-1 border border-border/50">
+                  <span className="text-[10px] text-muted-foreground">Ajustar peso:</span>
+                  <Button type="button" size="sm" variant="outline" className="h-5 w-5 p-0" onClick={() => setWeightOverride(Math.max(0.1, (weightOverride ?? aiResult.estimated_weight_lb) - 0.5))}>
+                    <Minus className="h-2.5 w-2.5" />
+                  </Button>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={weightOverride ?? aiResult.estimated_weight_lb}
+                    onChange={(e) => setWeightOverride(parseFloat(e.target.value) || 0.1)}
+                    className="h-5 w-14 text-[10px] px-1"
+                  />
+                  <Button type="button" size="sm" variant="outline" className="h-5 w-5 p-0" onClick={() => setWeightOverride(Math.max(0.1, (weightOverride ?? aiResult.estimated_weight_lb) + 0.5))}>
+                    <Plus className="h-2.5 w-2.5" />
+                  </Button>
+                  {weightOverride != null && (
+                    <Button type="button" size="sm" variant="ghost" className="h-5 px-1 text-[9px] ml-auto" onClick={() => setWeightOverride(null)}>
+                      reset
+                    </Button>
+                  )}
+                </div>
+
                 <p className="text-muted-foreground italic text-[10px]">{aiResult.reasoning}</p>
 
-                {Array.isArray(aiResult.items) && aiResult.items.length > 0 && (
+                {Array.isArray(adjustedResult.items) && adjustedResult.items.length > 0 && (
                   <div className="border-t border-border pt-1 mt-1 space-y-1">
                     <p className="font-semibold text-[11px]">Detalle por producto:</p>
                     <div className="max-h-40 overflow-y-auto space-y-1">
-                      {aiResult.items.map((it: any, idx: number) => (
+                      {adjustedResult.items.map((it: any, idx: number) => (
                         <div key={idx} className="border border-border/50 rounded p-1.5 bg-background/50">
                           <div className="flex justify-between items-start gap-2">
                             <span className="font-medium truncate flex-1">{it.name}</span>
@@ -304,16 +409,16 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
                 )}
 
                 <div className="border-t border-border pt-1 mt-1 space-y-0.5">
-                  {aiResult.products_subtotal_usd != null && (
-                    <p>Subtotal productos: <strong>{fmt(aiResult.products_subtotal_usd)}</strong></p>
+                  {adjustedResult.products_subtotal_usd != null && (
+                    <p>Subtotal productos: <strong>{fmt(adjustedResult.products_subtotal_usd)}</strong></p>
                   )}
-                  <p>Empresa cobra envío: <strong>{fmt(aiResult.my_cost)}</strong></p>
-                  <p>Cobrar envío al cliente: <strong className="text-primary">{fmt(aiResult.client_charge)}</strong></p>
-                  <p>Ganancia bruta envío: <strong className="text-profit">{fmt(aiResult.profit)}</strong></p>
-                  {aiResult.grand_total_usd != null && (
+                  <p>Empresa cobra envío: <strong>{fmt(adjustedResult.my_cost)}</strong></p>
+                  <p>Cobrar envío al cliente: <strong className="text-primary">{fmt(adjustedResult.client_charge)}</strong></p>
+                  <p>Ganancia bruta envío: <strong className="text-profit">{fmt(adjustedResult.profit)}</strong></p>
+                  {adjustedResult.grand_total_usd != null && (
                     <p className="border-t border-border pt-0.5 mt-0.5">
-                      Gran total al cliente: <strong className="text-primary">{fmt(aiResult.grand_total_usd)}</strong>
-                      {exchangeRate && <span className="text-muted-foreground"> ≈ {(aiResult.grand_total_usd * exchangeRate).toFixed(0)} Bs</span>}
+                      Gran total al cliente: <strong className="text-primary">{fmt(adjustedResult.grand_total_usd)}</strong>
+                      {exchangeRate && <span className="text-muted-foreground"> ≈ {(adjustedResult.grand_total_usd * exchangeRate).toFixed(0)} Bs</span>}
                     </p>
                   )}
                 </div>
