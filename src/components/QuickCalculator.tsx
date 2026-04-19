@@ -221,28 +221,101 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
           </TabsList>
 
           {/* TAB 1: AI Estimate */}
-          <TabsContent value="ai-estimate" className="space-y-2 pt-2">
+          <TabsContent value="ai-estimate" className="space-y-2 pt-2" ref={aiTabRef} tabIndex={0}>
             <p className="text-[11px] text-muted-foreground">
-              Describe los productos del cliente sin peso. La IA estima cuánto va a pesar, cuánto te cobra la empresa y cuánto cobrarle al cliente.
+              Describe los productos o sube/pega una captura del carrito. La IA detecta cada item, su precio y peso, y calcula precios totales e individuales con envío.
             </p>
             <Textarea
               value={aiDescription}
               onChange={e => setAiDescription(e.target.value)}
-              placeholder="Ej: 3 vestidos de Shein, 2 pares de zapatos talla 38, 5 accesorios pequeños"
+              placeholder="Ej: 3 vestidos de Shein, 2 pares de zapatos talla 38 (opcional si subes captura)"
               rows={2}
               className="text-xs"
             />
-            <Button onClick={runAIEstimate} disabled={!aiDescription.trim() || aiLoading} size="sm" className="w-full h-7 text-xs">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (f) await handleImageFile(f);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              }}
+            />
+            {aiImage ? (
+              <div className="relative inline-block">
+                <img src={aiImage} alt="captura" className="h-16 rounded border border-border" />
+                <button
+                  onClick={() => setAiImage(null)}
+                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                  type="button"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-7 text-xs"
+              >
+                <Upload className="h-3 w-3 mr-1" /> Subir o pegar (Ctrl+V) captura
+              </Button>
+            )}
+            <Button onClick={runAIEstimate} disabled={(!aiDescription.trim() && !aiImage) || aiLoading} size="sm" className="w-full h-7 text-xs">
               {aiLoading ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Estimando...</> : <><Sparkles className="h-3 w-3 mr-1" /> Estimar con IA</>}
             </Button>
             {aiResult && (
               <div className="text-xs space-y-1 p-2 rounded-md border-l-2 border-primary bg-primary/5">
                 <p className="font-semibold">⚖️ ~{aiResult.estimated_weight_lb} lbs ({aiResult.billable_weight_lb} lbs facturables)</p>
                 <p className="text-muted-foreground italic text-[10px]">{aiResult.reasoning}</p>
+
+                {Array.isArray(aiResult.items) && aiResult.items.length > 0 && (
+                  <div className="border-t border-border pt-1 mt-1 space-y-1">
+                    <p className="font-semibold text-[11px]">Detalle por producto:</p>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {aiResult.items.map((it: any, idx: number) => (
+                        <div key={idx} className="border border-border/50 rounded p-1.5 bg-background/50">
+                          <div className="flex justify-between items-start gap-2">
+                            <span className="font-medium truncate flex-1">{it.name}</span>
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              x{it.quantity} · {it.weight_lb}lb
+                            </span>
+                          </div>
+                          <div className="text-[10px] space-y-0.5 mt-0.5">
+                            {it.total_price_usd != null && (
+                              <p>Producto: {fmt(it.total_price_usd)}{it.quantity > 1 && it.unit_price_usd != null && <span className="text-muted-foreground"> ({fmt(it.unit_price_usd)}/u)</span>}</p>
+                            )}
+                            <p>+ Envío proporcional: <span className="text-muted-foreground">{fmt(it.shipping_share_usd)}</span></p>
+                            {it.full_total_usd != null && (
+                              <p className="font-semibold text-primary">
+                                Total: {fmt(it.full_total_usd)}
+                                {it.quantity > 1 && it.full_per_unit_usd != null && <span className="text-[10px] text-muted-foreground font-normal"> · {fmt(it.full_per_unit_usd)}/u</span>}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="border-t border-border pt-1 mt-1 space-y-0.5">
-                  <p>Empresa cobra: <strong>{fmt(aiResult.my_cost)}</strong></p>
-                  <p>Cobrar al cliente: <strong className="text-primary">{fmt(aiResult.client_charge)}</strong></p>
-                  <p>Ganancia bruta: <strong className="text-profit">{fmt(aiResult.profit)}</strong></p>
+                  {aiResult.products_subtotal_usd != null && (
+                    <p>Subtotal productos: <strong>{fmt(aiResult.products_subtotal_usd)}</strong></p>
+                  )}
+                  <p>Empresa cobra envío: <strong>{fmt(aiResult.my_cost)}</strong></p>
+                  <p>Cobrar envío al cliente: <strong className="text-primary">{fmt(aiResult.client_charge)}</strong></p>
+                  <p>Ganancia bruta envío: <strong className="text-profit">{fmt(aiResult.profit)}</strong></p>
+                  {aiResult.grand_total_usd != null && (
+                    <p className="border-t border-border pt-0.5 mt-0.5">
+                      Gran total al cliente: <strong className="text-primary">{fmt(aiResult.grand_total_usd)}</strong>
+                      {exchangeRate && <span className="text-muted-foreground"> ≈ {(aiResult.grand_total_usd * exchangeRate).toFixed(0)} Bs</span>}
+                    </p>
+                  )}
                 </div>
                 <p className="text-[10px] text-muted-foreground">Confianza: {aiResult.confidence}</p>
               </div>
