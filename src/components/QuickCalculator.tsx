@@ -326,19 +326,18 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
               {aiLoading ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Estimando...</> : <><Sparkles className="h-3 w-3 mr-1" /> Estimar con IA</>}
             </Button>
             {adjustedResult && (
-              <div className="text-xs space-y-1 p-2 rounded-md border-l-2 border-primary bg-primary/5">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold">⚖️ ~{adjustedResult.estimated_weight_lb} lbs ({adjustedResult.billable_weight_lb} lbs facturables)</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-2 text-[10px]"
-                    onClick={() => downloadCSV(adjustedResult)}
-                  >
-                    <Download className="h-3 w-3 mr-1" /> CSV
-                  </Button>
-                </div>
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full h-7 text-xs"
+                  onClick={downloadImage}
+                >
+                  <Download className="h-3 w-3 mr-1" /> Descargar imagen
+                </Button>
+              <div ref={resultRef} className="text-xs space-y-1 p-3 rounded-md border-l-2 border-primary bg-primary/5">
+                <p className="font-semibold">⚖️ ~{adjustedResult.estimated_weight_lb} lbs ({adjustedResult.billable_weight_lb} lbs facturables)</p>
 
                 {/* Manual weight override */}
                 <div className="flex items-center gap-1 bg-background/60 rounded p-1 border border-border/50">
