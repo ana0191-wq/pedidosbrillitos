@@ -36,8 +36,41 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
   const [aiImage, setAiImage] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
+  const [weightOverride, setWeightOverride] = useState<number | null>(null);
   const aiTabRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Recalculate everything when user overrides the weight
+  const adjustedResult = useMemo(() => {
+    if (!aiResult) return null;
+    if (weightOverride == null) return aiResult;
+    const newWeight = Math.max(0.1, weightOverride);
+    const billable = Math.ceil(newWeight);
+    const myCost = Math.round(billable * freightRate * 100) / 100;
+    const charge = Math.round(billable * clientRate * 100) / 100;
+    const items = (aiResult.items || []) as any[];
+    const totalItemW = items.reduce((s, it) => s + (it.weight_lb || 0) * (it.quantity || 1), 0) || newWeight;
+    const enriched = items.map((it: any) => {
+      const itemW = (it.weight_lb || 0) * (it.quantity || 1);
+      const share = totalItemW > 0 ? itemW / totalItemW : 0;
+      const itemShipping = Math.round(charge * share * 100) / 100;
+      const totalPrice = it.total_price_usd;
+      const fullTotal = totalPrice != null ? Math.round((totalPrice + itemShipping) * 100) / 100 : null;
+      const fullPerUnit = fullTotal != null ? Math.round((fullTotal / it.quantity) * 100) / 100 : null;
+      return { ...it, shipping_share_usd: itemShipping, full_total_usd: fullTotal, full_per_unit_usd: fullPerUnit };
+    });
+    const subtotal = aiResult.products_subtotal_usd;
+    return {
+      ...aiResult,
+      items: enriched,
+      estimated_weight_lb: Math.round(newWeight * 100) / 100,
+      billable_weight_lb: billable,
+      my_cost: myCost,
+      client_charge: charge,
+      profit: Math.round((charge - myCost) * 100) / 100,
+      grand_total_usd: subtotal != null ? Math.round((subtotal + charge) * 100) / 100 : null,
+    };
+  }, [aiResult, weightOverride, freightRate, clientRate]);
 
   const compressImage = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
