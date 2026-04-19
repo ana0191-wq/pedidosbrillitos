@@ -31,18 +31,81 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
   const freightRate = shippingSettings?.airRatePerLb ?? 6.50;
   const clientRate = shippingSettings?.airPricePerLb ?? 12.00;
 
-  // ====== TAB 1: AI estimate (no weight) ======
+  // ====== TAB 1: AI estimate (description + optional screenshot) ======
   const [aiDescription, setAiDescription] = useState('');
+  const [aiImage, setAiImage] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
+  const aiTabRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const compressImage = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 1200;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('No canvas ctx'));
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const handleImageFile = async (file: File) => {
+    try {
+      const compressed = await compressImage(file);
+      setAiImage(compressed);
+    } catch (err: any) {
+      toast({ title: 'Error', description: 'No se pudo procesar la imagen', variant: 'destructive' });
+    }
+  };
+
+  // Paste support inside the tab
+  useEffect(() => {
+    const el = aiTabRef.current;
+    if (!el) return;
+    const handler = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            await handleImageFile(file);
+            toast({ title: '📸 Imagen pegada', description: 'Ya puedes estimar' });
+          }
+          break;
+        }
+      }
+    };
+    el.addEventListener('paste', handler as any);
+    return () => el.removeEventListener('paste', handler as any);
+  }, [toast]);
 
   const runAIEstimate = async () => {
-    if (!aiDescription.trim()) return;
+    if (!aiDescription.trim() && !aiImage) return;
     setAiLoading(true);
     setAiResult(null);
     try {
       const { data, error } = await supabase.functions.invoke('ai-shipping-estimate', {
-        body: { description: aiDescription, ratePerLb: freightRate, pricePerLb: clientRate },
+        body: {
+          description: aiDescription,
+          ratePerLb: freightRate,
+          pricePerLb: clientRate,
+          imageBase64: aiImage,
+          exchangeRate,
+        },
       });
       if (error) throw error;
       if (data?.success) setAiResult(data.data);
