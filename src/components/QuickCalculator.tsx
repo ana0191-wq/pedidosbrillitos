@@ -185,6 +185,7 @@ export function QuickCalculator({ shippingSettings, exchangeRate, clientOrders }
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast({ title: '✅ CSV descargado', description: `${items.length} productos exportados` });
+  };
 
   // ====== TAB 2: Distribute invoice between clients ======
   const [invoiceTotal, setInvoiceTotal] = useState('');
