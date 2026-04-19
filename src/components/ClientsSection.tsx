@@ -238,12 +238,20 @@ export function ClientsSection({
                         )}
 
                         {bothFullyPaid ? (
-                          <p className="text-green-600 font-medium">✅ Todo cobrado · Ganancia: {fmt(totalProfit)}</p>
+                          <>
+                            <p className="text-green-600 font-medium">✅ Todo cobrado · Ganancia: {fmt(totalProfit)}</p>
+                            {totalProfit > 0 && (
+                              <p className="text-[11px] text-muted-foreground">🌸 Tú: {fmt(totalProfit * 0.7)} · 🐒 Hermano: {fmt(totalProfit * 0.3)}</p>
+                            )}
+                          </>
                         ) : anyShipMissing && totalShipCharge === 0 ? (
                           <p className="text-amber-500 font-medium">⚠️ Envío sin calcular</p>
                         ) : (
                           <>
                             <p className="text-blue-600 font-medium">⏳ Cobrar: {fmt(totalShipCharge)} · Ganancia: {fmt(totalProfit)}</p>
+                            {totalProfit > 0 && (
+                              <p className="text-[11px] text-muted-foreground">🌸 Tú: {fmt(totalProfit * 0.7)} · 🐒 Hermano: {fmt(totalProfit * 0.3)}</p>
+                            )}
                             {exchangeRate && totalShipCharge > 0 && (
                               <p className="text-muted-foreground">≈ {(totalShipCharge * exchangeRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs</p>
                             )}

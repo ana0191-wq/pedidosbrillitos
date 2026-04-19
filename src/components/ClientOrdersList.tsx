@@ -170,9 +170,16 @@ export function ClientOrdersList({ clientOrders, clients, onAddOrder, onAddProdu
                       ✅ Etapa 2: {fmt(order.shippingPaymentAmount || ship.totalClientPays)} pagado ({order.shippingPaymentMethod || '—'})
                     </p>
                   ) : hasShippingData ? (
-                    <p className="text-blue-600 font-medium">
-                      ⏳ Etapa 2: Cobrar {fmt(ship.totalClientPays)} · Ganancia {fmt(ship.profit)}
-                    </p>
+                    <>
+                      <p className="text-blue-600 font-medium">
+                        ⏳ Etapa 2: Cobrar {fmt(ship.totalClientPays)} · Ganancia {fmt(ship.profit)}
+                      </p>
+                      {ship.profit > 0 && order.brotherInvolved && (
+                        <p className="text-[11px] text-muted-foreground">
+                          🌸 Tú: {fmt(ship.profit * 0.7)} · 🐒 Hermano: {fmt(ship.profit * 0.3)}
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-amber-500 font-medium">⚠️ Envío sin calcular · <span className="underline">Calcular</span></p>
                   )}
