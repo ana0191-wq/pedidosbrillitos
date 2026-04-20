@@ -367,6 +367,13 @@ export function ClientsSection({
         open={!!addOrderForClient}
         onOpenChange={v => { if (!v) setAddOrderForClient(null); }}
         clients={clients}
+        onAddClient={async (name, phone) => {
+          // ClientsSection's onAddClient has a different signature — wrap it
+          let newId: string | null = null;
+          await onAddClient({ name, phone: phone || undefined });
+          // Re-find the client by name after creation
+          return null; // Index will handle ID resolution via onAddOrder
+        }}
         onAddOrder={onAddOrder}
         onAddProduct={onAddProduct}
         defaultClientId={addOrderForClient || undefined}

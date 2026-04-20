@@ -229,6 +229,7 @@ const Index = () => {
             <ClientOrdersList
             clientOrders={clientOrders}
             clients={clients}
+            onAddClient={async (name, phone) => addClient(name, phone || '')}
             onAddOrder={addClientOrder}
             onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
             onUpdateOrder={updateClientOrder}

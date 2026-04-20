@@ -14,6 +14,7 @@ import type { Order } from '@/types/orders';
 interface Props {
   clientOrders: ClientOrder[];
   clients: Client[];
+  onAddClient?: (name: string, phone?: string) => Promise<string | null>;
   onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
   onAddProduct: (order: Order, clientOrderId?: string) => Promise<void>;
   onUpdateOrder: (id: string, updates: Record<string, any>) => void;
@@ -72,7 +73,7 @@ const STATUS_CONFIG = {
 };
 
 export function ClientOrdersList({
-  clientOrders, clients, onAddOrder, onAddProduct,
+  clientOrders, clients, onAddClient, onAddOrder, onAddProduct,
   onUpdateOrder, onDeleteOrder, onArchiveOrder,
   exchangeRate, shippingSettings, collaborators, onUpsertEarning,
 }: Props) {
@@ -365,6 +366,7 @@ export function ClientOrdersList({
         open={showAdd}
         onOpenChange={setShowAdd}
         clients={clients}
+        onAddClient={onAddClient}
         onAddOrder={onAddOrder}
         onAddProduct={onAddProduct}
         exchangeRate={exchangeRate}
