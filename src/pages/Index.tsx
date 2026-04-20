@@ -217,6 +217,8 @@ const Index = () => {
               getOrdersByClient={getByClient}
               exchangeRate={exchangeRate}
               shippingSettings={shippingSettings}
+              collaborators={collaborators}
+              onUpsertEarning={upsertEarning}
             />
           </>
         );

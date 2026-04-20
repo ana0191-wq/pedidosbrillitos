@@ -9,6 +9,7 @@ import { fmtMoney } from '@/lib/utils';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
+import type { Order } from '@/types/orders';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
@@ -20,7 +21,9 @@ interface Props {
   onUpdateClient?: (id: string, data: Partial<Client>) => Promise<void>;
   onDeleteClient?: (id: string) => Promise<void>;
   onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
-  onAddProduct: (order: any, clientOrderId?: string) => Promise<void>;
+  onAddProduct: (order: Order, clientOrderId?: string) => Promise<void>;
+  collaborators?: { id: string; name: string; percentage: number }[];
+  onUpsertEarning?: (collaboratorId: string, orderId: string, anaProfit: number, percentage: number) => void;
   onUpdateOrder: (id: string, updates: Record<string, any>) => void;
   onDeleteOrder: (id: string) => void;
   onArchiveOrder?: (id: string) => void;
@@ -28,6 +31,7 @@ interface Props {
   exchangeRate: number | null;
   shippingSettings?: ShippingSettings;
 }
+
 
 const RATE_PER_LB = 10;
 
@@ -60,7 +64,7 @@ function StatusBadge({ order }: { order: ClientOrder }) {
 export function ClientsSection({
   clients, clientOrders, onAddClient, onUpdateClient, onDeleteClient,
   onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, onArchiveOrder,
-  getOrdersByClient, exchangeRate, shippingSettings,
+  getOrdersByClient, exchangeRate, shippingSettings, collaborators, onUpsertEarning,
 }: Props) {
   const { toast } = useToast();
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
@@ -378,6 +382,8 @@ export function ClientsSection({
         onDeleteOrder={onDeleteOrder}
         exchangeRate={exchangeRate}
         shippingSettings={shippingSettings}
+        collaborators={collaborators}
+        onUpsertEarning={onUpsertEarning}
       />
     </div>
   );

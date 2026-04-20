@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { Order } from '@/types/orders';
+import type { ShippingSettings } from '@/hooks/useShippingSettings';
 
 // Product weight estimates by category
 const WEIGHT_ESTIMATES: Record<string, number> = {
@@ -58,10 +59,10 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   clients: Client[];
   onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
-  onAddProduct: (order: any, clientOrderId?: string) => Promise<void>;
+  onAddProduct: (order: Order, clientOrderId?: string) => Promise<void>;
   defaultClientId?: string;
   exchangeRate?: number | null;
-  shippingSettings?: any;
+  shippingSettings?: ShippingSettings;
 }
 
 export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, onAddProduct, defaultClientId, exchangeRate }: Props) {
@@ -204,9 +205,9 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
       if (!orderId) throw new Error('No se pudo crear el pedido');
 
       for (const p of products) {
-        const order: any = {
+        const order: Order = {
           id: makeId(),
-          category: 'client',
+          category: 'client' as const,
           productName: p.name,
           productPhoto: p.photo,
           store: p.store,
@@ -214,15 +215,12 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
           orderDate: new Date().toISOString().split('T')[0],
           estimatedArrival: '',
           orderNumber: '',
-          notes: '',
+          notes: p.link ? `link:${p.link}` : '',
           createdAt: new Date().toISOString(),
-          status: 'Pendiente',
+          status: 'Pendiente' as const,
           clientName: selectedClient?.name || '',
           shippingCost: 0,
           amountCharged: 0,
-          productLink: p.link || null,
-          category_tag: p.category,
-          weight_lb_estimated: p.estimatedWeight,
         };
         await onAddProduct(order, orderId);
       }
