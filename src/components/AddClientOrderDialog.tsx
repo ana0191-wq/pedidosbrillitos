@@ -230,12 +230,26 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddClient,
     try {
       // If no existing client matched, create one on the fly
       let resolvedClientId = clientId;
-      if (!resolvedClientId && clientSearch.trim() && onAddClient) {
-        const newId = await onAddClient(clientSearch.trim());
-        if (!newId) throw new Error('No se pudo crear el cliente');
-        resolvedClientId = newId;
+      if (!resolvedClientId && clientSearch.trim()) {
+        // Try prop first
+        if (onAddClient) {
+          const newId = await onAddClient(clientSearch.trim());
+          if (newId) resolvedClientId = newId;
+        }
+        // Fallback: create directly via Supabase
+        if (!resolvedClientId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error('No autenticado');
+          const { data, error } = await supabase
+            .from('clients')
+            .insert({ user_id: user.id, name: clientSearch.trim(), phone: '' })
+            .select('id')
+            .single();
+          if (error || !data) throw new Error('No se pudo crear el cliente');
+          resolvedClientId = data.id;
+        }
       }
-      if (!resolvedClientId) throw new Error('Cliente requerido');
+      if (!resolvedClientId) throw new Error('Escribe el nombre del cliente');
 
       const orderId = await onAddOrder(resolvedClientId, {
         status: 'Pendiente',
