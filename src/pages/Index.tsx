@@ -356,6 +356,7 @@ const Index = () => {
           exchangeRate={exchangeRate}
           shippingSettings={shippingSettings}
         />
+      )}
 
       <EditClientOrderDialog
         open={!!editingClientOrder}
