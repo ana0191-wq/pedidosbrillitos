@@ -1,17 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Package, Send, Pencil, Archive, Search, ChevronDown, ChevronUp, Check, Clock, Truck } from 'lucide-react';
-import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
-import type { ClientOrder } from '@/hooks/useClientOrders';
-import type { Client } from '@/hooks/useClients';
-import type { ShippingSettings } from '@/hooks/useShippingSettings';
-import type { Order } from '@/types/orders';
+import { Plus, Package, Search, ExternalLink, MessageCircle, ChevronRight, CheckCircle2, Clock, Truck, CircleDollarSign, X } from 'lucide-react';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 import { QuotationGenerator } from '@/components/QuotationGenerator';
 import { fmtMoney } from '@/lib/utils';
+import type { ClientOrder } from '@/hooks/useClientOrders';
+import type { Client } from '@/hooks/useClients';
+import type { ShippingSettings } from '@/hooks/useShippingSettings';
+import type { Order } from '@/types/orders';
 
 interface Props {
   clientOrders: ClientOrder[];
@@ -28,38 +26,50 @@ interface Props {
 }
 
 const FILTERS = [
-  { id: 'all',       label: 'Todos' },
-  { id: 'pending',   label: 'Pendiente' },
-  { id: 'partial',   label: 'Parcial' },
-  { id: 'done',      label: 'Completo' },
-  { id: 'no-ship',   label: 'Sin envío' },
+  { id: 'all',     label: 'Todos' },
+  { id: 'pending', label: 'Pendiente' },
+  { id: 'partial', label: 'Envío pendiente' },
+  { id: 'done',    label: 'Completo' },
 ];
 
-function getFilterKey(order: ClientOrder): string {
-  const p1 = order.productPaymentStatus === 'Pagado';
-  const p2 = order.shippingPaymentStatus === 'Pagado';
-  const hasShip = (order.shippingChargeToClient ?? 0) > 0;
-  if (p1 && p2) return 'done';
-  if (p1 && !hasShip) return 'no-ship';
+const STORE_COLORS: Record<string, string> = {
+  Shein:      'bg-black text-white',
+  Temu:       'bg-orange-500 text-white',
+  Amazon:     'bg-amber-400 text-black',
+  AliExpress: 'bg-red-500 text-white',
+  Otro:       'bg-muted text-muted-foreground',
+};
+
+function getFilterKey(o: ClientOrder) {
+  const p1 = o.productPaymentStatus === 'Pagado';
+  const p2 = o.shippingPaymentStatus === 'Pagado';
+  const hasShip = (o.shippingChargeToClient ?? 0) > 0;
+  if (p1 && (p2 || !hasShip)) return 'done';
   if (p1) return 'partial';
   return 'pending';
 }
 
-function calcShipping(order: ClientOrder, settings?: ShippingSettings) {
-  const freightRate = settings?.airRatePerLb ?? 6.50;
-  const clientRate = settings?.airPricePerLb ?? 10.00;
+function calcShipping(o: ClientOrder, s?: ShippingSettings) {
+  const fr = s?.airRatePerLb ?? 6.50;
+  const cr = s?.airPricePerLb ?? 10.00;
   let anaPays = 0, clientPays = 0;
-  for (const p of order.products) {
+  for (const p of o.products) {
     const w = p.weightLb || 0;
     const vol = (p.lengthIn && p.widthIn && p.heightIn) ? (p.lengthIn * p.widthIn * p.heightIn) / 166 : 0;
     const bill = Math.max(w, vol);
-    anaPays += bill * freightRate;
-    clientPays += bill * clientRate;
+    anaPays += bill * fr;
+    clientPays += bill * cr;
   }
-  if ((order.shippingChargeToClient ?? 0) > 0) clientPays = order.shippingChargeToClient!;
-  if ((order.shippingCostCompany ?? 0) > 0) anaPays = order.shippingCostCompany!;
+  if ((o.shippingChargeToClient ?? 0) > 0) clientPays = o.shippingChargeToClient!;
+  if ((o.shippingCostCompany ?? 0) > 0) anaPays = o.shippingCostCompany!;
   return { anaPays, clientPays, profit: clientPays - anaPays };
 }
+
+const STATUS_CONFIG = {
+  done:    { label: 'Completo',        icon: CheckCircle2, cls: 'text-green-600',  bg: 'bg-green-50 border-green-200' },
+  partial: { label: 'Envío pendiente', icon: Truck,        cls: 'text-blue-600',   bg: 'bg-blue-50 border-blue-200' },
+  pending: { label: 'Pendiente',       icon: Clock,        cls: 'text-amber-600',  bg: 'bg-amber-50 border-amber-200' },
+};
 
 export function ClientOrdersList({
   clientOrders, clients, onAddOrder, onAddProduct,
@@ -72,16 +82,17 @@ export function ClientOrdersList({
   const [quotationData, setQuotationData] = useState<any>(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const clientPhoneMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    clients.forEach(c => { m[c.id] = c.phone || ''; });
-    return m;
-  }, [clients]);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: clientOrders.length, pending: 0, partial: 0, done: 0 };
+    clientOrders.forEach(o => { const k = getFilterKey(o); c[k] = (c[k] || 0) + 1; });
+    return c;
+  }, [clientOrders]);
 
   const filtered = useMemo(() => {
-    let list = [...clientOrders];
+    let list = [...clientOrders].sort((a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
     if (filter !== 'all') list = list.filter(o => getFilterKey(o) === filter);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -93,24 +104,15 @@ export function ClientOrdersList({
     return list;
   }, [clientOrders, filter, search]);
 
-  // Summary counts
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: clientOrders.length, pending: 0, partial: 0, done: 0, 'no-ship': 0 };
-    clientOrders.forEach(o => { c[getFilterKey(o)] = (c[getFilterKey(o)] || 0) + 1; });
-    return c;
-  }, [clientOrders]);
-
-  const toggle = (id: string) => setExpanded(prev => {
-    const s = new Set(prev);
-    s.has(id) ? s.delete(id) : s.add(id);
-    return s;
-  });
-
   return (
     <div className="space-y-4">
+
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold">Pedidos de clientes</h2>
+        <div>
+          <h2 className="text-lg font-bold text-foreground">Pedidos</h2>
+          <p className="text-xs text-muted-foreground">{clientOrders.length} pedido{clientOrders.length !== 1 ? 's' : ''} en total</p>
+        </div>
         <Button size="sm" onClick={() => setShowAdd(true)}>
           <Plus className="h-4 w-4 mr-1.5" /> Nuevo pedido
         </Button>
@@ -125,10 +127,15 @@ export function ClientOrdersList({
           placeholder="Buscar por cliente o producto..."
           className="pl-9 h-9"
         />
+        {search && (
+          <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setSearch('')}>
+            <X className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        )}
       </div>
 
       {/* Filters */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
         {FILTERS.map(f => (
           <button
             key={f.id}
@@ -141,9 +148,7 @@ export function ClientOrdersList({
           >
             {f.label}
             {counts[f.id] > 0 && (
-              <span className={`ml-1.5 ${filter === f.id ? 'opacity-75' : 'text-muted-foreground'}`}>
-                {counts[f.id]}
-              </span>
+              <span className={`ml-1.5 ${filter === f.id ? 'opacity-70' : ''}`}>{counts[f.id]}</span>
             )}
           </button>
         ))}
@@ -151,189 +156,211 @@ export function ClientOrdersList({
 
       {/* Empty */}
       {filtered.length === 0 && (
-        <div className="text-center py-10">
-          <Package className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
+        <div className="text-center py-16">
+          <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
+            <Package className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <p className="font-semibold text-foreground">
             {search || filter !== 'all' ? 'Sin resultados' : 'No hay pedidos todavía'}
           </p>
+          {!search && filter === 'all' && (
+            <Button className="mt-4" size="sm" onClick={() => setShowAdd(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> Crear primer pedido
+            </Button>
+          )}
         </div>
       )}
 
-      {/* Orders */}
-      <div className="space-y-2">
+      {/* Orders grid */}
+      <div className="space-y-3">
         {filtered.map(order => {
-          const isOpen = expanded.has(order.id);
+          const fk = getFilterKey(order);
+          const status = STATUS_CONFIG[fk as keyof typeof STATUS_CONFIG];
+          const StatusIcon = status.icon;
           const productCost = order.products.reduce((s, p) => s + p.pricePaid, 0);
           const ship = calcShipping(order, shippingSettings);
-          const p1 = order.productPaymentStatus === 'Pagado';
-          const p2 = order.shippingPaymentStatus === 'Pagado';
-          const hasShip = ship.clientPays > 0;
-          const fk = getFilterKey(order);
-
-          // Status badge config
-          const badge =
-            fk === 'done'    ? { label: 'Completo',         cls: 'bg-green-100 text-green-700' } :
-            fk === 'partial' ? { label: 'Envío pendiente',  cls: 'bg-blue-100 text-blue-700' } :
-            fk === 'no-ship' ? { label: 'Sin envío',        cls: 'bg-orange-100 text-orange-700' } :
-                               { label: 'Pendiente',        cls: 'bg-amber-100 text-amber-700' };
+          const totalOwed = productCost + (order.shippingPaymentStatus !== 'Pagado' ? ship.clientPays : 0);
+          const productsWithPhotos = order.products.filter(p => p.productPhoto);
+          const productsNoPhoto = order.products.filter(p => !p.productPhoto);
+          const date = new Date(order.createdAt).toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
 
           return (
-            <Card key={order.id} className="overflow-hidden">
-              <CardContent className="p-0">
-
-                {/* Main row — always visible */}
-                <button
-                  className="w-full p-3.5 text-left hover:bg-muted/20 transition-colors"
-                  onClick={() => toggle(order.id)}
-                >
-                  <div className="flex items-center gap-3">
-                    {/* Product thumbnails */}
-                    <div className="flex -space-x-2 flex-shrink-0">
-                      {order.products.slice(0, 3).map((p, i) => (
+            <div
+              key={order.id}
+              className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+            >
+              {/* ── Photos strip ── */}
+              {order.products.length > 0 && (
+                <div className="relative">
+                  {productsWithPhotos.length > 0 ? (
+                    <div className={`grid gap-0.5 ${
+                      productsWithPhotos.length === 1 ? 'grid-cols-1' :
+                      productsWithPhotos.length === 2 ? 'grid-cols-2' :
+                      productsWithPhotos.length === 3 ? 'grid-cols-3' :
+                      'grid-cols-4'
+                    }`}>
+                      {productsWithPhotos.slice(0, 4).map((p, i) => (
                         <div
                           key={p.id}
-                          className="h-10 w-10 rounded-xl border-2 border-white bg-muted overflow-hidden"
-                          style={{ zIndex: 3 - i }}
+                          className={`relative bg-muted overflow-hidden ${
+                            productsWithPhotos.length === 1 ? 'h-52' :
+                            productsWithPhotos.length === 2 ? 'h-40' :
+                            'h-32'
+                          }`}
                         >
-                          {p.productPhoto
-                            ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" />
-                            : <Package className="h-4 w-4 m-3 text-muted-foreground" />
-                          }
-                        </div>
-                      ))}
-                      {order.products.length > 3 && (
-                        <div className="h-10 w-10 rounded-xl border-2 border-white bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground" style={{ zIndex: 0 }}>
-                          +{order.products.length - 3}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-foreground">{order.clientName || 'Sin cliente'}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {order.products.length} prod · {fmt(productCost)}
-                        {hasShip ? ` + ${fmt(ship.clientPays)} envío` : ''}
-                      </p>
-                    </div>
-
-                    {/* Right: totals */}
-                    <div className="flex-shrink-0 text-right">
-                      {ship.profit > 0 && (
-                        <p className="text-xs font-semibold text-green-600">{fmt(ship.profit)}</p>
-                      )}
-                      {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground ml-auto mt-1" /> : <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto mt-1" />}
-                    </div>
-                  </div>
-                </button>
-
-                {/* Expanded detail */}
-                {isOpen && (
-                  <div className="border-t border-border">
-
-                    {/* Products */}
-                    <div className="px-3.5 py-2 space-y-1.5">
-                      {order.products.map(p => (
-                        <div key={p.id} className="flex items-center gap-2.5">
-                          <div className="h-9 w-9 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-                            {p.productPhoto
-                              ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" />
-                              : <Package className="h-4 w-4 m-2.5 text-muted-foreground" />
-                            }
-                          </div>
-                          <p className="text-xs flex-1 truncate text-foreground">{p.productName}</p>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                            p.status === 'Entregado' ? 'bg-green-100 text-green-700' :
-                            p.status === 'Llegó' || p.status === 'En Venezuela' ? 'bg-purple-100 text-purple-700' :
-                            p.status === 'En Tránsito' ? 'bg-blue-100 text-blue-700' :
-                            'bg-muted text-muted-foreground'
-                          }`}>{p.status}</span>
-                          <span className="text-xs font-semibold flex-shrink-0">{fmt(p.pricePaid)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Payment status */}
-                    <div className="px-3.5 pb-2 pt-1 space-y-1 border-t border-border">
-                      <div className="flex items-center gap-2">
-                        {p1 ? <Check className="h-3.5 w-3.5 text-green-600 flex-shrink-0" /> : <Clock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />}
-                        <span className={`text-xs font-semibold ${p1 ? 'text-green-600' : 'text-amber-600'}`}>
-                          Productos: {p1 ? `${fmt(order.productPaymentAmount || productCost)} · ${order.productPaymentMethod || ''}` : `${fmt(productCost)} pendiente`}
-                        </span>
-                      </div>
-                      {hasShip && (
-                        <div className="flex items-center gap-2">
-                          {p2 ? <Check className="h-3.5 w-3.5 text-green-600 flex-shrink-0" /> : <Truck className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />}
-                          <span className={`text-xs font-semibold ${p2 ? 'text-green-600' : 'text-blue-600'}`}>
-                            Envío: {p2 ? `${fmt(order.shippingPaymentAmount || ship.clientPays)} · ${order.shippingPaymentMethod || ''}` : `${fmt(ship.clientPays)} pendiente`}
+                          <img
+                            src={p.productPhoto!}
+                            alt={p.productName}
+                            className="w-full h-full object-cover"
+                          />
+                          {/* Store badge */}
+                          <span className={`absolute top-1.5 left-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STORE_COLORS[p.store] || STORE_COLORS.Otro}`}>
+                            {p.store}
                           </span>
+                          {/* Price */}
+                          <span className="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            ${p.pricePaid.toFixed(2)}
+                          </span>
+                          {/* +N overlay on last visible */}
+                          {i === 3 && order.products.length > 4 && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                              <span className="text-white text-lg font-bold">+{order.products.length - 4}</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {!hasShip && (
-                        <p className="text-xs text-orange-500 font-medium">Envío sin calcular aún</p>
-                      )}
-                      {ship.profit > 0 && order.brotherInvolved && (
-                        <p className="text-[10px] text-muted-foreground">
-                          Tú: {fmt(ship.profit * 0.70)} · Hermano: {fmt(ship.profit * 0.30)}
-                        </p>
-                      )}
+                      ))}
                     </div>
+                  ) : (
+                    <div className="h-20 bg-muted/30 flex items-center justify-center gap-2">
+                      <Package className="h-5 w-5 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">{order.products.length} producto{order.products.length !== 1 ? 's' : ''} sin foto</span>
+                    </div>
+                  )}
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-1.5 px-3.5 pb-3">
-                      <Button
-                        size="sm"
-                        className="flex-1 h-8 text-xs"
-                        onClick={e => { e.stopPropagation(); setEditing(order); }}
-                      >
-                        <Pencil className="h-3 w-3 mr-1" /> Editar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs"
-                        onClick={e => {
-                          e.stopPropagation();
-                          const prods = order.products.map(p => ({ name: p.productName, price: p.pricePaid }));
-                          setQuotationData({
-                            clientName: order.clientName || '',
-                            clientPhone: clientPhoneMap[order.clientId],
-                            products: prods,
-                            shippingCharge: order.shippingChargeToClient || 0,
-                            exchangeRate,
-                          });
-                        }}
-                      >
-                        <Send className="h-3 w-3 mr-1" /> Cotizar
-                      </Button>
-                      {onArchiveOrder && (
-                        <ConfirmDeleteDialog
-                          title="¿Archivar pedido?"
-                          description="El pedido se archiva y deja de aparecer en la lista activa."
-                          onConfirm={() => onArchiveOrder(order.id)}
-                          trigger={
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-500">
-                              <Archive className="h-3.5 w-3.5" />
-                            </Button>
-                          }
-                        />
-                      )}
-                      <ConfirmDeleteDialog
-                        title="¿Eliminar este pedido?"
-                        onConfirm={() => { onDeleteOrder(order.id); setExpanded(prev => { const s = new Set(prev); s.delete(order.id); return s; }); }}
-                      />
-                    </div>
+                  {/* Status pill on top-right of photo */}
+                  <div className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-semibold ${status.bg} ${status.cls}`}>
+                    <StatusIcon className="h-3 w-3" />
+                    {status.label}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Info section ── */}
+              <div className="p-3.5 space-y-2.5">
+
+                {/* Client + date */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-foreground text-base leading-tight">{order.clientName || 'Cliente'}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{date} · {order.products.length} producto{order.products.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  {order.brotherInvolved && (
+                    <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full flex-shrink-0">
+                      + hermano
+                    </span>
+                  )}
+                </div>
+
+                {/* Product names list (no photo ones) */}
+                {productsNoPhoto.length > 0 && productsWithPhotos.length === 0 && (
+                  <div className="space-y-1">
+                    {order.products.slice(0, 3).map(p => (
+                      <div key={p.id} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-7 w-7 rounded-lg bg-muted flex-shrink-0 flex items-center justify-center">
+                            <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                          <p className="text-xs text-foreground truncate">{p.productName}</p>
+                        </div>
+                        <p className="text-xs font-semibold flex-shrink-0">${p.pricePaid.toFixed(2)}</p>
+                      </div>
+                    ))}
+                    {order.products.length > 3 && (
+                      <p className="text-[10px] text-muted-foreground pl-9">+{order.products.length - 3} más</p>
+                    )}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+
+                {/* All product names when there ARE photos (below the strip) */}
+                {productsWithPhotos.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {order.products.map(p => (
+                      <span key={p.id} className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full truncate max-w-[140px]">
+                        {p.productName}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Financials */}
+                <div className="flex items-center gap-3 pt-1 border-t border-border/50">
+                  <div className="flex-1">
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold">Carrito</p>
+                    <p className="text-sm font-bold text-foreground">{fmt(productCost)}</p>
+                  </div>
+                  {ship.clientPays > 0 && (
+                    <div className="flex-1">
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Envío</p>
+                      <p className={`text-sm font-bold ${order.shippingPaymentStatus === 'Pagado' ? 'text-green-600' : 'text-foreground'}`}>
+                        {fmt(ship.clientPays)}
+                      </p>
+                    </div>
+                  )}
+                  {ship.profit > 0 && (
+                    <div className="flex-1">
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Ganancia</p>
+                      <p className="text-sm font-bold text-green-600">{fmt(ship.profit)}</p>
+                    </div>
+                  )}
+                  {fk !== 'done' && totalOwed > 0 && (
+                    <div className="flex-1">
+                      <p className="text-[10px] text-amber-600 uppercase font-semibold">Por cobrar</p>
+                      <p className="text-sm font-bold text-amber-600">{fmt(totalOwed)}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2 pt-0.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 h-8 text-xs"
+                    onClick={() => setEditing(order)}
+                  >
+                    Ver detalle
+                    <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => {
+                      const prods = order.products.map(p => ({
+                        name: p.productName,
+                        price: p.pricePaid,
+                        store: p.store,
+                        photo: p.productPhoto,
+                        weightLb: p.weightLb,
+                      }));
+                      setQuotationData({
+                        clientName: order.clientName || '',
+                        products: prods,
+                        shippingCharge: ship.clientPays,
+                        exchangeRate,
+                      });
+                    }}
+                  >
+                    <MessageCircle className="h-3.5 w-3.5 mr-1" />
+                    Cotización
+                  </Button>
+                </div>
+              </div>
+            </div>
           );
         })}
       </div>
 
+      {/* Dialogs */}
       <AddClientOrderDialog
         open={showAdd}
         onOpenChange={setShowAdd}
@@ -356,11 +383,16 @@ export function ClientOrdersList({
         onUpsertEarning={onUpsertEarning}
       />
 
-      <QuotationGenerator
-        open={!!quotationData}
-        onOpenChange={v => { if (!v) setQuotationData(null); }}
-        data={quotationData}
-      />
+      {quotationData && (
+        <QuotationGenerator
+          open={!!quotationData}
+          onOpenChange={v => { if (!v) setQuotationData(null); }}
+          clientName={quotationData.clientName}
+          products={quotationData.products}
+          shippingCharge={quotationData.shippingCharge}
+          exchangeRate={quotationData.exchangeRate}
+        />
+      )}
     </div>
   );
 }
