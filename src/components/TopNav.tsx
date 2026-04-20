@@ -1,5 +1,5 @@
-import { Search, Plus, LogOut, ShoppingBag } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { useState } from 'react';
+import { Package, Users, ShoppingBag, BarChart3, Calculator, UserCheck, LogOut, Menu, X, DollarSign, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface TopNavProps {
@@ -9,100 +9,147 @@ interface TopNavProps {
   onSignOut: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  onQuickAddClientOrder?: () => void;
+  onQuickAddClientOrder: () => void;
 }
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'por-cobrar', label: '💰 Por Cobrar' },
-  { id: 'clients', label: 'Clientes' },
-  { id: 'personal', label: 'Compras' },
-  { id: 'merchandise', label: 'Mercancía' },
-  { id: 'calculator', label: '🧮 Calculadora' },
-  { id: 'team', label: 'Equipo' },
+  { id: 'dashboard',     label: 'Dashboard',  icon: BarChart3 },
+  { id: 'por-cobrar',    label: 'Por Cobrar', icon: DollarSign },
+  { id: 'clients',       label: 'Clientes',   icon: Users },
+  { id: 'personal',      label: 'Compras',    icon: ShoppingBag },
+  { id: 'merchandise',   label: 'Mercancía',  icon: Package },
+  { id: 'team',          label: 'Equipo',     icon: UserCheck },
+  { id: 'calculator',    label: 'Calculadora',icon: Calculator },
 ];
 
 export function TopNav({ activeTab, onNavigate, onAddOrder, onSignOut, searchQuery, onSearchChange, onQuickAddClientOrder }: TopNavProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const handleNav = (tab: string) => {
+    onNavigate(tab);
+    setMenuOpen(false);
+  };
+
   return (
-    <header className="sticky top-0 z-50 px-4 pt-3 pb-2">
-      <div className="card-brillitos max-w-[1400px] mx-auto flex items-center justify-between gap-4 px-5 py-2.5">
-        {/* Logo */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xl font-extrabold text-primary tracking-tight">✨ Brillitos Store</span>
-        </div>
-
-        {/* Pill Nav */}
-        <nav className="hidden md:flex items-center gap-1 bg-secondary rounded-full p-1">
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                activeTab === item.id
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        {/* Right section */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="relative hidden sm:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary/60" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Buscar..."
-              className="h-8 w-40 pl-8 rounded-full bg-secondary border-0 text-xs placeholder:text-primary/40 focus-visible:ring-primary/30"
-            />
-          </div>
-          <Button
-            size="sm"
-            className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90 gap-1 text-xs h-8 px-4"
-            onClick={onAddOrder}
+    <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
+      <div className="max-w-[1400px] mx-auto px-4">
+        <div className="flex items-center gap-3 h-14">
+          {/* Logo */}
+          <button
+            className="flex items-center gap-2 flex-shrink-0"
+            onClick={() => handleNav('dashboard')}
           >
-            <Plus className="h-3.5 w-3.5" /> Nuevo pedido
-          </Button>
-          {onQuickAddClientOrder && (
+            <span className="text-xl">✨</span>
+            <span className="font-bold text-foreground text-sm hidden sm:block">Brillitos</span>
+          </button>
+
+          {/* Desktop nav */}
+          <nav className="hidden md:flex items-center gap-1 flex-1">
+            {NAV_ITEMS.map(item => {
+              const Icon = item.icon;
+              const active = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNav(item.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 ml-auto">
+            {/* Search — hidden on mobile */}
+            <div className="hidden sm:flex items-center gap-2 bg-muted rounded-lg px-3 py-1.5">
+              <svg className="h-3.5 w-3.5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                value={searchQuery}
+                onChange={e => onSearchChange(e.target.value)}
+                placeholder="Buscar..."
+                className="bg-transparent text-sm outline-none w-28 placeholder:text-muted-foreground"
+              />
+            </div>
+
             <Button
               size="sm"
-              variant="outline"
-              className="rounded-full gap-1 text-xs h-8 px-3 border-primary text-primary hover:bg-primary/10"
               onClick={onQuickAddClientOrder}
+              className="hidden sm:flex items-center gap-1.5 h-8 text-xs"
             >
-              <ShoppingBag className="h-3.5 w-3.5" /> Pedido cliente
+              <Plus className="h-3.5 w-3.5" />
+              Nuevo pedido
             </Button>
-          )}
-          <button
-            onClick={onSignOut}
-            className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
+
+            {/* Mobile: + button */}
+            <Button
+              size="icon"
+              onClick={onQuickAddClientOrder}
+              className="flex sm:hidden h-8 w-8"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onSignOut}
+              className="hidden md:flex h-8 w-8 text-muted-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+
+            {/* Mobile menu toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="flex md:hidden h-8 w-8"
+              onClick={() => setMenuOpen(v => !v)}
+            >
+              {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Mobile nav */}
-      <div className="md:hidden mt-2 max-w-[1400px] mx-auto">
-        <div className="flex items-center gap-1 bg-secondary rounded-full p-1 overflow-x-auto">
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
-                activeTab === item.id
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+      {/* Mobile menu */}
+      {menuOpen && (
+        <div className="md:hidden border-t border-border bg-white px-4 py-3 space-y-1">
+          {NAV_ITEMS.map(item => {
+            const Icon = item.icon;
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleNav(item.id)}
+                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-foreground hover:bg-muted'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => { onSignOut(); setMenuOpen(false); }}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar sesión
+          </button>
         </div>
-      </div>
+      )}
     </header>
   );
 }

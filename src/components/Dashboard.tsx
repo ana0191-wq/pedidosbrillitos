@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
-import { Package, Clock, TrendingUp, Truck, ArrowUpRight, AlertTriangle } from 'lucide-react';
-import type { Order, ClientOrder, MerchandiseOrder } from '@/types/orders';
+import { Package, Clock, TrendingUp, Truck, ArrowUpRight, DollarSign, Users, ShoppingBag } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import type { Order } from '@/types/orders';
 import { fmtMoney } from '@/lib/utils';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder as ClientOrderType } from '@/hooks/useClientOrders';
 import type { Collaborator, CollaboratorEarning } from '@/hooks/useCollaborators';
-import { StatusBadge, StoreBadge } from '@/components/StatusBadge';
 
 interface DashboardProps {
   orders: Order[];
@@ -18,352 +19,323 @@ interface DashboardProps {
   onOrderClick?: (order: Order, parentClientOrder: ClientOrderType | null) => void;
 }
 
-export function Dashboard({ orders, clients, clientOrders, collaborators, earnings, onNavigate, onMarkPaid, onOrderClick }: DashboardProps) {
-  const stats = useMemo(() => {
-    const totalOrders = orders.length;
-    const inTransit = orders.filter(o => o.status === 'En Tránsito').length;
+const STATUS_COLORS: Record<string, string> = {
+  'Pendiente':    'bg-amber-100 text-amber-700',
+  'En Tránsito':  'bg-blue-100 text-blue-700',
+  'Llegó':        'bg-purple-100 text-purple-700',
+  'En Venezuela': 'bg-indigo-100 text-indigo-700',
+  'Entregado':    'bg-green-100 text-green-700',
+  'No Llegó':     'bg-red-100 text-red-700',
+};
 
-    let totalShippingRevenue = 0; // SUM of shipping_charge_client (NOT product price)
+export function Dashboard({ orders, clients, clientOrders, collaborators, earnings, onNavigate, onMarkPaid, onOrderClick }: DashboardProps) {
+  const fmt = fmtMoney;
+
+  const stats = useMemo(() => {
     let totalAnaProfit = 0;
-    let netProfitAccum = 0; // Net profit honoring brother_involved per-order
-    let brotherCutTotal = 0;  // 30% only from orders where brotherInvolved=true
+    let brotherCutTotal = 0;
+    let netProfitAccum = 0;
     let pendingCollection = 0;
     let ordersWithInvoice = 0;
-    let totalClientOrders = 0;
 
     for (const co of clientOrders) {
-      totalClientOrders++;
       const productCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
-      const shippingChargeClient = co.shippingChargeToClient;
-      const companyInvoiceAmount = co.shippingCostCompany;
+      const charge = co.shippingChargeToClient;
+      const cost = co.shippingCostCompany;
 
-      // Revenue = only shipping charged to clients (product is passthrough)
-      if (shippingChargeClient != null) {
-        totalShippingRevenue += shippingChargeClient;
-      }
-
-      // PROFIT: only from shipping, only when both values are known
-      if (companyInvoiceAmount != null && shippingChargeClient != null) {
-        const anaProfit = shippingChargeClient - companyInvoiceAmount;
-        totalAnaProfit += anaProfit;
+      if (charge != null && cost != null) {
+        const profit = charge - cost;
+        totalAnaProfit += profit;
         ordersWithInvoice++;
-        // If brother NOT involved on this order, all profit is hers; otherwise 30% goes to brother
-        if (co.brotherInvolved === false) {
-          netProfitAccum += anaProfit;
+        if (co.brotherInvolved) {
+          netProfitAccum += profit * 0.70;
+          brotherCutTotal += profit * 0.30;
         } else {
-          netProfitAccum += anaProfit * 0.70;
-          brotherCutTotal += anaProfit * 0.30;
+          netProfitAccum += profit;
         }
       }
-
-      // POR COBRAR: what client still owes
-      const stage1Pending = co.productPaymentStatus !== 'Pagado' ? productCost : 0;
-      const stage2Pending = co.shippingPaymentStatus !== 'Pagado' ? (shippingChargeClient ?? 0) : 0;
-      pendingCollection += stage1Pending + stage2Pending;
+      const s1 = co.productPaymentStatus !== 'Pagado' ? productCost : 0;
+      const s2 = co.shippingPaymentStatus !== 'Pagado' ? (charge ?? 0) : 0;
+      pendingCollection += s1 + s2;
     }
 
-    // Brother cut = SUM of unpaid collaborator_earnings
-    const collabTotal = earnings.filter(e => !e.paid).reduce((s, e) => s + e.collaboratorCut, 0);
-    // Net profit respects per-order brother_involved flag
-    const netProfit = netProfitAccum;
+    const inTransit = orders.filter(o => ['En Tránsito', 'Llegó', 'En Venezuela'].includes(o.status)).length;
+    const totalClientOrders = clientOrders.length;
+    const hasPartialData = ordersWithInvoice < totalClientOrders && totalClientOrders > 0;
 
-    return { totalOrders, inTransit, pendingCollection, netProfit, totalAnaProfit, collabTotal, brotherCutTotal, totalShippingRevenue, ordersWithInvoice, totalClientOrders };
-  }, [orders, clientOrders, earnings]);
+    return {
+      totalOrders: orders.length,
+      inTransit,
+      pendingCollection,
+      netProfit: netProfitAccum,
+      totalAnaProfit,
+      brotherCutTotal,
+      ordersWithInvoice,
+      totalClientOrders,
+      hasPartialData,
+    };
+  }, [orders, clientOrders]);
 
-  // Monthly shipping revenue data for chart (last 6 months)
+  // Monthly chart data
   const chartData = useMemo(() => {
-    const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     const now = new Date();
-    const data: { label: string; value: number }[] = [];
-
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const month = d.getMonth();
-      const year = d.getFullYear();
-
-      let revenue = 0;
-      for (const co of clientOrders) {
-        const created = new Date(co.createdAt);
-        if (created.getMonth() === month && created.getFullYear() === year) {
-          // Only count shipping revenue, NOT product passthrough
-          if (co.shippingChargeToClient != null) {
-            revenue += co.shippingChargeToClient;
-          }
-        }
-      }
-      data.push({ label: months[month], value: revenue });
-    }
-    return data;
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const m = d.getMonth(), y = d.getFullYear();
+      const value = clientOrders
+        .filter(co => { const c = new Date(co.createdAt); return c.getMonth() === m && c.getFullYear() === y; })
+        .reduce((s, co) => s + (co.shippingChargeToClient ?? 0), 0);
+      return { label: months[m], value };
+    });
   }, [clientOrders]);
 
   const maxChart = Math.max(...chartData.map(d => d.value), 1);
-  const recentOrders = orders.slice(0, 8);
-  const trackingOrders = orders
+
+  const activeOrders = orders
     .filter(o => ['En Tránsito', 'Llegó', 'En Venezuela'].includes(o.status))
     .slice(0, 5);
 
+  const recentClientOrders = clientOrders.slice(0, 6);
+
   const primaryCollab = collaborators[0] || null;
-  const collabUnpaid = primaryCollab
-    ? earnings.filter(e => e.collaboratorId === primaryCollab.id && !e.paid)
-    : [];
-  const collabUnpaidTotal = collabUnpaid.reduce((s, e) => s + e.collaboratorCut, 0);
-
-  const fmt = fmtMoney;
-  const getOrderName = (orderId: string) => orders.find(o => o.id === orderId)?.productName || 'Pedido';
-
-  // Data confidence: show warning if some orders are missing invoice data
-  const hasPartialData = stats.ordersWithInvoice < stats.totalClientOrders && stats.totalClientOrders > 0;
-  const confidenceLabel = hasPartialData
-    ? `⚠️ basado en ${stats.ordersWithInvoice} de ${stats.totalClientOrders} pedidos con factura`
-    : null;
+  const collabUnpaidTotal = primaryCollab
+    ? earnings.filter(e => e.collaboratorId === primaryCollab.id && !e.paid).reduce((s, e) => s + e.collaboratorCut, 0)
+    : 0;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-[18px] h-full">
-      {/* Row 1: 4 stat cards */}
-      <StatCard
-        icon={<Package className="h-5 w-5" />}
-        label="Total Pedidos"
-        value={String(stats.totalOrders)}
-        onClick={() => onNavigate('personal')}
-      />
-      <StatCard
-        icon={<Clock className="h-5 w-5" />}
-        label="Pendiente de cobro"
-        value={fmt(stats.pendingCollection)}
-        onClick={() => onNavigate('por-cobrar')}
-      />
-      <div className="card-brillitos gradient-pink p-5 flex flex-col justify-between cursor-pointer hover:shadow-brillitos-lg transition-shadow" onClick={() => onNavigate('client-orders')}>
-        <div className="flex items-center justify-between">
-          <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center">
-            <TrendingUp className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <ArrowUpRight className="h-4 w-4 text-primary-foreground/60" />
-        </div>
-        <div className="mt-3">
-          <p className="text-2xl lg:text-3xl font-extrabold text-primary-foreground">{fmt(stats.netProfit)}</p>
-          <p className="text-xs text-primary-foreground/70 font-medium mt-0.5">Tu ganancia neta</p>
-          {confidenceLabel && (
-            <p className="text-[10px] text-primary-foreground/50 mt-0.5">{confidenceLabel}</p>
-          )}
-        </div>
-      </div>
-      <StatCard
-        icon={<Truck className="h-5 w-5" />}
-        label="En Tránsito"
-        value={String(stats.inTransit)}
-        onClick={() => onNavigate('personal')}
-      />
+    <div className="space-y-5">
 
-      {/* Row 2: Revenue chart (2 cols) + Ganancias (1 col) + Tracking (1 col, spans 2 rows) */}
-      <div className="card-brillitos p-5 lg:col-span-2">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">Total cobrado en envíos</h3>
-            <p className="text-2xl font-extrabold text-foreground mt-1">{fmt(stats.totalShippingRevenue)}</p>
-            {hasPartialData && (
-              <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3 text-amber-500" />
-                {confidenceLabel}
-              </p>
-            )}
-          </div>
-          <span className="text-xs font-semibold text-profit bg-profit/10 px-2 py-1 rounded-full">↑ Activo</span>
-        </div>
-        <div className="flex items-end gap-2 h-32">
-          {chartData.map((d, i) => {
-            const height = maxChart > 0 ? (d.value / maxChart) * 100 : 0;
-            const isLast = i === chartData.length - 1;
-            return (
-              <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
-                <div
-                  className={`w-full rounded-t-lg transition-all ${isLast ? 'bg-primary' : 'bg-pink-soft'}`}
-                  style={{ height: `${Math.max(height, 4)}%` }}
-                />
-                <span className="text-[10px] text-muted-foreground">{d.label}</span>
+      {/* ── KPI row ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate('clients')}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Package className="h-4 w-4 text-primary" />
               </div>
-            );
-          })}
-        </div>
-      </div>
+              <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <p className="text-2xl font-extrabold text-foreground">{stats.totalOrders}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Total pedidos</p>
+          </CardContent>
+        </Card>
 
-      {/* Ganancias breakdown — profit is ONLY from shipping */}
-      <div className="card-brillitos p-5">
-        <h3 className="text-sm font-semibold text-foreground mb-4">Ganancias</h3>
-        <div className="space-y-4">
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-muted-foreground">Por envíos</span>
-              <span className="font-semibold text-foreground">{stats.ordersWithInvoice > 0 ? fmt(stats.totalAnaProfit) : '—'}</span>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate('por-cobrar')}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="h-8 w-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                <DollarSign className="h-4 w-4 text-amber-600" />
+              </div>
+              <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
-            <div className="h-2 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? 70 : 0}%` }} />
+            <p className="text-2xl font-extrabold text-foreground">{fmt(stats.pendingCollection)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Por cobrar</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-primary text-primary-foreground">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="h-8 w-8 bg-white/20 rounded-lg flex items-center justify-center">
+                <TrendingUp className="h-4 w-4" />
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-muted-foreground">Le toca al equipo (30%)</span>
-              <span className="font-semibold text-primary">-{stats.ordersWithInvoice > 0 ? fmt(stats.brotherCutTotal) : '—'}</span>
-            </div>
-            <div className="h-2 bg-secondary rounded-full overflow-hidden">
-              <div className="h-full bg-pink-soft rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? 30 : 0}%` }} />
-            </div>
-          </div>
-          <div className="border-t border-border pt-3">
-            <div className="flex justify-between">
-              <span className="text-xs text-muted-foreground font-medium">Total neto</span>
-              <span className="text-lg font-extrabold text-foreground">{stats.ordersWithInvoice > 0 ? fmt(stats.netProfit) : '—'}</span>
-            </div>
-            {confidenceLabel && (
-              <p className="text-[10px] text-amber-500 mt-1">{confidenceLabel}</p>
+            <p className="text-2xl font-extrabold">{fmt(stats.netProfit)}</p>
+            <p className="text-xs opacity-80 mt-0.5">Tu ganancia neta</p>
+            {stats.hasPartialData && (
+              <p className="text-[10px] opacity-60 mt-1">{stats.ordersWithInvoice}/{stats.totalClientOrders} pedidos con factura</p>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate('clients')}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="h-8 w-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Truck className="h-4 w-4 text-blue-600" />
+              </div>
+              <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <p className="text-2xl font-extrabold text-foreground">{stats.inTransit}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">En tránsito</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Tracking card */}
-      <div className="card-brillitos p-5 lg:row-span-2">
-        <h3 className="text-sm font-semibold text-foreground mb-4">📦 Tracking</h3>
-        {trackingOrders.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">Sin envíos activos</p>
-        ) : (
-          <div className="space-y-4">
-            {trackingOrders.map((order, idx) => (
-              <div key={order.id} className="relative">
-                {idx < trackingOrders.length - 1 && (
-                  <div className="absolute left-[11px] top-8 w-0.5 h-full bg-primary/20" />
-                )}
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <div className="h-2.5 w-2.5 rounded-full bg-primary" />
+      {/* ── Chart + Profit split ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-bold text-foreground">Cobrado en envíos</p>
+              <button className="text-xs text-primary font-semibold" onClick={() => onNavigate('clients')}>
+                Ver todo →
+              </button>
+            </div>
+            <div className="flex items-end gap-2 h-28">
+              {chartData.map((d, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <div
+                    className="w-full bg-primary/20 rounded-t-sm transition-all"
+                    style={{ height: `${(d.value / maxChart) * 96}px`, minHeight: d.value > 0 ? '4px' : '0' }}
+                  >
+                    <div
+                      className="w-full bg-primary rounded-t-sm h-full"
+                      style={{ opacity: i === chartData.length - 1 ? 1 : 0.6 }}
+                    />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-foreground truncate">{order.productName}</p>
-                    {order.orderNumber && (
-                      <p className="text-[10px] text-primary font-medium bg-primary/10 inline-block px-1.5 py-0.5 rounded mt-0.5">#{order.orderNumber}</p>
-                    )}
-                    <StatusBadge status={order.status} />
-                  </div>
+                  <span className="text-[10px] text-muted-foreground">{d.label}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <p className="text-sm font-bold text-foreground">Ganancias</p>
+            <div className="space-y-2.5">
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-muted-foreground">Por envíos</span>
+                  <span className="font-semibold">{stats.ordersWithInvoice > 0 ? fmt(stats.totalAnaProfit) : '—'}</span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-primary rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? 100 : 0}%` }} />
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Row 3: Orders table (3 cols) */}
-      <div className="card-brillitos p-5 lg:col-span-3">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-foreground">Pedidos Recientes</h3>
-          <button onClick={() => onNavigate('personal')} className="text-xs text-primary font-medium hover:underline">Ver todos →</button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-muted-foreground border-b border-border">
-                <th className="text-left py-2 font-medium">Producto</th>
-                <th className="text-left py-2 font-medium hidden sm:table-cell">Cliente</th>
-                <th className="text-left py-2 font-medium hidden md:table-cell">Tienda</th>
-                <th className="text-left py-2 font-medium">Estado</th>
-                <th className="text-right py-2 font-medium">Precio</th>
-                <th className="text-right py-2 font-medium hidden sm:table-cell">Cobro envío</th>
-                <th className="text-right py-2 font-medium hidden md:table-cell">Ganancia</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentOrders.map(order => {
-                const parentCO = clientOrders.find(co => co.products.some(p => p.id === order.id));
-                const shippingChargeClient = parentCO?.shippingChargeToClient;
-                const companyInvoice = parentCO?.shippingCostCompany;
-                const anaProfit = (shippingChargeClient != null && companyInvoice != null)
-                  ? shippingChargeClient - companyInvoice
-                  : null;
-
-                return (
-                  <tr
-                    key={order.id}
-                    onClick={() => onOrderClick ? onOrderClick(order, parentCO || null) : onNavigate(parentCO ? 'client-orders' : 'personal')}
-                    className="border-b border-border/50 hover:bg-secondary/50 transition-colors cursor-pointer"
-                    title="Click para editar"
-                  >
-                    <td className="py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
-                          {order.productPhoto ? (
-                            <img src={order.productPhoto} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                          )}
-                        </div>
-                        <span className="font-medium text-foreground truncate max-w-[120px]">{order.productName}</span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 hidden sm:table-cell text-muted-foreground">
-                      {parentCO?.clientName || '—'}
-                    </td>
-                    <td className="py-2.5 hidden md:table-cell">
-                      <StoreBadge store={order.store} />
-                    </td>
-                    <td className="py-2.5">
-                      <StatusBadge status={order.status} />
-                    </td>
-                    <td className="py-2.5 text-right font-bold text-foreground">{fmt(order.pricePaid)}</td>
-                    <td className="py-2.5 text-right font-semibold text-primary hidden sm:table-cell">
-                      {shippingChargeClient != null ? fmt(shippingChargeClient) : '—'}
-                    </td>
-                    <td className="py-2.5 text-right font-bold text-profit hidden md:table-cell">
-                      {anaProfit != null ? fmt(anaProfit) : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Equipo card */}
-      {primaryCollab && (
-        <div className="card-brillitos p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-3">👤 {primaryCollab.name}</h3>
-          <p className="text-2xl font-extrabold text-primary">{fmt(collabUnpaidTotal)}</p>
-          <p className="text-[10px] text-muted-foreground mb-3">Le debes ahora</p>
-          {collabUnpaid.length > 0 && (
-            <>
-              <button
-                className="w-full rounded-full bg-primary text-primary-foreground text-xs font-medium py-2 hover:bg-primary/90 transition-colors mb-3"
-                onClick={() => onNavigate('team')}
-              >
-                Marcar pagado
-              </button>
-              <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                {collabUnpaid.slice(0, 5).map(e => (
-                  <div key={e.id} className="flex justify-between text-[11px]">
-                    <span className="truncate text-muted-foreground">{getOrderName(e.orderId)}</span>
-                    <span className="font-semibold text-primary flex-shrink-0 ml-2">{fmt(e.collaboratorCut)}</span>
+              {stats.brotherCutTotal > 0 && (
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted-foreground">Le toca al equipo (30%)</span>
+                    <span className="font-semibold text-amber-600">-{fmt(stats.brotherCutTotal)}</span>
                   </div>
-                ))}
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-400 rounded-full" style={{ width: '30%' }} />
+                  </div>
+                </div>
+              )}
+              <div className="border-t border-border pt-2">
+                <div className="flex justify-between">
+                  <span className="text-xs text-muted-foreground font-medium">Total neto</span>
+                  <span className="text-lg font-extrabold text-foreground">
+                    {stats.ordersWithInvoice > 0 ? fmt(stats.netProfit) : '—'}
+                  </span>
+                </div>
               </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+            </div>
 
-function StatCard({ icon, label, value, onClick }: { icon: React.ReactNode; label: string; value: string; onClick: () => void }) {
-  return (
-    <div className="card-brillitos p-5 flex flex-col justify-between cursor-pointer hover:shadow-brillitos-lg transition-shadow" onClick={onClick}>
-      <div className="flex items-center justify-between">
-        <div className="h-10 w-10 rounded-xl bg-secondary flex items-center justify-center text-primary">
-          {icon}
-        </div>
-        <ArrowUpRight className="h-4 w-4 text-muted-foreground/40" />
+            {/* Brother owed */}
+            {primaryCollab && collabUnpaidTotal > 0 && (
+              <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-xs font-semibold text-amber-700">Le debes a {primaryCollab.name}</p>
+                <p className="text-base font-bold text-amber-700">{fmt(collabUnpaidTotal)}</p>
+                <button className="text-[10px] text-amber-600 underline mt-0.5" onClick={() => onNavigate('team')}>
+                  Ver detalle →
+                </button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
-      <div className="mt-3">
-        <p className="text-2xl lg:text-3xl font-extrabold text-foreground">{value}</p>
-        <p className="text-xs text-muted-foreground font-medium mt-0.5">{label}</p>
+
+      {/* ── In transit ── */}
+      {activeOrders.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-foreground">En tránsito</p>
+              <button className="text-xs text-primary font-semibold" onClick={() => onNavigate('clients')}>Ver todo →</button>
+            </div>
+            <div className="space-y-2">
+              {activeOrders.map(order => (
+                <button
+                  key={order.id}
+                  className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                  onClick={() => onOrderClick?.(order, null)}
+                >
+                  <div className="h-9 w-9 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+                    {order.productPhoto
+                      ? <img src={order.productPhoto} alt="" className="h-full w-full object-cover" />
+                      : <Package className="h-4 w-4 m-2.5 text-muted-foreground" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{order.productName}</p>
+                    <p className="text-xs text-muted-foreground">{order.store}</p>
+                  </div>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS[order.status] || 'bg-muted text-muted-foreground'}`}>
+                    {order.status}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Recent client orders ── */}
+      {recentClientOrders.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-foreground">Pedidos recientes</p>
+              <button className="text-xs text-primary font-semibold" onClick={() => onNavigate('clients')}>Ver todos →</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground border-b border-border">
+                    <th className="text-left pb-2 font-medium">Cliente</th>
+                    <th className="text-left pb-2 font-medium">Productos</th>
+                    <th className="text-right pb-2 font-medium">Carrito</th>
+                    <th className="text-right pb-2 font-medium">Envío</th>
+                    <th className="text-right pb-2 font-medium">Ganancia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {recentClientOrders.map(co => {
+                    const cart = co.products.reduce((s, p) => s + p.pricePaid, 0);
+                    const ship = co.shippingChargeToClient ?? 0;
+                    const profit = co.shippingCostCompany != null && ship > 0
+                      ? ship - co.shippingCostCompany
+                      : null;
+                    return (
+                      <tr key={co.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="py-2 font-semibold">{co.clientName}</td>
+                        <td className="py-2 text-muted-foreground">{co.products.length} prod</td>
+                        <td className="py-2 text-right">{fmt(cart)}</td>
+                        <td className="py-2 text-right">{ship > 0 ? fmt(ship) : '—'}</td>
+                        <td className="py-2 text-right font-semibold text-green-600">
+                          {profit != null ? fmt(profit) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Quick links ── */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { id: 'personal', label: 'Compras personales', icon: ShoppingBag },
+          { id: 'merchandise', label: 'Mercancía', icon: Package },
+          { id: 'team', label: 'Equipo', icon: Users },
+        ].map(({ id, label, icon: Icon }) => (
+          <Card key={id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate(id)}>
+            <CardContent className="p-3 text-center">
+              <Icon className="h-5 w-5 mx-auto mb-1.5 text-muted-foreground" />
+              <p className="text-[11px] font-semibold text-muted-foreground leading-tight">{label}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
     </div>
   );
 }

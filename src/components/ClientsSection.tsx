@@ -1,43 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, ChevronDown, ChevronUp, Trash2, Package, Phone, Pencil, Send, Calendar, Archive } from 'lucide-react';
-import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
+import { Plus, ChevronDown, ChevronUp, Phone, Pencil, Package, Check, X, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { fmtMoney } from '@/lib/utils';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
-import { EditClientDialog } from '@/components/EditClientDialog';
-import { QuotationGenerator } from '@/components/QuotationGenerator';
-import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 
-const STORAGE_KEY = 'brillitos_expanded_clients';
-
-function loadExpanded(): Set<string> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return new Set(JSON.parse(raw));
-  } catch {}
-  return new Set();
-}
-
-function saveExpanded(set: Set<string>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
-}
-
-interface ClientsSectionProps {
+interface Props {
   clients: Client[];
   clientOrders: ClientOrder[];
-  onAddClient: (name: string, phone?: string, notes?: string) => Promise<string | null>;
-  onUpdateClient?: (id: string, updates: Partial<Pick<Client, 'name' | 'phone' | 'notes'>>) => void;
-  onDeleteClient: (id: string) => void;
+  onAddClient: (data: Partial<Client>) => Promise<void>;
+  onUpdateClient?: (id: string, data: Partial<Client>) => Promise<void>;
+  onDeleteClient?: (id: string) => Promise<void>;
   onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
   onAddProduct: (order: any, clientOrderId?: string) => Promise<void>;
   onUpdateOrder: (id: string, updates: Record<string, any>) => void;
@@ -48,360 +29,350 @@ interface ClientsSectionProps {
   shippingSettings?: ShippingSettings;
 }
 
+const RATE_PER_LB = 10;
+
 function calcShippingFromProducts(order: ClientOrder, settings?: ShippingSettings) {
   const freightRate = settings?.airRatePerLb ?? 6.50;
-  const clientRate = settings?.airPricePerLb ?? 12.00;
-
+  const clientRate = settings?.airPricePerLb ?? RATE_PER_LB;
   let totalAnaPays = 0;
   let totalClientPays = 0;
-
   for (const p of order.products) {
-    const weight = p.weightLb || 0;
-    const l = p.lengthIn || 0;
-    const w = p.widthIn || 0;
-    const h = p.heightIn || 0;
-    const volWeight = (l && w && h) ? (l * w * h) / 166 : 0;
-    const billable = Math.max(weight, volWeight);
-    totalAnaPays += billable * freightRate;
-    totalClientPays += billable * clientRate;
+    const w = p.weightLb || 0;
+    const l = p.lengthIn || 0, wi = p.widthIn || 0, h = p.heightIn || 0;
+    const vol = (l && wi && h) ? (l * wi * h) / 166 : 0;
+    const bill = Math.max(w, vol);
+    totalAnaPays += bill * freightRate;
+    totalClientPays += bill * clientRate;
   }
-
-  if (order.shippingChargeToClient && order.shippingChargeToClient > 0) {
-    totalClientPays = order.shippingChargeToClient;
-  }
-  if (order.shippingCostCompany && order.shippingCostCompany > 0) {
-    totalAnaPays = order.shippingCostCompany;
-  }
-
+  if (order.shippingChargeToClient && order.shippingChargeToClient > 0) totalClientPays = order.shippingChargeToClient;
+  if (order.shippingCostCompany && order.shippingCostCompany > 0) totalAnaPays = order.shippingCostCompany;
   return { totalAnaPays, totalClientPays, profit: totalClientPays - totalAnaPays };
 }
 
-function formatDateShort(dateStr: string | null | undefined): string | null {
-  if (!dateStr) return null;
-  try {
-    return format(new Date(dateStr), "d MMM yyyy", { locale: es });
-  } catch {
-    return null;
-  }
-}
-
-function isToday(dateStr: string): boolean {
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
+function StatusBadge({ order }: { order: ClientOrder }) {
+  const p1 = order.productPaymentStatus === 'Pagado';
+  const p2 = order.shippingPaymentStatus === 'Pagado';
+  if (p1 && p2) return <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Completo</span>;
+  if (p1) return <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Envío pendiente</span>;
+  return <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Pendiente</span>;
 }
 
 export function ClientsSection({
   clients, clientOrders, onAddClient, onUpdateClient, onDeleteClient,
-  onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, onArchiveOrder, getOrdersByClient, exchangeRate, shippingSettings
-}: ClientsSectionProps) {
+  onAddOrder, onAddProduct, onUpdateOrder, onDeleteOrder, onArchiveOrder,
+  getOrdersByClient, exchangeRate, shippingSettings,
+}: Props) {
   const { toast } = useToast();
-  const [expandedClients, setExpandedClients] = useState<Set<string>>(loadExpanded);
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [showAddClient, setShowAddClient] = useState(false);
-  const [showAddOrder, setShowAddOrder] = useState<string | null>(null);
-  const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
-  const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [quotationData, setQuotationData] = useState<any>(null);
   const [newClientName, setNewClientName] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [addOrderForClient, setAddOrderForClient] = useState<string | null>(null);
+  const [editingOrder, setEditingOrder] = useState<ClientOrder | null>(null);
+  const fmt = fmtMoney;
 
-  const toggleClient = (clientId: string) => {
+  const toggleClient = (id: string) => {
     setExpandedClients(prev => {
-      const next = new Set(prev);
-      if (next.has(clientId)) next.delete(clientId);
-      else next.add(clientId);
-      saveExpanded(next);
-      return next;
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
     });
   };
 
-  const handleAddClient = async () => {
+  const saveNewClient = async () => {
     if (!newClientName.trim()) return;
-    await onAddClient(newClientName.trim(), newClientPhone.trim());
-    setNewClientName('');
-    setNewClientPhone('');
-    setShowAddClient(false);
-    toast({ title: '✅ Cliente agregado' });
+    await onAddClient({ name: newClientName.trim(), phone: newClientPhone.trim() || undefined });
+    setNewClientName(''); setNewClientPhone(''); setShowAddClient(false);
+    toast({ title: 'Cliente agregado' });
   };
 
-  const handleQuotation = (client: Client, orders: ClientOrder[]) => {
-    const products: { name: string; price: number }[] = [];
-    let totalShip = 0;
+  const activeClients = useMemo(() =>
+    clients.filter(c => !c.deletedAt).sort((a, b) => a.name.localeCompare(b.name)),
+    [clients]
+  );
 
-    orders.forEach(o => {
-      o.products.forEach(p => products.push({ name: p.productName, price: p.pricePaid }));
-      totalShip += o.shippingChargeToClient || 0;
-    });
-
-    setQuotationData({
-      clientName: client.name,
-      clientPhone: client.phone,
-      products,
-      shippingCharge: totalShip,
-      exchangeRate,
-    });
-  };
-
-  const fmt = (n: number) => `$${n.toFixed(2)}`;
+  if (activeClients.length === 0 && !showAddClient) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-12">
+          <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+            <Package className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <p className="font-semibold text-foreground">No hay clientes aún</p>
+          <p className="text-sm text-muted-foreground mt-1 mb-4">Agrega tu primer cliente para empezar</p>
+          <Button onClick={() => setShowAddClient(true)}>
+            <Plus className="h-4 w-4 mr-2" /> Agregar cliente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-foreground">👤 Clientes</h2>
-        <Button onClick={() => setShowAddClient(true)} size="sm">
-          <Plus className="h-4 w-4 mr-1" /> Nuevo Cliente
+        <h2 className="text-lg font-bold text-foreground">Clientes</h2>
+        <Button size="sm" onClick={() => setShowAddClient(true)}>
+          <Plus className="h-4 w-4 mr-1.5" /> Nuevo cliente
         </Button>
       </div>
 
-      {exchangeRate && (
-        <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-1.5">
-          💱 Tasa BCV: <span className="font-semibold text-foreground">{exchangeRate.toFixed(2)} Bs/€</span>
-        </div>
+      {/* Add client inline form */}
+      {showAddClient && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <p className="text-sm font-semibold">Nuevo cliente</p>
+            <Input
+              value={newClientName}
+              onChange={e => setNewClientName(e.target.value)}
+              placeholder="Nombre"
+              className="h-9"
+              autoFocus
+              onKeyDown={e => e.key === 'Enter' && saveNewClient()}
+            />
+            <Input
+              value={newClientPhone}
+              onChange={e => setNewClientPhone(e.target.value)}
+              placeholder="WhatsApp (opcional)"
+              className="h-9"
+              type="tel"
+            />
+            <div className="flex gap-2">
+              <Button className="flex-1 h-9" onClick={saveNewClient} disabled={!newClientName.trim()}>
+                Guardar
+              </Button>
+              <Button variant="ghost" className="h-9" onClick={() => { setShowAddClient(false); setNewClientName(''); setNewClientPhone(''); }}>
+                Cancelar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {clients.length === 0 ? (
-        <Card><CardContent className="p-6 text-center text-muted-foreground">No hay clientes. ¡Agrega el primero!</CardContent></Card>
-      ) : (
-        clients.map(client => {
-          const orders = getOrdersByClient(client.id);
-          const expanded = expandedClients.has(client.id);
-          const totalProducts = orders.reduce((sum, o) => sum + o.products.length, 0);
+      {/* Clients list */}
+      {activeClients.map(client => {
+        const orders = getOrdersByClient(client.id);
+        const expanded = expandedClients.has(client.id);
+        const isEditing = editingClient?.id === client.id;
 
-          let totalProdPaid = 0;
-          let totalProdAmount = 0;
-          let totalShipCharge = 0;
-          let totalProfit = 0;
-          let brotherProfit = 0;  // profit only from orders where brotherInvolved=true
-          let anyBrotherInvolved = false;
-          let allProdPaid = orders.length > 0;
-          let allShipPaid = orders.length > 0;
-          let anyShipMissing = false;
-          let prodMethods: string[] = [];
+        // Summary calculations
+        let totalProdPaid = 0;
+        let totalProdPending = 0;
+        let totalShipPending = 0;
+        let totalProfit = 0;
+        let brotherProfit = 0;
+        let anyBrotherInvolved = false;
+        let allPaid = orders.length > 0;
 
-          orders.forEach(o => {
-            const productCost = o.products.reduce((s, p) => s + p.pricePaid, 0);
-            totalProdAmount += productCost;
+        orders.forEach(o => {
+          const productCost = o.products.reduce((s, p) => s + p.pricePaid, 0);
+          const ship = calcShippingFromProducts(o, shippingSettings);
 
-            if (o.productPaymentStatus === 'Pagado') {
-              totalProdPaid += o.productPaymentAmount || productCost;
-              if (o.productPaymentMethod && !prodMethods.includes(o.productPaymentMethod)) {
-                prodMethods.push(o.productPaymentMethod);
-              }
-            } else {
-              allProdPaid = false;
-            }
+          if (o.productPaymentStatus === 'Pagado') {
+            totalProdPaid += o.productPaymentAmount || productCost;
+          } else {
+            totalProdPending += productCost;
+            allPaid = false;
+          }
 
-            const ship = calcShippingFromProducts(o, shippingSettings);
-            if (o.shippingPaymentStatus === 'Pagado') {
-              totalShipCharge += o.shippingPaymentAmount || ship.totalClientPays;
-              totalProfit += ship.profit;
-              if (o.brotherInvolved !== false) { brotherProfit += ship.profit; anyBrotherInvolved = true; }
-            } else if (ship.totalClientPays > 0) {
-              allShipPaid = false;
-              totalShipCharge += ship.totalClientPays;
-              totalProfit += ship.profit;
-              if (o.brotherInvolved !== false) { brotherProfit += ship.profit; anyBrotherInvolved = true; }
-            } else {
-              allShipPaid = false;
-              anyShipMissing = true;
-            }
-          });
+          if (o.shippingPaymentStatus === 'Pagado') {
+            totalProfit += ship.profit;
+            if (o.brotherInvolved) { brotherProfit += ship.profit; anyBrotherInvolved = true; }
+          } else if (ship.totalClientPays > 0) {
+            totalShipPending += ship.totalClientPays;
+            totalProfit += ship.profit;
+            if (o.brotherInvolved) { brotherProfit += ship.profit; anyBrotherInvolved = true; }
+            allPaid = false;
+          } else {
+            allPaid = false;
+          }
+        });
 
-          const bothFullyPaid = allProdPaid && allShipPaid && !anyShipMissing;
+        const totalPending = totalProdPending + totalShipPending;
 
-          return (
-            <Card key={client.id} className="overflow-hidden">
-              <CardContent className="p-0">
-                {/* Client header — clickable to expand/collapse */}
+        return (
+          <Card key={client.id} className="overflow-hidden">
+            <CardContent className="p-0">
+              {/* Client row */}
+              {isEditing ? (
+                <div className="p-4 space-y-2 bg-muted/20">
+                  <Input
+                    defaultValue={client.name}
+                    id={`edit-name-${client.id}`}
+                    placeholder="Nombre"
+                    className="h-9"
+                  />
+                  <Input
+                    defaultValue={client.phone || ''}
+                    id={`edit-phone-${client.id}`}
+                    placeholder="WhatsApp"
+                    className="h-9"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="h-8"
+                      onClick={() => {
+                        const name = (document.getElementById(`edit-name-${client.id}`) as HTMLInputElement)?.value?.trim();
+                        const phone = (document.getElementById(`edit-phone-${client.id}`) as HTMLInputElement)?.value?.trim();
+                        if (name && onUpdateClient) onUpdateClient(client.id, { name, phone: phone || undefined });
+                        setEditingClient(null);
+                      }}
+                    >
+                      <Check className="h-3.5 w-3.5 mr-1" /> Guardar
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingClient(null)}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
                 <button
-                  className="w-full p-4 text-left hover:bg-muted/30 transition-colors"
+                  className="w-full p-4 text-left hover:bg-muted/20 transition-colors"
                   onClick={() => toggleClient(client.id)}
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-foreground text-base">{client.name}</p>
-                        {onUpdateClient && (
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setEditingClient(client); }}>
-                            <Pencil className="h-3 w-3" />
-                          </Button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-foreground">{client.name}</p>
+                        {orders.length > 0 && (
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                            {orders.length} pedido{orders.length !== 1 ? 's' : ''}
+                          </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                        {client.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{client.phone}</span>}
-                        <span>{orders.length} pedido{orders.length !== 1 ? 's' : ''} · {totalProducts} producto{totalProducts !== 1 ? 's' : ''}</span>
-                      </div>
+                      {client.phone && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                          <Phone className="h-3 w-3" />
+                          {client.phone}
+                        </div>
+                      )}
                     </div>
-
-                    {orders.length > 0 && (
-                      <div className="text-right text-xs space-y-0.5 flex-shrink-0">
-                        {allProdPaid ? (
-                          <p className="text-green-600 font-medium">✅ {fmt(totalProdPaid)} pagado · {prodMethods.join(', ') || '—'}</p>
-                        ) : (
-                          <p className="text-amber-600 font-medium">⏳ Producto: {fmt(totalProdAmount)}</p>
-                        )}
-
-                        {bothFullyPaid ? (
-                          <>
-                            <p className="text-green-600 font-medium">✅ Todo cobrado · Ganancia: {fmt(totalProfit)}</p>
-                            {anyBrotherInvolved && brotherProfit > 0 && (
-                              <p className="text-[11px] text-muted-foreground">🌸 Tú: {fmt(totalProfit - brotherProfit * 0.3)} · 🐒 Hermano: {fmt(brotherProfit * 0.3)}</p>
-                            )}
-                          </>
-                        ) : anyShipMissing && totalShipCharge === 0 ? (
-                          <p className="text-amber-500 font-medium">⚠️ Envío sin calcular</p>
-                        ) : (
-                          <>
-                            <p className="text-blue-600 font-medium">⏳ Cobrar: {fmt(totalShipCharge)} · Ganancia: {fmt(totalProfit)}</p>
-                            {anyBrotherInvolved && brotherProfit > 0 && (
-                              <p className="text-[11px] text-muted-foreground">🌸 Tú: {fmt(totalProfit - brotherProfit * 0.3)} · 🐒 Hermano: {fmt(brotherProfit * 0.3)}</p>
-                            )}
-                            {exchangeRate && totalShipCharge > 0 && (
-                              <p className="text-muted-foreground">≈ {(totalShipCharge * exchangeRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs</p>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />}
+                    <div className="text-right flex-shrink-0 space-y-0.5">
+                      {totalPending > 0 && (
+                        <p className="text-sm font-bold text-amber-600">{fmt(totalPending)} pendiente</p>
+                      )}
+                      {totalProfit > 0 && (
+                        <p className="text-xs text-green-600 font-semibold">Ganancia: {fmt(totalProfit)}</p>
+                      )}
+                      {anyBrotherInvolved && brotherProfit > 0 && (
+                        <p className="text-[10px] text-muted-foreground">
+                          Tú: {fmt(totalProfit - brotherProfit * 0.3)} · Hermano: {fmt(brotherProfit * 0.3)}
+                        </p>
+                      )}
+                      {allPaid && orders.length > 0 && (
+                        <p className="text-xs text-green-600 font-semibold">Todo pagado</p>
+                      )}
+                    </div>
+                    {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" /> : <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />}
                   </div>
                 </button>
+              )}
 
-                {/* Expanded detail */}
-                {expanded && (
-                  <div className="border-t border-border p-4 space-y-2 bg-muted/10">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">Pedidos</span>
-                      <div className="flex gap-2">
-                        {orders.length > 0 && (
-                          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); handleQuotation(client, orders); }}>
-                            <Send className="h-3 w-3 mr-1" /> Cotización
+              {/* Expanded: orders + actions */}
+              {expanded && !isEditing && (
+                <div className="border-t border-border">
+                  {/* Action bar */}
+                  <div className="flex items-center gap-2 px-4 py-2 bg-muted/10">
+                    <Button size="sm" className="h-7 text-xs flex-1" onClick={() => setAddOrderForClient(client.id)}>
+                      <Plus className="h-3 w-3 mr-1" /> Nuevo pedido
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={e => { e.stopPropagation(); setEditingClient(client); }}>
+                      <Pencil className="h-3 w-3 mr-1" /> Editar
+                    </Button>
+                    {onDeleteClient && (
+                      <ConfirmDeleteDialog
+                        title={`¿Eliminar a ${client.name}?`}
+                        description="Se eliminarán también todos sus pedidos."
+                        onConfirm={() => onDeleteClient(client.id)}
+                        trigger={
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive">
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => setShowAddOrder(client.id)}>
-                          <Plus className="h-3 w-3 mr-1" /> Pedido
-                        </Button>
-                        <ConfirmDeleteDialog
-                          onConfirm={() => onDeleteClient(client.id)}
-                          title="¿Segura que quieres eliminar este cliente?"
-                          trigger={
-                            <Button size="sm" variant="ghost" className="text-destructive">
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    {orders.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-2">Sin pedidos</p>
-                    ) : (
-                      orders.map(order => (
-                        <div key={order.id} className="flex items-center gap-2 p-2 rounded-md bg-card border border-border cursor-pointer hover:shadow-sm transition-shadow" onClick={() => setEditingOrder(order)}>
-                          <div className="flex-1 min-w-0 space-y-1">
-                            {order.products.map(p => {
-                              const dateLabel = formatDateShort(p.createdAt);
-                              const backfilled = p.createdAt && isToday(p.createdAt) && new Date(p.createdAt).getTime() > Date.now() - 60000;
-                              return (
-                                <div key={p.id} className="flex items-center gap-2 text-xs">
-                                  <div className="h-7 w-7 rounded bg-muted flex-shrink-0 overflow-hidden">
-                                    {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-3.5 w-3.5 m-1.5 text-muted-foreground" />}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <span className={`truncate text-foreground block ${p.arrived ? 'line-through opacity-60' : ''}`}>
-                                      📦 {p.productName}
-                                    </span>
-                                    <span className="flex items-center gap-1 text-muted-foreground text-[10px]">
-                                      <Calendar className="h-2.5 w-2.5" />
-                                      {dateLabel ? `📅 ${dateLabel}` : '—'}
-                                      {' · '}
-                                      {p.status}
-                                      {' · '}
-                                      {p.store}
-                                    </span>
-                                  </div>
-                                  <span className="text-muted-foreground flex-shrink-0">{fmt(p.pricePaid)}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <Badge variant="outline" className="text-[10px]">{order.status}</Badge>
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}>
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            {onArchiveOrder && (
-                              <ConfirmDeleteDialog
-                                onConfirm={() => onArchiveOrder(order.id)}
-                                title="¿Archivar este pedido?"
-                                description="Se archiva y desaparece de la lista activa."
-                                trigger={
-                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-500" title="Archivar">
-                                    <Archive className="h-3 w-3" />
-                                  </Button>
-                                }
-                              />
-                            )}
-                            <ConfirmDeleteDialog
-                              onConfirm={() => onDeleteOrder(order.id)}
-                              title="¿Segura que quieres eliminar este pedido?"
-                            />
-                          </div>
-                        </div>
-                      ))
+                        }
+                      />
                     )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })
-      )}
 
-      {/* Add Client Dialog */}
-      <Dialog open={showAddClient} onOpenChange={setShowAddClient}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Nuevo Cliente</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Nombre *</Label><Input value={newClientName} onChange={e => setNewClientName(e.target.value)} placeholder="Nombre del cliente" /></div>
-            <div><Label>Teléfono</Label><Input value={newClientPhone} onChange={e => setNewClientPhone(e.target.value)} placeholder="+58..." /></div>
-            <Button onClick={handleAddClient} className="w-full" disabled={!newClientName.trim()}>Agregar Cliente</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+                  {/* Orders */}
+                  {orders.length === 0 ? (
+                    <p className="px-4 py-3 text-sm text-muted-foreground">Sin pedidos todavía</p>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {orders.map(order => {
+                        const productCost = order.products.reduce((s, p) => s + p.pricePaid, 0);
+                        const ship = calcShippingFromProducts(order, shippingSettings);
+                        return (
+                          <button
+                            key={order.id}
+                            className="w-full px-4 py-3 text-left hover:bg-muted/20 transition-colors"
+                            onClick={() => setEditingOrder(order)}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                {/* Product thumbnails */}
+                                {order.products.length > 0 && (
+                                  <div className="flex gap-1 mb-1.5">
+                                    {order.products.slice(0, 4).map(p => (
+                                      <div key={p.id} className="h-8 w-8 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
+                                        {p.productPhoto
+                                          ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" />
+                                          : <Package className="h-4 w-4 m-2 text-muted-foreground" />
+                                        }
+                                      </div>
+                                    ))}
+                                    {order.products.length > 4 && (
+                                      <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground">
+                                        +{order.products.length - 4}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <StatusBadge order={order} />
+                                  <span className="text-xs text-muted-foreground">
+                                    {order.products.length} prod · {fmt(productCost)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                {ship.totalClientPays > 0 && order.shippingPaymentStatus !== 'Pagado' && (
+                                  <p className="text-xs font-semibold text-blue-600">+ {fmt(ship.totalClientPays)} envío</p>
+                                )}
+                                {ship.profit > 0 && (
+                                  <p className="text-[10px] text-green-600">Gan: {fmt(ship.profit)}</p>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
 
-      {/* Edit Client Dialog */}
-      {onUpdateClient && (
-        <EditClientDialog
-          open={!!editingClient}
-          onOpenChange={(v) => { if (!v) setEditingClient(null); }}
-          client={editingClient}
-          onUpdate={onUpdateClient}
-        />
-      )}
-
-      {/* Quotation Generator */}
-      <QuotationGenerator
-        open={!!quotationData}
-        onOpenChange={(v) => { if (!v) setQuotationData(null); }}
-        data={quotationData}
-      />
-
-      {/* Add Order Dialog */}
+      {/* Dialogs */}
       <AddClientOrderDialog
-        open={!!showAddOrder}
-        onOpenChange={(v) => { if (!v) setShowAddOrder(null); }}
+        open={!!addOrderForClient}
+        onOpenChange={v => { if (!v) setAddOrderForClient(null); }}
         clients={clients}
         onAddOrder={onAddOrder}
         onAddProduct={onAddProduct}
-        defaultClientId={showAddOrder || undefined}
+        defaultClientId={addOrderForClient || undefined}
+        exchangeRate={exchangeRate}
+        shippingSettings={shippingSettings}
       />
 
-      {/* Edit Order Dialog */}
       <EditClientOrderDialog
         open={!!editingOrder}
-        onOpenChange={(v) => { if (!v) setEditingOrder(null); }}
+        onOpenChange={v => { if (!v) setEditingOrder(null); }}
         order={editingOrder}
         onUpdateOrder={onUpdateOrder}
         onDeleteOrder={onDeleteOrder}

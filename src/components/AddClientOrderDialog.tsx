@@ -2,267 +2,234 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Camera, Loader2, ImagePlus, Clipboard, X, Trash2, Plus, Package } from 'lucide-react';
+import { Camera, Link, X, Plus, ChevronDown, ChevronUp, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { Client } from '@/hooks/useClients';
 import type { ClientOrder } from '@/hooks/useClientOrders';
-import type { Order, Store } from '@/types/orders';
+import type { Order } from '@/types/orders';
 
-const PAYMENT_METHODS = ['Bolívares (tasa euro)', 'PayPal', 'Binance', 'Efectivo'];
+// Product weight estimates by category
+const WEIGHT_ESTIMATES: Record<string, number> = {
+  'Ropa ligera': 0.3,
+  'Ropa pesada': 0.8,
+  'Zapatos': 1.2,
+  'Accesorios': 0.2,
+  'Electrónica': 0.5,
+  'Cosméticos': 0.3,
+  'Juguetes': 0.6,
+  'Hogar': 0.7,
+  'Otro': 0.5,
+};
 
-interface DetectedProduct {
-  productName: string;
+const STORES = ['Shein', 'Temu', 'Amazon', 'AliExpress', 'Otro'];
+const PAYMENT_METHODS = ['Binance', 'PayPal', 'Zelle', 'PagoMóvil', 'Efectivo', 'Otro'];
+
+interface ProductEntry {
+  id: string;
+  name: string;
+  photo: string;
+  link: string;
+  price: string;
   store: string;
-  pricePaid: number;
-  pricePerUnit: number;
-  unitsOrdered: number;
-  orderNumber: string;
-  croppedImage: string;
-  imageBbox?: [number, number, number, number] | null;
+  category: string;
+  estimatedWeight: number;
 }
 
-function compressImage(base64: string, maxWidth = 1200): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
+function makeId() { return Math.random().toString(36).slice(2, 10); }
+
+async function compressImage(dataUrl: string, maxW = 800): Promise<string> {
+  return new Promise(res => {
+    const img = new window.Image();
     img.onload = () => {
-      const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+      const scale = Math.min(1, maxW / img.width);
       const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject('No canvas context');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      res(canvas.toDataURL('image/jpeg', 0.75));
     };
-    img.onerror = reject;
-    img.src = base64;
+    img.src = dataUrl;
   });
 }
 
-function cropImageFromBbox(
-  imageBase64: string,
-  bbox: [number, number, number, number]
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const [x1Pct, y1Pct, x2Pct, y2Pct] = bbox;
-      const x = (x1Pct / 100) * img.width;
-      const y = (y1Pct / 100) * img.height;
-      const w = ((x2Pct - x1Pct) / 100) * img.width;
-      const h = ((y2Pct - y1Pct) / 100) * img.height;
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(w));
-      canvas.height = Math.max(1, Math.round(h));
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject('No canvas context');
-      ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
-    };
-    img.onerror = reject;
-    img.src = imageBase64;
-  });
-}
-
-interface AddClientOrderDialogProps {
+interface Props {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (v: boolean) => void;
   clients: Client[];
   onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
-  onAddProduct: (order: Order, clientOrderId?: string) => Promise<void>;
-  /** If provided, pre-selects the client */
+  onAddProduct: (order: any, clientOrderId?: string) => Promise<void>;
   defaultClientId?: string;
+  exchangeRate?: number | null;
+  shippingSettings?: any;
 }
 
-export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, onAddProduct, defaultClientId }: AddClientOrderDialogProps) {
+export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, onAddProduct, defaultClientId, exchangeRate }: Props) {
   const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState<'client' | 'products' | 'payment'>('client');
+
+  // Client
   const [clientId, setClientId] = useState(defaultClientId || '');
-  const [payment, setPayment] = useState('');
-  const [payRef, setPayRef] = useState('');
-  const [shipping, setShipping] = useState('');
-  const [charged, setCharged] = useState('');
-  const [companyInvoice, setCompanyInvoice] = useState('');
-  const [clientShippingCharge, setClientShippingCharge] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [showClientList, setShowClientList] = useState(false);
+
+  // Products
+  const [products, setProducts] = useState<ProductEntry[]>([]);
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductEntry | null>(null);
+
+  // New product form
+  const [newName, setNewName] = useState('');
+  const [newPhoto, setNewPhoto] = useState('');
+  const [newLink, setNewLink] = useState('');
+  const [newPrice, setNewPrice] = useState('');
+  const [newStore, setNewStore] = useState('Shein');
+  const [newCategory, setNewCategory] = useState('Ropa ligera');
+  const [processingPhoto, setProcessingPhoto] = useState(false);
+
+  // Payment
+  const [payMethod, setPayMethod] = useState('');
   const [notes, setNotes] = useState('');
-  const [orderStatus, setOrderStatus] = useState('Pendiente');
   const [brotherInvolved, setBrotherInvolved] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
 
-  // Screenshot import state
-  const [processing, setProcessing] = useState(false);
-  const [products, setProducts] = useState<DetectedProduct[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const RATE = 10; // $10/lb
 
-  // Sync clientId when defaultClientId changes or dialog opens
+  const reset = () => {
+    setStep('client');
+    setClientId(defaultClientId || '');
+    setClientSearch('');
+    setProducts([]);
+    setShowAddProduct(false);
+    setEditingProduct(null);
+    setNewName(''); setNewPhoto(''); setNewLink(''); setNewPrice('');
+    setNewStore('Shein'); setNewCategory('Ropa ligera');
+    setPayMethod(''); setNotes(''); setBrotherInvolved(false);
+  };
+
   useEffect(() => {
-    if (open && defaultClientId) {
-      setClientId(defaultClientId);
+    if (!open) return;
+    reset();
+    if (defaultClientId) {
+      const c = clients.find(x => x.id === defaultClientId);
+      if (c) setClientSearch(c.name);
     }
   }, [open, defaultClientId]);
 
-  const reset = () => {
-    setClientId(defaultClientId || '');
-    setPayment('');
-    setPayRef('');
-    setShipping('');
-    setCharged('');
-    setCompanyInvoice('');
-    setClientShippingCharge('');
-    setOrderStatus('Pendiente');
-    setBrotherInvolved(false);
-    setNotes('');
-    setProducts([]);
-    setProcessing(false);
-    setSubmitting(false);
-  };
-
-  const processImage = useCallback(async (base64Raw: string) => {
-    setProcessing(true);
+  // Photo handling
+  const handlePhotoFile = useCallback(async (file: File) => {
+    setProcessingPhoto(true);
     try {
-      const base64 = await compressImage(base64Raw, 1200);
-      const { data, error } = await supabase.functions.invoke('extract-screenshot', {
-        body: { imageBase64: base64 },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Error desconocido');
-
-      if (data.orders?.length) {
-        const detected: DetectedProduct[] = await Promise.all(
-          data.orders.map(async (order: any) => {
-            let croppedImage = '';
-            if (order.imageBbox && Array.isArray(order.imageBbox) && order.imageBbox.length === 4) {
-              try { croppedImage = await cropImageFromBbox(base64, order.imageBbox); } catch { croppedImage = base64; }
-            } else {
-              croppedImage = base64;
-            }
-            return {
-              productName: order.productName || 'Producto',
-              store: order.store || 'AliExpress',
-              pricePaid: order.pricePaid || 0,
-              pricePerUnit: order.pricePerUnit || order.pricePaid || 0,
-              unitsOrdered: order.unitsOrdered || 1,
-              orderNumber: order.orderNumber || '',
-              croppedImage,
-            };
-          })
-        );
-        setProducts(prev => [...prev, ...detected]);
-        toast({ title: `📸 ${data.orders.length} producto(s) detectado(s)` });
-      } else {
-        toast({ title: '🤔 No se detectaron productos', description: 'Intenta con otra captura' });
-      }
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    } finally {
-      setProcessing(false);
+      const reader = new FileReader();
+      reader.onload = async e => {
+        const raw = e.target?.result as string;
+        const compressed = await compressImage(raw);
+        // Try AI extraction
+        try {
+          const { data } = await supabase.functions.invoke('extract-screenshot', {
+            body: { imageBase64: compressed },
+          });
+          if (data?.success && data.orders?.[0]) {
+            const o = data.orders[0];
+            if (o.productName) setNewName(o.productName);
+            if (o.pricePaid) setNewPrice(String(o.pricePaid));
+            if (o.store) setNewStore(o.store);
+          }
+        } catch {}
+        setNewPhoto(compressed);
+        setProcessingPhoto(false);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setProcessingPhoto(false);
     }
-  }, [toast]);
+  }, []);
 
-  // Clipboard paste
-  useEffect(() => {
-    if (!open) return;
-    const handlePaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith('image/')) {
-          e.preventDefault();
-          const file = item.getAsFile();
-          if (!file) continue;
-          const reader = new FileReader();
-          reader.onload = (ev) => processImage(ev.target?.result as string);
-          reader.readAsDataURL(file);
-          return;
-        }
-      }
+  const addProduct = () => {
+    if (!newName.trim() && !newPhoto) return;
+    const est = WEIGHT_ESTIMATES[newCategory] ?? 0.5;
+    const p: ProductEntry = {
+      id: makeId(),
+      name: newName.trim() || 'Producto',
+      photo: newPhoto,
+      link: newLink.trim(),
+      price: newPrice,
+      store: newStore,
+      category: newCategory,
+      estimatedWeight: est,
     };
-    document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
-  }, [open, processImage]);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => processImage(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    if (editingProduct) {
+      setProducts(prev => prev.map(x => x.id === editingProduct.id ? p : x));
+      setEditingProduct(null);
+    } else {
+      setProducts(prev => [...prev, p]);
+    }
+    setNewName(''); setNewPhoto(''); setNewLink('');
+    setNewPrice(''); setNewStore('Shein'); setNewCategory('Ropa ligera');
+    setShowAddProduct(false);
   };
 
-  const updateProduct = (i: number, field: keyof DetectedProduct, value: any) => {
-    setProducts(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
+  const editProduct = (p: ProductEntry) => {
+    setEditingProduct(p);
+    setNewName(p.name); setNewPhoto(p.photo); setNewLink(p.link);
+    setNewPrice(p.price); setNewStore(p.store); setNewCategory(p.category);
+    setShowAddProduct(true);
   };
 
-  const removeProduct = (i: number) => {
-    setProducts(prev => prev.filter((_, idx) => idx !== i));
-  };
+  const totalCart = products.reduce((s, p) => s + (parseFloat(p.price) || 0), 0);
+  const totalEstWeight = products.reduce((s, p) => s + p.estimatedWeight, 0);
+  const estShipping = totalEstWeight * RATE;
+  const estTotal = totalCart + estShipping;
+
+  const selectedClient = clients.find(c => c.id === clientId);
+  const filteredClients = clients.filter(c =>
+    c.name.toLowerCase().includes(clientSearch.toLowerCase())
+  );
 
   const handleSubmit = async () => {
-    const selectedClient = clientId || defaultClientId;
-    if (!selectedClient) {
-      toast({ title: 'Selecciona un cliente', variant: 'destructive' });
-      return;
-    }
-
+    if (!clientId) { toast({ title: 'Selecciona un cliente', variant: 'destructive' }); return; }
+    if (products.length === 0) { toast({ title: 'Agrega al menos un producto', variant: 'destructive' }); return; }
     setSubmitting(true);
     try {
-      // Create the client order first
-      const companyInv = parseFloat(companyInvoice) || null;
-      const clientShipCharge = parseFloat(clientShippingCharge) || null;
-      const orderId = await onAddOrder(selectedClient, {
-        status: orderStatus,
-        paymentMethod: payment,
-        paymentReference: payRef,
-        shippingCost: parseFloat(shipping) || 0,
-        amountCharged: parseFloat(charged) || 0,
+      const orderId = await onAddOrder(clientId, {
+        status: 'Pendiente',
         notes,
-        shippingCostCompany: companyInv,
-        shippingChargeToClient: clientShipCharge,
         brotherInvolved,
+        shippingCost: 0,
+        amountCharged: 0,
+        paymentMethod: payMethod,
       });
+      if (!orderId) throw new Error('No se pudo crear el pedido');
 
-      if (!orderId) {
-        toast({ title: 'Error al crear pedido', description: 'Verifica que estés conectado e intenta de nuevo.', variant: 'destructive' });
-        return;
-      }
-
-      // Now add each product as an order linked to this client_order_id
-      const validStores: Store[] = ['AliExpress', 'Shein', 'Temu', 'Amazon'];
-      let savedCount = 0;
       for (const p of products) {
-        try {
-          const store: Store = validStores.includes(p.store as Store) ? (p.store as Store) : 'AliExpress';
-          const clientName = clients.find(c => c.id === selectedClient)?.name || '';
-          const order: Order = {
-            id: Math.random().toString(36).substring(2, 15),
-            category: 'client',
-            productName: p.productName,
-            productPhoto: p.croppedImage,
-            store,
-            pricePaid: p.pricePaid,
-            orderDate: new Date().toISOString().split('T')[0],
-            estimatedArrival: '',
-            orderNumber: p.orderNumber,
-            notes: '',
-            createdAt: new Date().toISOString(),
-            status: orderStatus as any,
-            clientName,
-            shippingCost: 0,
-            amountCharged: 0,
-          };
-          await onAddProduct(order, orderId);
-          savedCount++;
-        } catch (err: any) {
-          console.error('Error saving product:', err);
-        }
+        const order: any = {
+          id: makeId(),
+          category: 'client',
+          productName: p.name,
+          productPhoto: p.photo,
+          store: p.store,
+          pricePaid: parseFloat(p.price) || 0,
+          orderDate: new Date().toISOString().split('T')[0],
+          estimatedArrival: '',
+          orderNumber: '',
+          notes: '',
+          createdAt: new Date().toISOString(),
+          status: 'Pendiente',
+          clientName: selectedClient?.name || '',
+          shippingCost: 0,
+          amountCharged: 0,
+          productLink: p.link || null,
+          category_tag: p.category,
+          weight_lb_estimated: p.estimatedWeight,
+        };
+        await onAddProduct(order, orderId);
       }
 
+      toast({ title: `Pedido creado con ${products.length} producto(s)` });
       reset();
       onOpenChange(false);
-      toast({ title: `✅ Pedido creado${savedCount > 0 ? ` con ${savedCount} producto(s)` : ''}` });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -270,397 +237,303 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     }
   };
 
-  // Manual form state
-  const [showManualForm, setShowManualForm] = useState(false);
-  const [manualName, setManualName] = useState('');
-  const [manualStore, setManualStore] = useState('Amazon');
-  const [manualPrice, setManualPrice] = useState('');
-  const [manualLink, setManualLink] = useState('');
-  const [manualNotes, setManualNotes] = useState('');
-  const [manualImage, setManualImage] = useState('');
-  const [manualAIStatus, setManualAIStatus] = useState<'idle' | 'loading' | 'success' | 'partial'>('idle');
-  const manualFileRef = useRef<HTMLInputElement>(null);
-
-  const totalProducts = products.reduce((s, p) => s + p.pricePaid, 0);
-
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Nuevo Pedido de Cliente</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          {!defaultClientId && (
-            <div>
-              <Label>Cliente *</Label>
-              <Select value={clientId} onValueChange={setClientId}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar cliente..." /></SelectTrigger>
-                <SelectContent>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {clients.length === 0 && <p className="text-xs text-muted-foreground mt-1">Primero agrega un cliente en la pestaña Clientes</p>}
-            </div>
-          )}
+    <Dialog open={open} onOpenChange={v => { if (!v) reset(); onOpenChange(v); }}>
+      <DialogContent className="max-w-lg w-full max-h-[92vh] overflow-y-auto p-0">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
+          <DialogTitle className="text-base font-bold">Nuevo pedido de cliente</DialogTitle>
+        </DialogHeader>
 
-          {/* Status selector */}
-          <div>
-            <Label>Estado del pedido</Label>
-            <Select value={orderStatus} onValueChange={setOrderStatus}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Pendiente">⏳ Pendiente</SelectItem>
-                <SelectItem value="En Tránsito">🚚 En Tránsito</SelectItem>
-                <SelectItem value="Llegó">📦 Llegó</SelectItem>
-                <SelectItem value="En Venezuela">🇻🇪 En Venezuela</SelectItem>
-                <SelectItem value="Entregado">✅ Entregado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="px-5 py-4 space-y-5">
 
-          {/* Brother toggle */}
-          <div className="flex items-center justify-between border border-border rounded-lg p-2 bg-muted/20">
-            <div>
-              <Label className="text-xs font-semibold">👨 Hermano participa (30%)</Label>
-              <p className="text-[10px] text-muted-foreground">Si está apagado, no recibe comisión por este pedido</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setBrotherInvolved(v => !v)}
-              className={`relative h-5 w-9 rounded-full transition-colors ${brotherInvolved ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-            >
-              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-transform ${brotherInvolved ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-
-          <div>
-            <Label>Método de pago</Label>
-            <Select value={payment} onValueChange={setPayment}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-              <SelectContent>
-                {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div><Label>Referencia de pago</Label><Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="N° de transacción..." /></div>
-          {/* Pre-calculated shipping fields */}
-          <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/10">
-            <p className="text-xs font-semibold text-foreground">📦 Envío (si ya tienes los datos calculados)</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Factura empresa ($)</Label><Input type="number" step="0.01" value={companyInvoice} onChange={e => setCompanyInvoice(e.target.value)} placeholder="Lo que cobró Total Envíos" /></div>
-              <div><Label className="text-xs">Cobro al cliente ($)</Label><Input type="number" step="0.01" value={clientShippingCharge} onChange={e => setClientShippingCharge(e.target.value)} placeholder="Lo que le cobras" /></div>
-            </div>
-            {companyInvoice && clientShippingCharge && parseFloat(clientShippingCharge) > 0 && parseFloat(companyInvoice) > 0 && (() => {
-              const profit = parseFloat(clientShippingCharge) - parseFloat(companyInvoice);
-              const brotherCut = profit * 0.30;
-              const net = profit - brotherCut;
-              return (
-                <div className="text-xs space-y-0.5 bg-muted/30 rounded p-2">
-                  <p className="text-muted-foreground">→ Ganancia: <span className="font-semibold text-foreground">${profit.toFixed(2)}</span></p>
-                  <p className="text-muted-foreground">→ Equipo (30%): <span className="font-semibold text-primary">-${brotherCut.toFixed(2)}</span></p>
-                  <p className="text-muted-foreground">→ Tu neto: <span className="font-bold text-profit">${net.toFixed(2)}</span></p>
+          {/* ── CLIENTE ── */}
+          <section>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cliente</label>
+            <div className="relative mt-1.5">
+              <Input
+                value={clientSearch}
+                onChange={e => { setClientSearch(e.target.value); setShowClientList(true); setClientId(''); }}
+                onFocus={() => setShowClientList(true)}
+                placeholder="Buscar cliente..."
+                className="h-10"
+              />
+              {selectedClient && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-green-50 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                  <span>✓</span> {selectedClient.name}
                 </div>
-              );
-            })()}
-          </div>
-          <div><Label>Notas</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} /></div>
-
-          {/* Products Section */}
-          <div className="border-t border-border pt-3 space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Package className="h-4 w-4" /> Productos
-            </Label>
-
-            {/* Manual product entry */}
-            {!showManualForm ? (
-              <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setShowManualForm(true)}>
-                <Plus className="h-3 w-3 mr-1" /> Agregar producto manual
-              </Button>
-            ) : (
-              <div className="p-3 rounded-md border border-border space-y-2 bg-muted/20">
-                {/* Image upload zone */}
-                <div>
-                  <input
-                    ref={manualFileRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = async (ev) => {
-                        const base64 = ev.target?.result as string;
-                        const compressed = await compressImage(base64, 1200);
-                        setManualImage(compressed);
-                        // Try AI extraction
-                        setManualAIStatus('loading');
-                        try {
-                          const { data, error } = await supabase.functions.invoke('ai-pricing', {
-                            body: { type: 'product-extract', imageBase64: compressed },
-                          });
-                          if (!error && data?.success && data?.data) {
-                            const d = data.data;
-                            let filled = 0;
-                            if (d.product_name) { setManualName(d.product_name); filled++; }
-                            if (d.price != null && d.price > 0) { setManualPrice(String(d.price)); filled++; }
-                            if (d.store) {
-                              const storeMap: Record<string, string> = { amazon: 'Amazon', shein: 'Shein', temu: 'Temu', aliexpress: 'AliExpress' };
-                              setManualStore(storeMap[d.store.toLowerCase()] || 'Otra');
-                              filled++;
-                            }
-                            setManualAIStatus(filled >= 2 ? 'success' : 'partial');
-                          } else {
-                            setManualAIStatus('partial');
-                          }
-                        } catch {
-                          setManualAIStatus('partial');
-                        }
-                      };
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                  {!manualImage ? (
-                    <div
-                      onClick={() => manualFileRef.current?.click()}
-                      onPaste={async (e) => {
-                        const items = e.clipboardData?.items;
-                        if (!items) return;
-                        for (const item of Array.from(items)) {
-                          if (item.type.startsWith('image/')) {
-                            e.preventDefault();
-                            const file = item.getAsFile();
-                            if (!file) continue;
-                            const reader = new FileReader();
-                            reader.onload = async (ev) => {
-                              const base64 = ev.target?.result as string;
-                              const compressed = await compressImage(base64, 1200);
-                              setManualImage(compressed);
-                              setManualAIStatus('loading');
-                              try {
-                                const { data, error } = await supabase.functions.invoke('ai-pricing', {
-                                  body: { type: 'product-extract', imageBase64: compressed },
-                                });
-                                if (!error && data?.success && data?.data) {
-                                  const d = data.data;
-                                  let filled = 0;
-                                  if (d.product_name) { setManualName(d.product_name); filled++; }
-                                  if (d.price != null && d.price > 0) { setManualPrice(String(d.price)); filled++; }
-                                  if (d.store) {
-                                    const storeMap: Record<string, string> = { amazon: 'Amazon', shein: 'Shein', temu: 'Temu', aliexpress: 'AliExpress' };
-                                    setManualStore(storeMap[d.store.toLowerCase()] || 'Otra');
-                                    filled++;
-                                  }
-                                  setManualAIStatus(filled >= 2 ? 'success' : 'partial');
-                                } else {
-                                  setManualAIStatus('partial');
-                                }
-                              } catch {
-                                setManualAIStatus('partial');
-                              }
-                            };
-                            reader.readAsDataURL(file);
-                            return;
-                          }
-                        }
+              )}
+              {showClientList && clientSearch && filteredClients.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-20 bg-white border border-border rounded-xl shadow-lg mt-1 max-h-40 overflow-y-auto">
+                  {filteredClients.map(c => (
+                    <button
+                      key={c.id}
+                      className="w-full text-left px-4 py-2.5 hover:bg-muted transition-colors"
+                      onClick={() => {
+                        setClientId(c.id);
+                        setClientSearch(c.name);
+                        setShowClientList(false);
                       }}
-                      tabIndex={0}
-                      className="w-full h-16 flex flex-col items-center justify-center border-2 border-dashed border-border rounded-md cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
                     >
-                      <span className="text-xs text-muted-foreground">📎 Pega imagen (Ctrl+V) o haz clic para subir</span>
-                      <span className="text-[10px] text-muted-foreground/60">Acepta: PNG, JPG, WEBP, screenshots</span>
+                      <p className="text-sm font-semibold">{c.name}</p>
+                      {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ── PRODUCTOS ── */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Productos {products.length > 0 && <span className="text-primary">({products.length})</span>}
+              </label>
+              {products.length > 0 && (
+                <button
+                  className="text-xs text-primary font-semibold"
+                  onClick={() => { setEditingProduct(null); setShowAddProduct(v => !v); }}
+                >
+                  + Agregar otro
+                </button>
+              )}
+            </div>
+
+            {/* Product list */}
+            {products.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {products.map(p => (
+                  <div key={p.id} className="flex items-center gap-3 p-2.5 bg-muted/30 rounded-xl border border-border">
+                    {p.photo ? (
+                      <img src={p.photo} alt="" className="h-12 w-12 rounded-lg object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                        <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{p.name}</p>
+                      <p className="text-xs text-muted-foreground">{p.store} · {p.category} · ~{p.estimatedWeight}lb</p>
+                      {p.link && <a href={p.link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary truncate block">Ver link</a>}
                     </div>
+                    <div className="flex-shrink-0 text-right">
+                      <p className="text-sm font-bold">${parseFloat(p.price || '0').toFixed(2)}</p>
+                      <button className="text-xs text-muted-foreground underline" onClick={() => editProduct(p)}>Editar</button>
+                    </div>
+                    <button onClick={() => setProducts(prev => prev.filter(x => x.id !== p.id))} className="text-muted-foreground hover:text-destructive">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add product form */}
+            {(showAddProduct || products.length === 0) && (
+              <div className="border-2 border-dashed border-border rounded-xl p-4 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {editingProduct ? 'Editando producto' : 'Nuevo producto'}
+                </p>
+
+                {/* Photo — biggest element */}
+                <div
+                  className="relative w-full h-32 rounded-xl border-2 border-dashed border-border bg-muted/30 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors overflow-hidden"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {processingPhoto ? (
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                      <span className="text-xs">Analizando foto...</span>
+                    </div>
+                  ) : newPhoto ? (
+                    <>
+                      <img src={newPhoto} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        <span className="text-white text-xs font-semibold">Cambiar foto</span>
+                      </div>
+                    </>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <div className="h-12 w-12 rounded bg-muted overflow-hidden flex-shrink-0">
-                        <img src={manualImage} alt="" className="h-full w-full object-cover" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        {manualAIStatus === 'loading' && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Analizando imagen...</p>
-                        )}
-                        {manualAIStatus === 'success' && (
-                          <p className="text-xs text-green-600">✅ Detectado automáticamente — revisa y ajusta si es necesario</p>
-                        )}
-                        {manualAIStatus === 'partial' && (
-                          <p className="text-xs text-amber-600">⚠️ No pude leer todos los datos — completa manualmente</p>
-                        )}
-                      </div>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive flex-shrink-0" onClick={() => { setManualImage(''); setManualAIStatus('idle'); }}>
-                        <X className="h-3 w-3" />
-                      </Button>
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Camera className="h-8 w-8" />
+                      <span className="text-sm font-medium">Foto del producto</span>
+                      <span className="text-xs">Toca para abrir cámara o galería</span>
                     </div>
                   )}
                 </div>
-
-                <div>
-                  <Input
-                    value={manualName}
-                    onChange={e => setManualName(e.target.value)}
-                    placeholder="Nombre del producto *"
-                    className="h-7 text-xs"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Select value={manualStore} onValueChange={setManualStore}>
-                    <SelectTrigger className="h-7 text-xs flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Amazon">Amazon</SelectItem>
-                      <SelectItem value="Shein">Shein</SelectItem>
-                      <SelectItem value="Temu">Temu</SelectItem>
-                      <SelectItem value="AliExpress">AliExpress</SelectItem>
-                      <SelectItem value="Otra">Otra</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={manualPrice}
-                    onChange={e => setManualPrice(e.target.value)}
-                    placeholder="Precio $"
-                    className="h-7 text-xs w-24"
-                  />
-                </div>
-                <Input
-                  value={manualLink}
-                  onChange={e => setManualLink(e.target.value)}
-                  placeholder="Link (opcional)"
-                  className="h-7 text-xs"
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoFile(f); e.target.value = ''; }}
                 />
+
+                {/* Name */}
                 <Input
-                  value={manualNotes}
-                  onChange={e => setManualNotes(e.target.value)}
-                  placeholder="Notas (opcional)"
-                  className="h-7 text-xs"
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Nombre del producto"
+                  className="h-10"
                 />
-                <div className="flex gap-2">
-                  <Button size="sm" className="h-7 text-xs flex-1" disabled={manualAIStatus === 'loading'} onClick={() => {
-                    if (!manualName.trim()) return;
-                    setProducts(prev => [...prev, {
-                      productName: manualName.trim(),
-                      store: manualStore,
-                      pricePaid: parseFloat(manualPrice) || 0,
-                      pricePerUnit: parseFloat(manualPrice) || 0,
-                      unitsOrdered: 1,
-                      orderNumber: '',
-                      croppedImage: manualImage,
-                    }]);
-                    setManualName('');
-                    setManualStore('Amazon');
-                    setManualPrice('');
-                    setManualLink('');
-                    setManualNotes('');
-                    setManualImage('');
-                    setManualAIStatus('idle');
-                    setShowManualForm(false);
-                  }}>
-                    <Plus className="h-3 w-3 mr-1" /> Agregar
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setShowManualForm(false); setManualImage(''); setManualAIStatus('idle'); }}>
-                    Cancelar
-                  </Button>
-                </div>
-              </div>
-            )}
 
-            {/* Screenshot import */}
-            <Label className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
-              <Camera className="h-3 w-3" /> O importar desde captura
-            </Label>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-20 flex flex-col items-center justify-center gap-1 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
-            >
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <ImagePlus className="h-5 w-5" />
-                <span className="text-sm">/</span>
-                <Clipboard className="h-4 w-4" />
-              </div>
-              <span className="text-xs text-muted-foreground">
-                Sube captura o pega con <kbd className="px-1 py-0.5 rounded bg-muted text-xs font-mono">Ctrl+V</kbd>
-              </span>
-            </div>
-
-            {processing && (
-              <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" /> Analizando...
-              </div>
-            )}
-
-            {products.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{products.length} producto(s) · Total: ${totalProducts.toFixed(2)}</span>
-                  <Button variant="ghost" size="sm" onClick={() => setProducts([])} className="h-6 text-xs text-destructive">
-                    <Trash2 className="h-3 w-3 mr-1" /> Limpiar
-                  </Button>
-                </div>
-
-                {products.map((p, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-muted/30 border border-border/50">
-                    <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden">
-                      {p.croppedImage ? (
-                        <img src={p.croppedImage} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <Package className="h-4 w-4 m-3 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <Input
-                        value={p.productName}
-                        onChange={(e) => updateProduct(i, 'productName', e.target.value)}
-                        className="h-6 text-xs"
-                      />
-                      <div className="flex gap-1">
-                        <Select value={p.store} onValueChange={(v) => updateProduct(i, 'store', v)}>
-                          <SelectTrigger className="h-6 text-xs flex-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="AliExpress">AliExpress</SelectItem>
-                            <SelectItem value="Shein">Shein</SelectItem>
-                            <SelectItem value="Temu">Temu</SelectItem>
-                            <SelectItem value="Amazon">Amazon</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={p.pricePaid}
-                          onChange={(e) => updateProduct(i, 'pricePaid', parseFloat(e.target.value) || 0)}
-                          className="h-6 text-xs w-20"
-                          placeholder="$"
-                        />
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => removeProduct(i)} className="h-6 w-6 p-0 text-destructive flex-shrink-0">
-                      <X className="h-3 w-3" />
-                    </Button>
+                {/* Price + Store */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-semibold uppercase">Precio $</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={newPrice}
+                      onChange={e => setNewPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="h-9 mt-1"
+                    />
                   </div>
-                ))}
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-semibold uppercase">Tienda</label>
+                    <select
+                      value={newStore}
+                      onChange={e => setNewStore(e.target.value)}
+                      className="mt-1 w-full h-9 border border-input rounded-lg px-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {STORES.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs h-7"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={processing}
-                >
-                  <ImagePlus className="h-3 w-3 mr-1" /> Agregar otra captura
-                </Button>
+                {/* Category */}
+                <div>
+                  <label className="text-[10px] text-muted-foreground font-semibold uppercase">Categoría (para estimar peso)</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {Object.keys(WEIGHT_ESTIMATES).map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setNewCategory(cat)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                          newCategory === cat
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background border-border text-muted-foreground hover:border-primary'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Peso estimado: ~{WEIGHT_ESTIMATES[newCategory] ?? 0.5} lb → envío aprox. ${((WEIGHT_ESTIMATES[newCategory] ?? 0.5) * RATE).toFixed(2)}
+                  </p>
+                </div>
+
+                {/* Link */}
+                <div className="flex items-center gap-2">
+                  <Link className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  <Input
+                    value={newLink}
+                    onChange={e => setNewLink(e.target.value)}
+                    placeholder="Link del producto (opcional)"
+                    className="h-8 text-xs"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={addProduct} className="flex-1 h-9" disabled={!newName.trim() && !newPhoto}>
+                    {editingProduct ? 'Guardar cambios' : 'Agregar producto'}
+                  </Button>
+                  {(editingProduct || products.length > 0) && (
+                    <Button variant="ghost" className="h-9" onClick={() => {
+                      setShowAddProduct(false);
+                      setEditingProduct(null);
+                      setNewName(''); setNewPhoto(''); setNewLink('');
+                      setNewPrice(''); setNewStore('Shein'); setNewCategory('Ropa ligera');
+                    }}>
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
-          </div>
+          </section>
 
-          <Button onClick={handleSubmit} className="w-full" disabled={(!clientId && !defaultClientId) || submitting}>
-            {submitting ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Guardando...</> : <>Crear Pedido{products.length > 0 ? ` (${products.length} productos)` : ''}</>}
+          {/* ── RESUMEN ── */}
+          {products.length > 0 && (
+            <section className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-primary">Resumen del pedido</p>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Carrito</span>
+                  <span className="font-semibold">${totalCart.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Envío estimado (~{totalEstWeight.toFixed(1)} lb × $10)</span>
+                  <span className="font-semibold">${estShipping.toFixed(2)}</span>
+                </div>
+                {exchangeRate && (
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>≈ en Bolívares</span>
+                    <span>{(estTotal * exchangeRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-border pt-2 font-bold">
+                  <span>Total estimado</span>
+                  <span className="text-primary">${estTotal.toFixed(2)}</span>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ── PAGO / NOTAS ── */}
+          {products.length > 0 && (
+            <section className="space-y-3">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Método de pago (opcional)</label>
+              <div className="flex flex-wrap gap-1.5">
+                {PAYMENT_METHODS.map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setPayMethod(v => v === m ? '' : m)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                      payMethod === m
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border text-muted-foreground hover:border-primary'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+
+              <Input
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Notas del pedido (opcional)"
+                className="h-9 text-sm"
+              />
+
+              {/* Brother toggle */}
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
+                <div>
+                  <p className="text-sm font-semibold">Mi hermano participa</p>
+                  <p className="text-xs text-muted-foreground">30% de la ganancia</p>
+                </div>
+                <button
+                  onClick={() => setBrotherInvolved(v => !v)}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${brotherInvolved ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                >
+                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${brotherInvolved ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* ── SUBMIT ── */}
+          <Button
+            className="w-full h-11 font-bold"
+            onClick={handleSubmit}
+            disabled={submitting || !clientId || products.length === 0}
+          >
+            {submitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Guardando...</> : `Crear pedido (${products.length} producto${products.length !== 1 ? 's' : ''})`}
           </Button>
+
         </div>
       </DialogContent>
     </Dialog>
