@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Package, Search, ExternalLink, MessageCircle, ChevronRight, CheckCircle2, Clock, Truck, CircleDollarSign, X } from 'lucide-react';
+import { Plus, Package, Search, MessageCircle, ChevronRight, CheckCircle2, Clock, Truck, X, Trash2 } from 'lucide-react';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
 import { QuotationGenerator } from '@/components/QuotationGenerator';
@@ -332,6 +333,16 @@ export function ClientOrdersList({
                     Ver detalle
                     <ChevronRight className="h-3.5 w-3.5 ml-1" />
                   </Button>
+                  <ConfirmDeleteDialog
+                    title="¿Eliminar este pedido?"
+                    description="Se eliminarán todos los productos del pedido. Esta acción no se puede deshacer."
+                    onConfirm={() => onDeleteOrder(order.id)}
+                    trigger={
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
                   <Button
                     size="sm"
                     className="h-8 px-3 text-xs"
