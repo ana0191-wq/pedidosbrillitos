@@ -356,6 +356,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const invoiceBrotherCut = (invoiceProfit != null && brotherInvolved) ? invoiceProfit * 0.30 : null;
   const invoiceNetProfit = invoiceProfit != null ? (invoiceBrotherCut != null ? invoiceProfit - invoiceBrotherCut : invoiceProfit) : null;
 
+  if (!order) return null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden max-h-[95vh]">

@@ -132,7 +132,7 @@ const Index = () => {
       case 'por-cobrar':
         return (
           <>
-            <BackBar label="💰 Por Cobrar" />
+            <BackBar label="Por Cobrar" />
             <PorCobrarSection
               clientOrders={clientOrders}
               onUpdateOrder={updateClientOrder}
@@ -142,7 +142,7 @@ const Index = () => {
       case 'personal':
         return (
           <>
-            <BackBar label="🛍️ Compras Personales" />
+            <BackBar label="Compras Personales" />
             <ComprasPersonalesSection
               orders={getByCategory('personal')}
               onAdd={async (data) => {
@@ -170,7 +170,7 @@ const Index = () => {
       case 'merchandise':
         return (
           <>
-            <BackBar label="📦 Mercancía" />
+            <BackBar label="Mercancía" />
             <MercanciaSection
               orders={getByCategory('merchandise')}
               onAdd={async (data) => {
@@ -202,7 +202,7 @@ const Index = () => {
       case 'clients':
         return (
           <>
-            <BackBar label="👥 Clientes" />
+            <BackBar label="Clientes" />
             <ClientsSection
               clients={clients}
               clientOrders={clientOrders}
@@ -224,7 +224,9 @@ const Index = () => {
         );
       case 'client-orders':
         return (
-          <ClientOrdersList
+          <>
+            <BackBar label="Pedidos de clientes" />
+            <ClientOrdersList
             clientOrders={clientOrders}
             clients={clients}
             onAddOrder={addClientOrder}
@@ -237,11 +239,12 @@ const Index = () => {
             collaborators={collaborators}
             onUpsertEarning={upsertEarning}
           />
+          </>
         );
       case 'inventory':
         return (
           <>
-            <BackBar label="🗂️ Género / Inventario" />
+            <BackBar label="Inventario" />
             <InventorySection
               products={products}
               onAdd={addProduct}
@@ -254,7 +257,7 @@ const Index = () => {
       case 'catalog':
         return (
           <>
-            <BackBar label="📖 Catálogo" />
+            <BackBar label="Catálogo" />
             <CatalogSection
               products={products}
               onAdd={addProduct}
@@ -267,7 +270,7 @@ const Index = () => {
       case 'team':
         return (
           <>
-            <BackBar label="👫 Equipo" />
+            <BackBar label="Equipo" />
             <TeamSection
               collaborators={collaborators}
               earnings={earnings}
@@ -280,7 +283,7 @@ const Index = () => {
       case 'calculator':
         return (
           <>
-            <BackBar label="🧮 Calculadora" />
+            <BackBar label="Calculadora" />
             <div className="max-w-md space-y-4">
               <div className="flex gap-2 border-b border-border pb-3">
                 <button
@@ -308,7 +311,7 @@ const Index = () => {
       case 'shipping':
         return (
           <>
-            <BackBar label="✈️ Calculadora de Envío" />
+            <BackBar label="Calculadora de Envío" />
             <ShippingCalculator settings={shippingSettings} onSaveSettings={saveSettings} />
           </>
         );
