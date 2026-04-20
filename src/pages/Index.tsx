@@ -350,12 +350,12 @@ const Index = () => {
           open={quickAddClientOrderOpen}
           onOpenChange={setQuickAddClientOrderOpen}
           clients={clients}
+          onAddClient={async (name, phone) => addClient(name, phone || '')}
           onAddOrder={addClientOrder}
           onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
           exchangeRate={exchangeRate}
           shippingSettings={shippingSettings}
         />
-      )}
 
       <EditClientOrderDialog
         open={!!editingClientOrder}
