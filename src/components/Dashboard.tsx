@@ -37,6 +37,8 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
     let netProfitAccum = 0;
     let pendingCollection = 0;
     let ordersWithInvoice = 0;
+    let totalShipCharged = 0;
+    let totalShipCost = 0;
 
     for (const co of clientOrders) {
       const productCost = co.products.reduce((s, p) => s + p.pricePaid, 0);
@@ -46,6 +48,8 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
       if (charge != null && cost != null) {
         const profit = charge - cost;
         totalAnaProfit += profit;
+        totalShipCharged += charge;
+        totalShipCost += cost;
         ordersWithInvoice++;
         if (co.brotherInvolved) {
           netProfitAccum += profit * 0.70;
@@ -73,6 +77,8 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
       ordersWithInvoice,
       totalClientOrders,
       hasPartialData,
+      totalShipCharged,
+      totalShipCost,
     };
   }, [orders, clientOrders]);
 
@@ -194,36 +200,48 @@ export function Dashboard({ orders, clients, clientOrders, collaborators, earnin
 
         <Card>
           <CardContent className="p-4 space-y-3">
-            <p className="text-sm font-bold text-foreground">Ganancias</p>
-            <div className="space-y-2.5">
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-muted-foreground">Por envíos</span>
-                  <span className="font-semibold">{stats.ordersWithInvoice > 0 ? fmt(stats.totalAnaProfit) : '—'}</span>
-                </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full" style={{ width: `${stats.totalAnaProfit > 0 ? 100 : 0}%` }} />
-                </div>
+            <p className="text-sm font-bold text-foreground">Desglose de ganancias</p>
+            <div className="space-y-1.5 text-xs">
+
+              {/* Ingresos */}
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Ingresos</p>
+              <div className="flex justify-between pl-2">
+                <span className="text-muted-foreground">Envíos cobrados a clientes</span>
+                <span className="font-semibold">{stats.ordersWithInvoice > 0 ? fmt(stats.totalShipCharged) : '—'}</span>
               </div>
+
+              {/* Costos */}
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-2">Costos</p>
+              <div className="flex justify-between pl-2">
+                <span className="text-muted-foreground">Pagado a empresa de carga</span>
+                <span className="font-semibold text-red-500">{stats.ordersWithInvoice > 0 ? `−${fmt(stats.totalShipCost)}` : '—'}</span>
+              </div>
+
+              {/* Bruta */}
+              <div className="flex justify-between border-t border-border pt-1.5 font-bold">
+                <span>Ganancia bruta</span>
+                <span className="text-green-600">{stats.ordersWithInvoice > 0 ? fmt(stats.totalAnaProfit) : '—'}</span>
+              </div>
+
+              {/* Hermano */}
               {stats.brotherCutTotal > 0 && (
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-muted-foreground">Le toca al equipo (30%)</span>
-                    <span className="font-semibold text-amber-600">-{fmt(stats.brotherCutTotal)}</span>
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-400 rounded-full" style={{ width: '30%' }} />
-                  </div>
+                <div className="flex justify-between text-amber-600">
+                  <span>Parte del hermano (30%)</span>
+                  <span className="font-semibold">−{fmt(stats.brotherCutTotal)}</span>
                 </div>
               )}
-              <div className="border-t border-border pt-2">
-                <div className="flex justify-between">
-                  <span className="text-xs text-muted-foreground font-medium">Total neto</span>
-                  <span className="text-lg font-extrabold text-foreground">
-                    {stats.ordersWithInvoice > 0 ? fmt(stats.netProfit) : '—'}
-                  </span>
-                </div>
+
+              {/* Neta */}
+              <div className={`flex justify-between font-bold text-sm rounded-lg px-2 py-1.5 mt-1 ${
+                stats.netProfit > 0 ? 'bg-green-50 text-green-700' : 'bg-muted text-muted-foreground'
+              }`}>
+                <span>Tu ganancia neta</span>
+                <span>{stats.ordersWithInvoice > 0 ? fmt(stats.netProfit) : '—'}</span>
               </div>
+
+              {stats.hasPartialData && (
+                <p className="text-[10px] text-muted-foreground">{stats.ordersWithInvoice}/{stats.totalClientOrders} pedidos con factura de envío</p>
+              )}
             </div>
 
             {/* Brother owed */}

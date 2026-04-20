@@ -58,6 +58,7 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   clients: Client[];
+  onAddClient?: (name: string, phone?: string) => Promise<string | null>;
   onAddOrder: (clientId: string, data: Partial<ClientOrder>) => Promise<string | null>;
   onAddProduct: (order: Order, clientOrderId?: string) => Promise<void>;
   defaultClientId?: string;
@@ -65,7 +66,7 @@ interface Props {
   shippingSettings?: ShippingSettings;
 }
 
-export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, onAddProduct, defaultClientId, exchangeRate }: Props) {
+export function AddClientOrderDialog({ open, onOpenChange, clients, onAddClient, onAddOrder, onAddProduct, defaultClientId, exchangeRate }: Props) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const linkRef = useRef<HTMLInputElement>(null);
@@ -223,11 +224,20 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   );
 
   const handleSubmit = async () => {
-    if (!clientId) { toast({ title: 'Selecciona un cliente', variant: 'destructive' }); return; }
+    if (!clientSearch.trim()) { toast({ title: 'Escribe el nombre del cliente', variant: 'destructive' }); return; }
     if (products.length === 0) { toast({ title: 'Agrega al menos un producto', variant: 'destructive' }); return; }
     setSubmitting(true);
     try {
-      const orderId = await onAddOrder(clientId, {
+      // If no existing client matched, create one on the fly
+      let resolvedClientId = clientId;
+      if (!resolvedClientId && clientSearch.trim() && onAddClient) {
+        const newId = await onAddClient(clientSearch.trim());
+        if (!newId) throw new Error('No se pudo crear el cliente');
+        resolvedClientId = newId;
+      }
+      if (!resolvedClientId) throw new Error('Cliente requerido');
+
+      const orderId = await onAddOrder(resolvedClientId, {
         status: 'Pendiente',
         notes,
         brotherInvolved,
@@ -251,7 +261,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
           notes: p.link ? `link:${p.link}` : '',
           createdAt: new Date().toISOString(),
           status: 'Pendiente' as const,
-          clientName: selectedClient?.name || '',
+          clientName: selectedClient?.name || clientSearch.trim(),
           shippingCost: 0,
           amountCharged: 0,
         };
@@ -609,7 +619,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
           <Button
             className="w-full h-11 font-bold"
             onClick={handleSubmit}
-            disabled={submitting || !clientId || products.length === 0}
+            disabled={submitting || !clientSearch.trim() || products.length === 0}
           >
             {submitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Guardando...</> : `Crear pedido (${products.length} producto${products.length !== 1 ? 's' : ''})`}
           </Button>

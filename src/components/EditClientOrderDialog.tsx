@@ -840,6 +840,95 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             )}
           </div>
 
+          {/* ═══ DESGLOSE DE GANANCIA ═══ */}
+          {(totals.totalProductCost > 0 || totals.totalClientPaysShipping > 0) && (
+            <div className="mx-4 mt-4 rounded-xl border border-border overflow-hidden">
+              <div className="bg-muted/40 px-4 py-2.5 border-b border-border">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Desglose de ganancia</p>
+              </div>
+              <div className="p-4 space-y-2 text-sm">
+
+                {/* INGRESOS */}
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Ingresos del cliente</p>
+                <div className="space-y-1.5 pl-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Productos (reembolso)</span>
+                    <span className="font-semibold">${totals.totalProductCost.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Envío cobrado al cliente</span>
+                    <span className="font-semibold">${(invoiceClient ?? totals.totalClientPaysShipping).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border/50 pt-1.5 font-bold">
+                    <span>Total cobrado</span>
+                    <span>${(totals.totalProductCost + (invoiceClient ?? totals.totalClientPaysShipping)).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* COSTOS */}
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-3">Costos</p>
+                <div className="space-y-1.5 pl-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Productos (pagados por cliente)</span>
+                    <span className="font-semibold text-muted-foreground">−${totals.totalProductCost.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Envío a empresa de carga</span>
+                    <span className="font-semibold text-red-500">−${(invoiceCompany ?? totals.totalAnaPaysFreight).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* GANANCIA BRUTA */}
+                {(() => {
+                  const shipIn = invoiceClient ?? totals.totalClientPaysShipping;
+                  const shipOut = invoiceCompany ?? totals.totalAnaPaysFreight;
+                  const bruta = shipIn - shipOut;
+                  const brotherCut = brotherInvolved ? bruta * 0.30 : 0;
+                  const neta = bruta - brotherCut;
+                  return (
+                    <>
+                      <div className="border-t border-border pt-2.5 space-y-1.5">
+                        <div className="flex justify-between font-bold text-base">
+                          <span>Ganancia bruta (envío)</span>
+                          <span className={bruta >= 0 ? 'text-green-600' : 'text-red-500'}>
+                            ${bruta.toFixed(2)}
+                          </span>
+                        </div>
+                        {bruta > 0 && (
+                          <p className="text-[10px] text-muted-foreground pl-1">
+                            Cobré ${shipIn.toFixed(2)} − Pagué ${shipOut.toFixed(2)} a la empresa
+                          </p>
+                        )}
+                      </div>
+
+                      {brotherInvolved && bruta > 0 && (
+                        <div className="flex justify-between text-amber-600">
+                          <span>Parte del hermano (30%)</span>
+                          <span className="font-semibold">−${brotherCut.toFixed(2)}</span>
+                        </div>
+                      )}
+
+                      <div className={`flex justify-between font-bold text-base rounded-lg px-3 py-2 mt-1 ${
+                        neta > 0 ? 'bg-green-50 text-green-700' :
+                        neta < 0 ? 'bg-red-50 text-red-600' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        <span>Tu ganancia neta</span>
+                        <span>${neta.toFixed(2)}</span>
+                      </div>
+
+                      {exchangeRate && neta !== 0 && (
+                        <p className="text-[10px] text-muted-foreground text-right">
+                          ≈ {(neta * exchangeRate).toLocaleString('es', { maximumFractionDigits: 0 })} Bs
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
           {/* Status badges */}
           {bothPaid && status !== 'Entregado' && (
             <div className="mx-4 mt-4 rounded-lg border-2 border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4 text-center space-y-2">
