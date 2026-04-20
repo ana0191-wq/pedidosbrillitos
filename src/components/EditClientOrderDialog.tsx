@@ -955,7 +955,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
               <button
                 type="button"
                 onClick={() => setBrotherInvolved(v => !v)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${brotherInvolved ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                className={`relative h-6 w-11 rounded-full transition-colors ${brotherInvolved ? 'bg-primary' : 'bg-gray-200'}`}
                 aria-label="Toggle hermano"
               >
                 <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform ${brotherInvolved ? 'translate-x-5' : 'translate-x-0.5'}`} />

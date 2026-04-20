@@ -621,7 +621,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddClient,
                 </div>
                 <button
                   onClick={() => setBrotherInvolved(v => !v)}
-                  className={`relative h-6 w-11 rounded-full transition-colors ${brotherInvolved ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${brotherInvolved ? 'bg-primary' : 'bg-gray-200'}`}
                 >
                   <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${brotherInvolved ? 'translate-x-5' : 'translate-x-0.5'}`} />
                 </button>
