@@ -70,7 +70,6 @@ export function useClientOrders() {
     const { data: coData, error: coError } = await supabase
       .from('client_orders')
       .select('*')
-      .is('archived_at', null)
       .order('created_at', { ascending: false });
 
     if (coError) { console.error(coError); return; }
@@ -121,7 +120,7 @@ export function useClientOrders() {
       });
     }
 
-    setClientOrders((coData || []).map((r: any) => ({
+    setClientOrders((coData || []).filter((r: any) => !r.archived_at).map((r: any) => ({
       id: r.id,
       clientId: r.client_id,
       clientName: clientMap[r.client_id] || 'Desconocido',
