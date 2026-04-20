@@ -224,20 +224,19 @@ const Index = () => {
         );
       case 'client-orders':
         return (
-          <>
-            <BackBar label="📋 Pedidos de Clientes" />
-            <ClientOrdersList
-              clientOrders={clientOrders}
-              clients={clients}
-              onAddOrder={addClientOrder}
-              onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
-              onUpdateOrder={updateClientOrder}
-              onDeleteOrder={deleteClientOrder}
-              onArchiveOrder={archiveClientOrder}
-              exchangeRate={exchangeRate}
-              shippingSettings={shippingSettings}
-            />
-          </>
+          <ClientOrdersList
+            clientOrders={clientOrders}
+            clients={clients}
+            onAddOrder={addClientOrder}
+            onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
+            onUpdateOrder={updateClientOrder}
+            onDeleteOrder={deleteClientOrder}
+            onArchiveOrder={archiveClientOrder}
+            exchangeRate={exchangeRate}
+            shippingSettings={shippingSettings}
+            collaborators={collaborators}
+            onUpsertEarning={upsertEarning}
+          />
         );
       case 'inventory':
         return (
