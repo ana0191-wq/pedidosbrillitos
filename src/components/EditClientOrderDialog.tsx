@@ -191,8 +191,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     return { totalProductCost, totalAnaPaysFreight, totalClientPaysShipping, totalAnaProfit };
   }, [products, productDims, freightRate, clientShipRate, stage2Mode, invoiceCompanyAmount, invoiceClientCharge]);
 
-  if (!order) return null;
-
   const updateDim = (id: string, field: keyof ProductDims, value: any) => {
     setProductDims(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
   };
@@ -356,11 +354,14 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const invoiceBrotherCut = (invoiceProfit != null && brotherInvolved) ? invoiceProfit * 0.30 : null;
   const invoiceNetProfit = invoiceProfit != null ? (invoiceBrotherCut != null ? invoiceProfit - invoiceBrotherCut : invoiceProfit) : null;
 
-  if (!order) return null;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden max-h-[95vh]">
+        {!order ? (
+          <div className="flex items-center justify-center h-32">
+            <span className="text-sm text-muted-foreground">Cargando...</span>
+          </div>
+        ) : (<>
         <DialogHeader className="px-5 pt-4 pb-3 border-b border-border">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-base font-bold">Editar Pedido — {order.clientName}</DialogTitle>
@@ -918,6 +919,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             data={quotationData}
           />
         </div>
+        </>)}
       </DialogContent>
     </Dialog>
   );

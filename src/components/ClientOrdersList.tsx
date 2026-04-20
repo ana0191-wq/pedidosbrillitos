@@ -387,10 +387,7 @@ export function ClientOrdersList({
         <QuotationGenerator
           open={!!quotationData}
           onOpenChange={v => { if (!v) setQuotationData(null); }}
-          clientName={quotationData.clientName}
-          products={quotationData.products}
-          shippingCharge={quotationData.shippingCharge}
-          exchangeRate={quotationData.exchangeRate}
+          data={quotationData}
         />
       )}
     </div>
