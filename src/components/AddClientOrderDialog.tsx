@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Camera, Link, X, Plus, ChevronDown, ChevronUp, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Camera, Link, X, Plus, Loader2, Image as ImageIcon, Clipboard, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { Client } from '@/hooks/useClients';
@@ -68,7 +68,9 @@ interface Props {
 export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, onAddProduct, defaultClientId, exchangeRate }: Props) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const linkRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<'client' | 'products' | 'payment'>('client');
+  const [scrapingLink, setScrapingLink] = useState(false);
 
   // Client
   const [clientId, setClientId] = useState(defaultClientId || '');
@@ -88,6 +90,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [newStore, setNewStore] = useState('Shein');
   const [newCategory, setNewCategory] = useState('Ropa ligera');
   const [processingPhoto, setProcessingPhoto] = useState(false);
+  const [linkInput, setLinkInput] = useState('');
 
   // Payment
   const [payMethod, setPayMethod] = useState('');
@@ -97,6 +100,35 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
   const [submitting, setSubmitting] = useState(false);
 
   const RATE = 10; // $10/lb
+
+  // Scrape product from URL
+  const scrapeLink = useCallback(async (url: string) => {
+    if (!url.trim()) return;
+    const isValidUrl = url.startsWith('http') && (
+      url.includes('shein') || url.includes('temu') ||
+      url.includes('amazon') || url.includes('aliexpress')
+    );
+    if (!isValidUrl) return;
+    setScrapingLink(true);
+    try {
+      const { data } = await supabase.functions.invoke('scrape-product', { body: { url } });
+      if (data?.success) {
+        if (data.name) setNewName(data.name.slice(0, 120));
+        if (data.price) setNewPrice(String(data.price));
+        if (data.store) setNewStore(data.store);
+        if (data.imageBase64) setNewPhoto(data.imageBase64);
+        setNewLink(url);
+        setLinkInput('');
+        toast({ title: 'Producto encontrado', description: data.name?.slice(0, 60) });
+      } else {
+        toast({ title: 'No se pudo leer el link', description: 'Agrega la info manualmente', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error al leer el link', variant: 'destructive' });
+    } finally {
+      setScrapingLink(false);
+    }
+  }, [toast]);
 
   const reset = () => {
     setStep('client');
@@ -108,6 +140,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setNewName(''); setNewPhoto(''); setNewLink(''); setNewPrice('');
     setNewStore('Shein'); setNewCategory('Ropa ligera');
     setPayMethod(''); setNotes(''); setBrotherInvolved(false);
+    setLinkInput('');
   };
 
   useEffect(() => {
@@ -332,6 +365,55 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   {editingProduct ? 'Editando producto' : 'Nuevo producto'}
                 </p>
+
+                {/* Link scraper — first thing */}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      ref={linkRef}
+                      value={linkInput}
+                      onChange={e => setLinkInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && scrapeLink(linkInput)}
+                      placeholder="Pega link de Shein, Temu o Amazon..."
+                      className="w-full h-10 border border-input rounded-lg px-3 pr-9 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    {linkInput && (
+                      <button
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setLinkInput('')}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    className="h-10 px-3 flex-shrink-0"
+                    onClick={() => scrapeLink(linkInput)}
+                    disabled={scrapingLink || !linkInput.trim()}
+                  >
+                    {scrapingLink
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Sparkles className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-10 px-3 flex-shrink-0"
+                    title="Pegar del portapapeles"
+                    onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        if (text.startsWith('http')) { setLinkInput(text); scrapeLink(text); }
+                      } catch {}
+                    }}
+                  >
+                    <Clipboard className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 border-t border-border" />
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold">o agrega foto</span>
+                  <div className="flex-1 border-t border-border" />
+                </div>
 
                 {/* Photo — biggest element */}
                 <div
