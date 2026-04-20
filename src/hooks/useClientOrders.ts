@@ -70,6 +70,7 @@ export function useClientOrders() {
     const { data: coData, error: coError } = await supabase
       .from('client_orders')
       .select('*')
+      .is('archived_at', null)
       .order('created_at', { ascending: false });
 
     if (coError) { console.error(coError); return; }
@@ -171,7 +172,7 @@ export function useClientOrders() {
       notes: data.notes || '',
       shipping_cost_company: data.shippingCostCompany ?? null,
       shipping_charge_to_client: data.shippingChargeToClient ?? null,
-      brother_involved: data.brotherInvolved !== false,
+      brother_involved: data.brotherInvolved === true,
     }).select('id').single();
 
     if (error) {

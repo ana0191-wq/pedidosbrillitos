@@ -43,16 +43,19 @@ export function PorCobrarSection({ clientOrders, onUpdateOrder }: PorCobrarSecti
   const fmt = fmtMoney;
 
   const markPaid = (orderId: string, stage: 'product' | 'shipping', amount: number) => {
+    const order = clientOrders.find(co => co.id === orderId);
     if (stage === 'product') {
       onUpdateOrder(orderId, {
         productPaymentStatus: 'Pagado',
         productPaymentAmount: amount,
+        productPaymentMethod: order?.productPaymentMethod || 'Efectivo',
         productPaymentDate: new Date().toISOString(),
       });
     } else {
       onUpdateOrder(orderId, {
         shippingPaymentStatus: 'Pagado',
         shippingPaymentAmount: amount,
+        shippingPaymentMethod: order?.shippingPaymentMethod || 'Efectivo',
         shippingPaymentDate: new Date().toISOString(),
       });
     }

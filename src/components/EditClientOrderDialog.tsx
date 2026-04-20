@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle, Send, FileText, Scale } from 'lucide-react';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
 import type { ShippingSettings } from '@/hooks/useShippingSettings';
@@ -231,7 +231,6 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     if (companyAmt == null || clientAmt == null) return;
 
     const profit = clientAmt - companyAmt;
-    const brotherCut = profit * 0.30;
 
     onUpdateOrder(order.id, {
       shippingCostCompany: companyAmt,
@@ -247,7 +246,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
       }).eq('id', p.id);
     }
 
-    toast.success(`✅ Factura guardada: Empresa $${companyAmt.toFixed(2)} · Cobro $${clientAmt.toFixed(2)} · Ganancia $${profit.toFixed(2)}`);
+    toast({ title: `✅ Factura guardada: Empresa ${companyAmt.toFixed(2)} · Cobro ${clientAmt.toFixed(2)} · Ganancia ${profit.toFixed(2)}` });
   };
 
   const deriveStatus = (pPay: string, sPay: string) => {
@@ -267,8 +266,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     const anaProfit = (shippingChargeToClient != null && shippingCostCompany != null)
       ? shippingChargeToClient - shippingCostCompany
       : null;
-    const brotherCut = anaProfit != null ? anaProfit * 0.30 : null;
-    const netProfit = anaProfit != null && brotherCut != null ? anaProfit - brotherCut : null;
+    const brotherCut = (anaProfit != null && brotherInvolved) ? anaProfit * 0.30 : null;
+    const netProfit = anaProfit != null ? (brotherCut != null ? anaProfit - brotherCut : anaProfit) : null;
 
     const updates: Record<string, any> = {
       status: finalStatus,
@@ -293,7 +292,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     for (const [key, val] of Object.entries(updates)) {
       if (typeof val === 'number' && isNaN(val)) {
         console.error(`❌ NaN detected for field: ${key}`);
-        toast.error(`Error: valor inválido en ${key}`);
+        toast({ title: `Error: valor inválido en ${key}`, variant: 'destructive' });
         return;
       }
     }
@@ -339,12 +338,13 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     const productLabel = `Producto $${totals.totalProductCost.toFixed(2)}`;
     const shippingLabel = shippingChargeToClient != null ? `Envío $${shippingChargeToClient.toFixed(2)}` : 'Envío —';
     const profitLabel = anaProfit != null ? `Ganancia $${anaProfit.toFixed(2)}` : 'Ganancia —';
-    toast.success(`✅ Guardado: ${productLabel} · ${shippingLabel} · ${profitLabel}`);
+    toast({ title: `✅ Guardado: ${productLabel} · ${shippingLabel} · ${profitLabel}` });
 
     onOpenChange(false);
   };
 
-  const fmt = (n: number) => `$${n.toFixed(2)}`;
+  const { toast } = useToast();
+  const fmt = (n: number) => `${n.toFixed(2)}`;
   const bothPaid = prodPayStatus === 'Pagado' && shipPayStatus === 'Pagado';
   const myRate = parseFloat(freightRate) || 6.50;
   const cRate = parseFloat(clientShipRate) || 12;
@@ -353,8 +353,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const invoiceCompany = parseNum(invoiceCompanyAmount);
   const invoiceClient = parseNum(invoiceClientCharge);
   const invoiceProfit = (invoiceCompany != null && invoiceClient != null) ? invoiceClient - invoiceCompany : null;
-  const invoiceBrotherCut = invoiceProfit != null ? invoiceProfit * 0.30 : null;
-  const invoiceNetProfit = invoiceProfit != null && invoiceBrotherCut != null ? invoiceProfit - invoiceBrotherCut : null;
+  const invoiceBrotherCut = (invoiceProfit != null && brotherInvolved) ? invoiceProfit * 0.30 : null;
+  const invoiceNetProfit = invoiceProfit != null ? (invoiceBrotherCut != null ? invoiceProfit - invoiceBrotherCut : invoiceProfit) : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

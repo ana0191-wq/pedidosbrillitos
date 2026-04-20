@@ -113,7 +113,7 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddOrder, 
     setCompanyInvoice('');
     setClientShippingCharge('');
     setOrderStatus('Pendiente');
-    setBrotherInvolved(true);
+    setBrotherInvolved(false);
     setNotes('');
     setProducts([]);
     setProcessing(false);
