@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Camera, Link, X, Plus, Loader2, Image as ImageIcon, Clipboard, Sparkles } from 'lucide-react';
+import { Camera, Link, X, Plus, Loader2, Image as ImageIcon, Clipboard, Sparkles, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { Client } from '@/hooks/useClients';
@@ -39,6 +39,26 @@ interface ProductEntry {
 
 function makeId() { return Math.random().toString(36).slice(2, 10); }
 
+function cropImageFromBbox(imageBase64: string, bbox: [number, number, number, number]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const [x1, y1, x2, y2] = bbox;
+      const x = (x1 / 100) * img.width;
+      const y = (y1 / 100) * img.height;
+      const w = Math.max(1, ((x2 - x1) / 100) * img.width);
+      const h = Math.max(1, ((y2 - y1) / 100) * img.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(w); canvas.height = Math.round(h);
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    img.src = imageBase64;
+  });
+}
+
 async function compressImage(dataUrl: string, maxW = 800): Promise<string> {
   return new Promise(res => {
     const img = new window.Image();
@@ -69,9 +89,11 @@ interface Props {
 export function AddClientOrderDialog({ open, onOpenChange, clients, onAddClient, onAddOrder, onAddProduct, defaultClientId, exchangeRate }: Props) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const screenshotRef = useRef<HTMLInputElement>(null);
   const linkRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<'client' | 'products' | 'payment'>('client');
   const [scrapingLink, setScrapingLink] = useState(false);
+  const [analyzingScreenshot, setAnalyzingScreenshot] = useState(false);
 
   // Client
   const [clientId, setClientId] = useState(defaultClientId || '');
@@ -153,7 +175,76 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddClient,
     }
   }, [open, defaultClientId]);
 
+  // Global paste listener — Ctrl+V with image anywhere in dialog
+  useEffect(() => {
+    if (!open) return;
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          if (blob) await handleScreenshotFile(blob);
+          return;
+        }
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [open, handleScreenshotFile]);
+
   // Photo handling
+  // Analyze a screenshot with AI — extracts ALL products at once
+  const analyzeScreenshot = useCallback(async (imageBase64: string) => {
+    setAnalyzingScreenshot(true);
+    try {
+      const compressed = await compressImage(imageBase64, 1200);
+      const { data } = await supabase.functions.invoke('extract-screenshot', {
+        body: { imageBase64: compressed },
+      });
+      if (!data?.success || !data.orders?.length) {
+        toast({ title: 'No se detectaron productos', description: 'Intenta con una imagen más clara', variant: 'destructive' });
+        return;
+      }
+      const extracted: ProductEntry[] = [];
+      for (const o of data.orders) {
+        let photo = '';
+        if (o.imageBbox && Array.isArray(o.imageBbox) && o.imageBbox.length === 4) {
+          try { photo = await cropImageFromBbox(compressed, o.imageBbox as [number,number,number,number]); } catch {}
+        }
+        const cat = 'Ropa ligera';
+        extracted.push({
+          id: makeId(),
+          name: o.productName || 'Producto',
+          photo,
+          link: '',
+          price: o.pricePaid ? String(o.pricePaid) : '',
+          store: o.store || 'Otro',
+          category: cat,
+          estimatedWeight: WEIGHT_ESTIMATES[cat],
+        });
+      }
+      setProducts(prev => [...prev, ...extracted]);
+      toast({ title: `${extracted.length} producto${extracted.length !== 1 ? 's' : ''} detectado${extracted.length !== 1 ? 's' : ''}`, description: 'Revisa los precios y categorías' });
+    } catch {
+      toast({ title: 'Error al analizar la imagen', variant: 'destructive' });
+    } finally {
+      setAnalyzingScreenshot(false);
+    }
+  }, [toast]);
+
+  // Handle screenshot file input
+  const handleScreenshotFile = useCallback(async (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const raw = e.target?.result as string;
+      await analyzeScreenshot(raw);
+    };
+    reader.readAsDataURL(file);
+  }, [analyzeScreenshot]);
+
+  // Handle product photo (single product)
   const handlePhotoFile = useCallback(async (file: File) => {
     setProcessingPhoto(true);
     try {
@@ -161,18 +252,6 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddClient,
       reader.onload = async e => {
         const raw = e.target?.result as string;
         const compressed = await compressImage(raw);
-        // Try AI extraction
-        try {
-          const { data } = await supabase.functions.invoke('extract-screenshot', {
-            body: { imageBase64: compressed },
-          });
-          if (data?.success && data.orders?.[0]) {
-            const o = data.orders[0];
-            if (o.productName) setNewName(o.productName);
-            if (o.pricePaid) setNewPrice(String(o.pricePaid));
-            if (o.store) setNewStore(o.store);
-          }
-        } catch {}
         setNewPhoto(compressed);
         setProcessingPhoto(false);
       };
@@ -352,6 +431,63 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddClient,
                   + Agregar otro
                 </button>
               )}
+            </div>
+
+            {/* ★ AI Screenshot — flujo principal */}
+            <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-3.5 mb-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <Wand2 className="h-4 w-4 text-primary" />
+                <p className="text-sm font-bold text-primary">Analizar screenshot con IA</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Sube o pega una captura de pantalla y la IA detecta todos los productos automáticamente</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-9 text-xs border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={() => screenshotRef.current?.click()}
+                  disabled={analyzingScreenshot}
+                >
+                  {analyzingScreenshot
+                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Analizando...</>
+                    : <><Camera className="h-3.5 w-3.5 mr-1.5" />Subir screenshot</>}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-9 px-3 border-primary/40 text-primary hover:bg-primary/10"
+                  disabled={analyzingScreenshot}
+                  title="Pegar imagen del portapapeles (Ctrl+V)"
+                  onClick={async () => {
+                    try {
+                      const items = await navigator.clipboard.read();
+                      for (const item of items) {
+                        const imageType = item.types.find(t => t.startsWith('image/'));
+                        if (imageType) {
+                          const blob = await item.getType(imageType);
+                          const reader = new FileReader();
+                          reader.onload = async e => {
+                            await analyzeScreenshot(e.target?.result as string);
+                          };
+                          reader.readAsDataURL(blob);
+                          return;
+                        }
+                      }
+                      toast({ title: 'No hay imagen en el portapapeles', variant: 'destructive' });
+                    } catch {
+                      // Fallback: listen for paste event
+                      toast({ title: 'Pega la imagen con Ctrl+V en cualquier parte', description: 'O usa el botón de subir screenshot' });
+                    }
+                  }}
+                >
+                  <Clipboard className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <input
+                ref={screenshotRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleScreenshotFile(f); e.target.value = ''; }}
+              />
             </div>
 
             {/* Product list */}
