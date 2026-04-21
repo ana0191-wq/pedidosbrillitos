@@ -90,7 +90,7 @@ export function useOrders() {
       category: order.category,
       product_name: order.productName,
       product_photo: order.productPhoto,
-      store: order.store.toLowerCase(),
+      store: order.store || 'Otro',
       price_paid: order.pricePaid,
       order_date: order.orderDate || null,
       estimated_arrival: order.estimatedArrival || null,
@@ -127,7 +127,7 @@ export function useOrders() {
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.category !== undefined) row.category = updates.category;
     if ((updates as any).productName !== undefined) row.product_name = (updates as any).productName;
-    if ((updates as any).store !== undefined) row.store = String((updates as any).store).toLowerCase();
+    if ((updates as any).store !== undefined) row.store = String((updates as any).store) || 'Otro';
     if ((updates as any).pricePaid !== undefined) row.price_paid = (updates as any).pricePaid;
     if ((updates as any).orderDate !== undefined) row.order_date = (updates as any).orderDate || null;
     if ((updates as any).estimatedArrival !== undefined) row.estimated_arrival = (updates as any).estimatedArrival || null;

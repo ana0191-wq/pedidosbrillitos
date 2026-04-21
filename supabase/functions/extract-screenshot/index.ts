@@ -5,47 +5,45 @@ const corsHeaders = {
 
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
-const EXTRACTION_PROMPT = `Eres un experto en leer capturas de pantalla de pedidos de tiendas online (Temu, AliExpress, Shein, Amazon).
+const EXTRACTION_PROMPT = `Eres un asistente que lee capturas de pantalla de pedidos de tiendas online (Temu, AliExpress, Shein, Amazon, etc.) y extrae la información de cada producto.
 
-Analiza la imagen y extrae CADA producto visible. Devuelve un JSON array.
+Tu trabajo tiene DOS partes:
+1. LEER el texto visible en la imagen para extraer nombre, precio y tienda
+2. LOCALIZAR la foto/miniatura del producto para recortarla
 
-IMPORTANTE: Cada producto en las apps de compras tiene una MINIATURA/FOTO a la izquierda. DEBES indicar dónde está esa foto.
-
-Campos requeridos por producto:
+Devuelve un JSON array con UN objeto por producto:
 {
-  "productName": "nombre real del producto",
-  "imageBbox": [x1_percent, y1_percent, x2_percent, y2_percent],
-  "store": "Temu" | "AliExpress" | "Shein" | "Amazon",
+  "productName": "nombre completo del producto tal como aparece en la imagen",
+  "store": "Temu" | "Shein" | "AliExpress" | "Amazon" | "Otro",
   "pricePaid": 12.99,
-  "orderNumber": "123456789",
-  "orderDate": "2026-02-20",
-  "estimatedArrival": "2026-03-15",
+  "pricePerUnit": 12.99,
   "unitsOrdered": 1,
-  "pricePerUnit": 12.99
+  "orderNumber": "123456789" | null,
+  "imageBbox": [x1, y1, x2, y2]
 }
 
-REGLAS CRÍTICAS PARA imageBbox:
-- imageBbox es OBLIGATORIO para cada producto. Es un array de 4 números.
-- Los valores son PORCENTAJES (0-100) relativos al tamaño total de la imagen.
-- [x1, y1, x2, y2] donde (x1,y1) = esquina superior-izquierda y (x2,y2) = esquina inferior-derecha de la FOTO/MINIATURA del producto.
-- Ejemplo: si la miniatura del producto está en la esquina superior izquierda ocupando ~20% del ancho y entre 10%-30% del alto: [0, 10, 20, 30]
-- NUNCA pongas null en imageBbox. Siempre hay una miniatura visible junto a cada producto.
+REGLAS PARA productName:
+- Copia el nombre EXACTO del producto como aparece en la pantalla
+- Si el nombre es muy largo, puedes recortarlo pero mantén las palabras clave
+- NUNCA inventes un nombre genérico
 
-OTRAS REGLAS:
-- productName DEBE ser el nombre real del artículo. NUNCA escribas texto genérico.
-- Si no puedes leer un campo (excepto imageBbox), usa null.
-- Detecta la tienda por el diseño/logo visible.
+REGLAS PARA store:
+- Detecta la tienda por el logo, diseño o texto visible
+- Si no puedes identificarla, usa "Otro"
 
-REGLAS CRÍTICAS DE PRECIOS Y CANTIDADES:
-- "pricePaid" es SIEMPRE el TOTAL pagado por ese producto (precio unitario × cantidad).
-- "pricePerUnit" es el precio de UNA sola unidad.
-- "unitsOrdered" es la cantidad de unidades compradas.
-- Si ves algo como "$2.04 x3 = $6.12", entonces: pricePaid=6.12, pricePerUnit=2.04, unitsOrdered=3.
-- Si ves algo como "Qty: 2" y un precio total de $9.00, entonces: pricePaid=9.00, pricePerUnit=4.50, unitsOrdered=2.
-- Si solo ves UN precio sin cantidad, asume unitsOrdered=1 y pricePerUnit=pricePaid.
-- NUNCA confundas el precio unitario con el total. Busca indicadores como "x2", "×3", "Qty:", "Cantidad:", "Cant.", etc.
+REGLAS PARA PRECIOS:
+- pricePaid = total pagado por ese producto (unitario × cantidad)
+- Si ves "$2.00 × 3" → pricePaid=6.00, pricePerUnit=2.00, unitsOrdered=3
+- Si solo hay un precio → pricePaid=ese precio, unitsOrdered=1
 
-Devuelve SOLO un JSON array válido. Sin markdown, sin explicación. Si no ves ningún pedido, devuelve \`[]\`.`;
+REGLAS PARA imageBbox (MUY IMPORTANTE):
+- Cada producto tiene una foto/miniatura cuadrada a la izquierda
+- imageBbox = [x1, y1, x2, y2] en PORCENTAJES (0-100) del tamaño total de la imagen
+- (x1,y1) = esquina superior-izquierda de la foto, (x2,y2) = esquina inferior-derecha
+- Si hay varias miniaturas, cada producto tiene la suya propia
+- Si NO puedes localizar la foto con certeza, usa null
+
+Devuelve SOLO el JSON array. Sin markdown, sin explicación. Si no hay productos visibles, devuelve [].`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
