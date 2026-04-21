@@ -166,35 +166,6 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddClient,
     setLinkInput('');
   };
 
-  useEffect(() => {
-    if (!open) return;
-    reset();
-    if (defaultClientId) {
-      const c = clients.find(x => x.id === defaultClientId);
-      if (c) setClientSearch(c.name);
-    }
-  }, [open, defaultClientId]);
-
-  // Global paste listener — Ctrl+V with image anywhere in dialog
-  useEffect(() => {
-    if (!open) return;
-    const handlePaste = async (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith('image/')) {
-          e.preventDefault();
-          const blob = item.getAsFile();
-          if (blob) await handleScreenshotFile(blob);
-          return;
-        }
-      }
-    };
-    document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
-  }, [open, handleScreenshotFile]);
-
-  // Photo handling
   // Analyze a screenshot with AI — extracts ALL products at once
   const analyzeScreenshot = useCallback(async (imageBase64: string) => {
     setAnalyzingScreenshot(true);
@@ -243,6 +214,34 @@ export function AddClientOrderDialog({ open, onOpenChange, clients, onAddClient,
     };
     reader.readAsDataURL(file);
   }, [analyzeScreenshot]);
+
+  useEffect(() => {
+    if (!open) return;
+    reset();
+    if (defaultClientId) {
+      const c = clients.find(x => x.id === defaultClientId);
+      if (c) setClientSearch(c.name);
+    }
+  }, [open, defaultClientId]);
+
+  // Global paste listener — Ctrl+V with image anywhere in dialog
+  useEffect(() => {
+    if (!open) return;
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          if (blob) await handleScreenshotFile(blob);
+          return;
+        }
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [open, handleScreenshotFile]);
 
   // Handle product photo (single product)
   const handlePhotoFile = useCallback(async (file: File) => {
