@@ -19,7 +19,7 @@ function App() {
   }
 
   return (
-    <BrowserRouter basename="/pedidosbrillitos">
+    <BrowserRouter basename="/pedidosbrillitos/">
       <Routes>
         {!session ? (
           <Route path="*" element={<Auth />} />
