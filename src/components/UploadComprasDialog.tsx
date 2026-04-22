@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   X, Camera, FileText, PenLine, Upload, Loader2,
   ChevronRight, Check, Plus, User, ShoppingBag, Home, ArrowLeft
@@ -47,6 +47,67 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
   const [mStore, setMStore] = useState('SHEIN');
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  // Attach paste listener when on upload step
+  useEffect(() => {
+    if (step !== 'upload') return;
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, method]);
+
+  // Ctrl+V paste support
+  const handlePaste = async (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        // Simulate file input change
+        await processFile(file);
+        break;
+      }
+    }
+  };
+
+  // Shared file processor (used by input + paste + drop)
+  const processFile = async (file: File) => {
+    setStep('scanning');
+    try {
+      const ext  = file.name?.split('.').pop() ?? 'jpg';
+      const path = `scans/${session!.user.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('order-photos')
+        .upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('order-photos')
+        .getPublicUrl(path);
+
+      const { data, error } = await supabase.functions.invoke('scan-products', {
+        body: { imageUrl: publicUrl, mode: method }
+      });
+      if (error) throw error;
+
+      const scanned: ScannedProduct[] = (data?.products ?? []).map((p: any) => ({
+        id: uid(), name: p.name ?? 'Producto', price: parseFloat(p.price) || 0,
+        store: p.store ?? 'SHEIN', imageUrl: p.imageUrl ?? publicUrl,
+        category: null, clientId: null, newClientName: '',
+      }));
+      if (scanned.length === 0) {
+        scanned.push({ id: uid(), name: 'Producto escaneado', price: 0, store: 'SHEIN', imageUrl: publicUrl, category: null, clientId: null, newClientName: '' });
+      }
+      setProducts(scanned);
+      setStep('classify');
+    } catch (err: any) {
+      toast.error('Error al escanear: ' + (err.message ?? 'Intenta de nuevo'));
+      setStep('upload');
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  };
 
   const reset = () => {
     setStep('method'); setMethod(null); setProducts([]); setSaving(false);
@@ -64,50 +125,7 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
   // ── File scan ─────────────────────────────────────────────────────────
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setStep('scanning');
-
-    try {
-      // Upload to storage
-      const ext  = file.name.split('.').pop() ?? 'jpg';
-      const path = `scans/${session!.user.id}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from('order-photos')
-        .upload(path, file, { upsert: true });
-      if (upErr) throw upErr;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('order-photos')
-        .getPublicUrl(path);
-
-      // Call edge function
-      const { data, error } = await supabase.functions.invoke('scan-products', {
-        body: { imageUrl: publicUrl, mode: method }
-      });
-      if (error) throw error;
-
-      const scanned: ScannedProduct[] = (data?.products ?? []).map((p: any) => ({
-        id: uid(),
-        name:     p.name  ?? 'Producto',
-        price:    parseFloat(p.price) || 0,
-        store:    p.store ?? 'SHEIN',
-        imageUrl: p.imageUrl ?? publicUrl,
-        category: null, clientId: null, newClientName: '',
-      }));
-
-      // Fallback: at least one product
-      if (scanned.length === 0) {
-        scanned.push({ id: uid(), name: 'Producto escaneado', price: 0, store: 'SHEIN', imageUrl: publicUrl, category: null, clientId: null, newClientName: '' });
-      }
-
-      setProducts(scanned);
-      setStep('classify');
-    } catch (err: any) {
-      toast.error('Error al escanear: ' + (err.message ?? 'Intenta de nuevo'));
-      setStep('upload');
-    }
-    // Reset file input
-    if (fileRef.current) fileRef.current.value = '';
+    if (file) await processFile(file);
   };
 
   // ── Manual add ────────────────────────────────────────────────────────
@@ -276,13 +294,15 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
 
           {/* UPLOAD */}
           {step === 'upload' && (
-            <div className="p-5">
+            <div className="p-5 space-y-3">
               <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFile} />
-              <button
+
+              {/* Paste zone — highlighted when on this step */}
+              <div
+                className="w-full border-2 border-dashed border-orange-200 rounded-2xl py-10 flex flex-col items-center gap-3 bg-orange-50/40 cursor-pointer hover:border-orange-400 hover:bg-orange-50/70 transition"
                 onClick={() => fileRef.current?.click()}
-                className="w-full border-2 border-dashed border-gray-200 rounded-2xl py-14 flex flex-col items-center gap-3 hover:border-orange-300 hover:bg-orange-50/30 transition"
               >
-                <div className="w-14 h-14 rounded-2xl bg-orange-50 flex items-center justify-center">
+                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center">
                   <Upload className="w-6 h-6 text-orange-500" />
                 </div>
                 <div className="text-center">
@@ -296,7 +316,20 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
                 <span className="text-xs font-medium bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
                   Seleccionar archivo
                 </span>
-              </button>
+              </div>
+
+              {/* Ctrl+V hint */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400">o</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+              <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 border border-gray-100">
+                <kbd className="px-2 py-1 rounded-md bg-white border border-gray-200 text-xs font-mono text-gray-600 shadow-sm">Ctrl</kbd>
+                <span className="text-gray-400 text-xs">+</span>
+                <kbd className="px-2 py-1 rounded-md bg-white border border-gray-200 text-xs font-mono text-gray-600 shadow-sm">V</kbd>
+                <span className="text-xs text-gray-500 ml-1">para pegar imagen del portapapeles</span>
+              </div>
             </div>
           )}
 
