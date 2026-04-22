@@ -392,7 +392,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
           </div>
         </DialogHeader>
 
-        <div className="overflow-y-auto max-h-[calc(95vh-60px)]">
+        <div className="overflow-y-auto max-h-[calc(95vh-60px)]" ref={el => { if (el && open) el.scrollTop = 0; }}>
           {/* ═══ ETAPA 1 — Producto ═══ */}
           <div className={`mx-4 mt-4 rounded-lg border-2 p-4 ${prodPayStatus === 'Pagado' ? 'border-green-500/30 bg-green-50 dark:bg-green-950/20' : 'border-amber-500/30 bg-amber-50 dark:bg-amber-950/20'}`}>
             <div className="flex items-center gap-2 mb-2">
@@ -811,7 +811,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
           )}
 
           {/* ═══ Product checklist ═══ */}
-          {(stage2Mode === 'invoice' || shipPayStatus === 'Pagado') && products.length > 0 && (
+          {products.length > 0 && (
             <div className="mx-4 mt-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Productos ({products.filter(p => p.delivered).length}/{products.length} entregados)</span>
