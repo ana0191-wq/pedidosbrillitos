@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   X, Camera, FileText, PenLine, Upload, Loader2,
   ChevronRight, Check, Plus, User, ShoppingBag, Home,
-  ArrowLeft, Trash2, DollarSign
+  ArrowLeft, Trash2, DollarSign, Code2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,7 +22,7 @@ interface ScannedProduct {
 }
 
 type Step = 'method' | 'upload' | 'scanning' | 'classify' | 'saving' | 'done';
-type Method = 'screenshot' | 'invoice' | 'manual';
+type Method = 'screenshot' | 'invoice' | 'html' | 'manual';
 
 interface Props { open: boolean; onClose: () => void; }
 
@@ -336,8 +336,9 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
             <div className="p-5 space-y-3">
               <p className="text-sm text-gray-500">¿Cómo quieres subir tus compras?</p>
               {[
-                { m: 'screenshot' as Method, icon: Camera,   title: 'Captura de pantalla', desc: 'Foto o screenshot del carrito / producto',  iconCls: 'text-orange-500', bgCls: 'bg-orange-50' },
+                { m: 'screenshot' as Method, icon: Camera,   title: 'Captura de pantalla', desc: 'Foto o screenshot del carrito / producto',  iconCls: 'text-orange-500', bgCls: 'bg-orange-50'  },
                 { m: 'invoice'    as Method, icon: FileText,  title: 'Factura / Orden',     desc: 'PDF o imagen de la orden completa',         iconCls: 'text-blue-500',   bgCls: 'bg-blue-50'   },
+                { m: 'html'       as Method, icon: Code2,     title: 'Página web (.html)',  desc: 'Guarda la página de SHEIN/Temu como .html', iconCls: 'text-violet-500', bgCls: 'bg-violet-50' },
                 { m: 'manual'     as Method, icon: PenLine,   title: 'Manual',              desc: 'Escribe los productos uno por uno',         iconCls: 'text-green-600',  bgCls: 'bg-green-50'  },
               ].map(({ m, icon: Icon, title, desc, iconCls, bgCls }) => (
                 <button key={m} onClick={() => selectMethod(m)}
@@ -359,7 +360,9 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
           {/* ── UPLOAD ── */}
           {step === 'upload' && (
             <div className="p-5 space-y-3">
-              <input ref={fileRef} type="file" accept="image/*,application/pdf,text/html,.html" className="hidden" onChange={handleFile} />
+              <input ref={fileRef} type="file"
+                accept={method === 'html' ? 'text/html,.html' : 'image/*,application/pdf'}
+                className="hidden" onChange={handleFile} />
               <div
                 onClick={() => fileRef.current?.click()}
                 className="w-full border-2 border-dashed border-orange-200 rounded-2xl py-10 flex flex-col items-center gap-3 bg-orange-50/40 cursor-pointer hover:border-orange-400 hover:bg-orange-50/70 transition"
@@ -369,14 +372,19 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
                 </div>
                 <div className="text-center">
                   <p className="font-semibold text-gray-900">
-                    {method === 'invoice' ? 'Sube la factura' : 'Sube la captura'}
+                    {method === 'html' ? 'Sube el archivo .html' : method === 'invoice' ? 'Sube la factura' : 'Sube la captura'}
                   </p>
                   <p className="text-sm text-gray-400 mt-1">
-                    {method === 'invoice' ? 'PDF, imagen o archivo .html de la orden' : 'Foto, screenshot o .html del carrito'}
+                    {method === 'html'
+                      ? 'En SHEIN/Temu: Ctrl+S → "Página web, solo HTML"'
+                      : method === 'invoice' ? 'PDF o imagen de la orden'
+                      : 'Foto o screenshot del carrito'}
                   </p>
                 </div>
-                <span className="text-xs font-medium bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
-                  Seleccionar archivo
+                <span className={`text-xs font-medium px-3 py-1 rounded-full ${
+                  method === 'html' ? 'bg-violet-100 text-violet-600' : 'bg-orange-100 text-orange-600'
+                }`}>
+                  Seleccionar archivo .{method === 'html' ? 'html' : 'jpg/png/pdf'}
                 </span>
               </div>
               <div className="flex items-center gap-3">
