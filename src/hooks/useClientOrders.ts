@@ -67,13 +67,26 @@ export function useClientOrders() {
   const { toast } = useToast();
 
   const fetchClientOrders = useCallback(async () => {
-    // Fetch client orders — explicit columns to avoid schema cache errors
-    const { data: coData, error: coError } = await supabase
-      .from('client_orders')
-      .select('id, user_id, client_id, status, payment_method, payment_reference, shipping_cost, amount_charged, shipping_type, shipping_weight_lb, shipping_volume_ft3, shipping_dimensions, notes, created_at, archived_at, product_payment_status, product_payment_amount, product_payment_method, product_payment_date, shipping_payment_status, shipping_payment_amount, shipping_payment_method, shipping_payment_date, shipping_cost_company, shipping_charge_to_client, brother_involved, tracking_number')
-      .order('created_at', { ascending: false });
-
-    if (coError) { console.error(coError); return; }
+    // Fetch client orders — try with archived_at filter first, fall back without it
+    let coData: any[] = [];
+    {
+      const { data: d1, error: e1 } = await supabase
+        .from('client_orders')
+        .select('*')
+        .is('archived_at', null)
+        .order('created_at', { ascending: false });
+      if (!e1) {
+        coData = d1 || [];
+      } else {
+        console.warn('client_orders with archived_at failed, trying without:', e1.message);
+        const { data: d2, error: e2 } = await supabase
+          .from('client_orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (e2) { console.error('client_orders fetch failed:', e2.message); }
+        else { coData = d2 || []; }
+      }
+    }
 
     // Fetch clients for names
     const { data: clientsData } = await supabase.from('clients').select('id, name');
