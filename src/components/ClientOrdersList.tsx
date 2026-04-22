@@ -182,7 +182,12 @@ export function ClientOrdersList({
           const StatusIcon = status.icon;
           const productCost = order.products.reduce((s, p) => s + p.pricePaid, 0);
           const ship = calcShipping(order, shippingSettings);
-          const totalOwed = productCost + (order.shippingPaymentStatus !== 'Pagado' ? ship.clientPays : 0);
+          // What client still owes
+          const productsPaid = order.productPaymentStatus === 'Pagado';
+          const shipPaid = order.shippingPaymentStatus === 'Pagado';
+          const owedProducts = productsPaid ? 0 : (order.productPaymentAmount != null ? productCost - order.productPaymentAmount : productCost);
+          const owedShipping = shipPaid ? 0 : ship.clientPays;
+          const totalOwed = owedProducts + owedShipping;
           const productsWithPhotos = order.products.filter(p => p.productPhoto);
           const productsNoPhoto = order.products.filter(p => !p.productPhoto);
           const date = new Date(order.createdAt).toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
@@ -259,23 +264,21 @@ export function ClientOrdersList({
                 <div className="flex items-center gap-3 pt-1 border-t border-border/50">
                   <div className="flex-1">
                     <p className="text-[10px] text-muted-foreground uppercase font-semibold">Carrito</p>
-                    <p className="text-sm font-bold text-foreground">{fmt(productCost)}</p>
+                    <p className={`text-sm font-bold ${productsPaid ? 'text-green-600' : 'text-foreground'}`}>{fmt(productCost)}</p>
                   </div>
                   {ship.clientPays > 0 && (
                     <div className="flex-1">
                       <p className="text-[10px] text-muted-foreground uppercase font-semibold">Envío</p>
-                      <p className={`text-sm font-bold ${order.shippingPaymentStatus === 'Pagado' ? 'text-green-600' : 'text-foreground'}`}>
-                        {fmt(ship.clientPays)}
-                      </p>
+                      <p className={`text-sm font-bold ${shipPaid ? 'text-green-600' : 'text-foreground'}`}>{fmt(ship.clientPays)}</p>
                     </div>
                   )}
-                  {ship.profit > 0 && (
+                  {ship.profit > 0 && shipPaid && (
                     <div className="flex-1">
                       <p className="text-[10px] text-muted-foreground uppercase font-semibold">Ganancia</p>
                       <p className="text-sm font-bold text-green-600">{fmt(ship.profit)}</p>
                     </div>
                   )}
-                  {fk !== 'done' && totalOwed > 0 && (
+                  {totalOwed > 0 && (
                     <div className="flex-1">
                       <p className="text-[10px] text-amber-600 uppercase font-semibold">Por cobrar</p>
                       <p className="text-sm font-bold text-amber-600">{fmt(totalOwed)}</p>

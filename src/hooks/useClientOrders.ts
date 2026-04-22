@@ -67,10 +67,10 @@ export function useClientOrders() {
   const { toast } = useToast();
 
   const fetchClientOrders = useCallback(async () => {
-    // Fetch client orders
+    // Fetch client orders — explicit columns to avoid schema cache errors
     const { data: coData, error: coError } = await supabase
       .from('client_orders')
-      .select('*')
+      .select('id, user_id, client_id, status, payment_method, payment_reference, shipping_cost, amount_charged, shipping_type, shipping_weight_lb, shipping_volume_ft3, shipping_dimensions, notes, created_at, archived_at, product_payment_status, product_payment_amount, product_payment_method, product_payment_date, shipping_payment_status, shipping_payment_amount, shipping_payment_method, shipping_payment_date, shipping_cost_company, shipping_charge_to_client, brother_involved, tracking_number')
       .order('created_at', { ascending: false });
 
     if (coError) { console.error(coError); return; }
@@ -150,7 +150,7 @@ export function useClientOrders() {
       shippingChargeToClient: r.shipping_charge_to_client != null ? Number(r.shipping_charge_to_client) : null,
       brotherInvolved: r.brother_involved !== false,
       trackingNumber: r.tracking_number || null,
-      estimatedArrivalDate: r.estimated_arrival_date || null,
+      estimatedArrivalDate: null,
     })));
     setLoading(false);
   }, []);
@@ -208,7 +208,7 @@ export function useClientOrders() {
     if (updates.shippingChargeToClient !== undefined) row.shipping_charge_to_client = updates.shippingChargeToClient;
     if (updates.brotherInvolved !== undefined) row.brother_involved = updates.brotherInvolved;
     if (updates.trackingNumber !== undefined) row.tracking_number = updates.trackingNumber;
-    if (updates.estimatedArrivalDate !== undefined) row.estimated_arrival_date = updates.estimatedArrivalDate;
+    // estimated_arrival_date not in client_orders table yet — skip
 
     const { error } = await supabase.from('client_orders').update(row).eq('id', id);
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
