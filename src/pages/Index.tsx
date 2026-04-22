@@ -29,8 +29,6 @@ import type { ClientOrder as ClientOrderRow } from '@/hooks/useClientOrders';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Plus } from 'lucide-react';
-import { NuevoPedidoDialog } from '@/components/NuevoPedidoDialog';
-import { PedidosView } from '@/components/PedidosView';
 
 const NON_DASHBOARD_TABS = ['por-cobrar', 'personal', 'merchandise', 'clients', 'client-orders', 'inventory', 'catalog', 'team', 'shipping', 'calculator'];
 
@@ -52,7 +50,6 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingClientOrder, setEditingClientOrder] = useState<ClientOrderRow | null>(null);
   const [quickAddClientOrderOpen, setQuickAddClientOrderOpen] = useState(false);
-  const [showNuevoPedido, setShowNuevoPedido] = useState(false);
   const [calcTab, setCalcTab] = useState<'cotizar' | 'distribuir'>('cotizar');
 
   const counts = getCounts();
@@ -228,24 +225,22 @@ const Index = () => {
       case 'client-orders':
         return (
           <>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-xl font-bold">Pedidos</h1>
-                <p className="text-xs text-muted-foreground">{orders.length} productos en total</p>
-              </div>
-              <Button size="sm" className="bg-primary text-white h-9 px-4 rounded-xl font-semibold"
-                onClick={() => setShowNuevoPedido(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Nuevo pedido
-              </Button>
-            </div>
-            <PedidosView
-              orders={orders}
-              clients={clients}
-              exchangeRate={exchangeRate}
-              onUpdate={(id, patch) => updateOrder(id, patch)}
-              onDelete={deleteOrder}
-              onToggleDelivered={(id, delivered) => updateOrder(id, { delivered } as any)}
-            />
+            <BackBar label="Pedidos de clientes" />
+            <ClientOrdersList
+            clientOrders={clientOrders}
+            clients={clients}
+            onAddClient={async (name, phone) => addClient(name, phone || '')}
+            onAddOrder={addClientOrder}
+            onAddProduct={async (order, coId) => { await addOrder(order, coId); }}
+            onUpdateOrder={updateClientOrder}
+            onDeleteOrder={deleteClientOrder}
+            onArchiveOrder={archiveClientOrder}
+            exchangeRate={exchangeRate}
+            shippingSettings={shippingSettings}
+            collaborators={collaborators}
+            onUpsertEarning={upsertEarning}
+            onToggleDelivered={async (productId, delivered) => { await updateOrder(productId, { delivered } as any); }}
+          />
           </>
         );
       case 'inventory':
@@ -336,7 +331,7 @@ const Index = () => {
         onSignOut={signOut}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onQuickAddClientOrder={() => setShowNuevoPedido(true)}
+        onQuickAddClientOrder={() => setQuickAddClientOrderOpen(true)}
       />
 
       <main className="max-w-[1400px] mx-auto px-4 py-4 pb-24">
@@ -374,39 +369,6 @@ const Index = () => {
         shippingSettings={shippingSettings}
         collaborators={collaborators}
         onUpsertEarning={upsertEarning}
-      />
-
-      {/* New unified order dialog */}
-      <NuevoPedidoDialog
-        open={showNuevoPedido}
-        onOpenChange={setShowNuevoPedido}
-        clients={clients}
-        onAddClient={async (name) => addClient(name, '')}
-        exchangeRate={exchangeRate}
-        onSave={async (items) => {
-          for (const item of items) {
-            const order: any = {
-              id: Math.random().toString(36).slice(2),
-              category: item.type,
-              productName: item.name,
-              productPhoto: item.photo,
-              store: item.store || 'Otro',
-              pricePaid: parseFloat(item.price) || 0,
-              orderDate: new Date().toISOString().split('T')[0],
-              estimatedArrival: '',
-              orderNumber: '',
-              notes: '',
-              status: 'Pendiente',
-              createdAt: new Date().toISOString(),
-              clientName: item.clientName || '',
-              clientId: item.clientId || '',
-              shippingCost: 0,
-              amountCharged: 0,
-              delivered: false,
-            };
-            await addOrder(order);
-          }
-        }}
       />
     </div>
   );
