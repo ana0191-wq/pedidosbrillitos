@@ -192,61 +192,7 @@ export function ClientOrdersList({
               key={order.id}
               className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm hover:shadow-md transition-shadow"
             >
-              {/* ── Photos strip ── */}
-              {order.products.length > 0 && (
-                <div className="relative">
-                  {productsWithPhotos.length > 0 ? (
-                    <div className={`grid gap-0.5 ${
-                      productsWithPhotos.length === 1 ? 'grid-cols-1' :
-                      productsWithPhotos.length === 2 ? 'grid-cols-2' :
-                      productsWithPhotos.length === 3 ? 'grid-cols-3' :
-                      'grid-cols-4'
-                    }`}>
-                      {productsWithPhotos.slice(0, 4).map((p, i) => (
-                        <div
-                          key={p.id}
-                          className={`relative bg-muted overflow-hidden ${
-                            productsWithPhotos.length === 1 ? 'h-52' :
-                            productsWithPhotos.length === 2 ? 'h-40' :
-                            'h-32'
-                          }`}
-                        >
-                          <img
-                            src={p.productPhoto!}
-                            alt={p.productName}
-                            className="w-full h-full object-cover"
-                          />
-                          {/* Store badge */}
-                          <span className={`absolute top-1.5 left-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STORE_COLORS[p.store] || STORE_COLORS.Otro}`}>
-                            {p.store}
-                          </span>
-                          {/* Price */}
-                          <span className="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                            ${p.pricePaid.toFixed(2)}
-                          </span>
-                          {/* +N overlay on last visible */}
-                          {i === 3 && order.products.length > 4 && (
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                              <span className="text-white text-lg font-bold">+{order.products.length - 4}</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="h-20 bg-muted/30 flex items-center justify-center gap-2">
-                      <Package className="h-5 w-5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">{order.products.length} producto{order.products.length !== 1 ? 's' : ''} sin foto</span>
-                    </div>
-                  )}
 
-                  {/* Status pill on top-right of photo */}
-                  <div className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-semibold ${status.bg} ${status.cls}`}>
-                    <StatusIcon className="h-3 w-3" />
-                    {status.label}
-                  </div>
-                </div>
-              )}
 
               {/* ── Info section ── */}
               <div className="p-3.5 space-y-2.5">
@@ -257,11 +203,17 @@ export function ClientOrdersList({
                     <p className="font-bold text-foreground text-base leading-tight">{order.clientName || 'Cliente'}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{date} · {order.products.length} producto{order.products.length !== 1 ? 's' : ''}</p>
                   </div>
-                  {order.brotherInvolved && (
-                    <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full flex-shrink-0">
-                      + hermano
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {order.brotherInvolved && (
+                      <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">
+                        + hermano
+                      </span>
+                    )}
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-semibold ${status.bg} ${status.cls}`}>
+                      <StatusIcon className="h-3 w-3" />
+                      {status.label}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Product checklist */}
