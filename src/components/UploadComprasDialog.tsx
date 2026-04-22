@@ -98,58 +98,51 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
   const processFile = async (file: File) => {
     setStep('scanning');
     try {
-      // Ensure bucket exists first
-      await ensureBucket();
+      // Convert to base64 for AI vision
+      const base64 = await toDataUrl(file);
 
-      const ext  = (file.name?.split('.').pop() ?? 'jpg').toLowerCase();
-      const path = `scans/${session!.user.id}/${Date.now()}.${ext}`;
+      // Call extract-screenshot edge function
+      const { data, error } = await supabase.functions.invoke('extract-screenshot', {
+        body: { imageBase64: base64 }
+      });
 
-      let publicUrl: string;
-      const { error: upErr } = await supabase.storage
-        .from('order-photos')
-        .upload(path, file, { upsert: true });
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error ?? 'Error al escanear');
 
-      if (upErr) {
-        // Fallback: use base64 data URL directly
-        console.warn('Storage upload failed, using base64 fallback:', upErr.message);
-        publicUrl = await toDataUrl(file);
-      } else {
-        const { data: { publicUrl: url } } = supabase.storage
-          .from('order-photos')
-          .getPublicUrl(path);
-        publicUrl = url;
-      }
+      const orders: any[] = data.orders ?? [];
 
-      // Try AI scan — if edge function not deployed, create one product manually
-      let scanned: ScannedProduct[] = [];
-      try {
-        const { data, error } = await supabase.functions.invoke('scan-products', {
-          body: { imageUrl: publicUrl, mode: method }
-        });
-        if (!error && data?.products?.length > 0) {
-          scanned = data.products.map((p: any) => ({
-            id: uid(), name: p.name ?? 'Producto', price: parseFloat(p.price) || 0,
-            store: p.store ?? 'SHEIN', imageUrl: p.imageUrl ?? publicUrl,
-            category: null, clientId: null, newClientName: '',
-          }));
-        }
-      } catch (_) {
-        // Edge function not available — fallback to manual classification
-      }
+      // Map every extracted order to a ScannedProduct
+      const scanned: ScannedProduct[] = orders.map((o: any) => ({
+        id:           uid(),
+        name:         o.productName ?? 'Producto',
+        price:        parseFloat(o.pricePaid) || 0,
+        store:        o.store ?? 'SHEIN',
+        imageUrl:     base64,   // use the full image; crop by bbox if available
+        category:     null,
+        clientId:     null,
+        newClientName: '',
+      }));
 
-      // Always create at least one product card with the uploaded image
+      // Fallback: at least one card if AI returned nothing
       if (scanned.length === 0) {
         scanned.push({
           id: uid(), name: 'Producto escaneado', price: 0,
-          store: 'SHEIN', imageUrl: publicUrl,
+          store: 'SHEIN', imageUrl: base64,
           category: null, clientId: null, newClientName: '',
         });
       }
 
+      // Also try to upload to storage in background (non-blocking)
+      ensureBucket().then(() => {
+        const ext  = (file.name?.split('.').pop() ?? 'jpg').toLowerCase();
+        const path = `scans/${session!.user.id}/${Date.now()}.${ext}`;
+        supabase.storage.from('order-photos').upload(path, file, { upsert: true }).catch(() => {});
+      }).catch(() => {});
+
       setProducts(scanned);
       setStep('classify');
     } catch (err: any) {
-      toast.error('Error al procesar imagen: ' + (err.message ?? 'Intenta de nuevo'));
+      toast.error('Error al escanear: ' + (err.message ?? 'Intenta de nuevo'));
       setStep('upload');
     }
     if (fileRef.current) fileRef.current.value = '';
