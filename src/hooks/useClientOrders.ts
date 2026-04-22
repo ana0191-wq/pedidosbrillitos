@@ -67,13 +67,18 @@ export function useClientOrders() {
   const { toast } = useToast();
 
   const fetchClientOrders = useCallback(async () => {
-    // Fetch client orders — only columns confirmed to exist in production DB
-    const SAFE_CO_COLS = 'id,user_id,client_id,status,payment_method,payment_reference,shipping_cost,amount_charged,shipping_type,notes,created_at,updated_at,product_payment_status,product_payment_amount,product_payment_method,product_payment_date,shipping_payment_status,shipping_payment_amount,shipping_payment_method,shipping_payment_date,shipping_cost_company,shipping_charge_to_client,brother_involved,tracking_number,archived_at';
+    setLoading(true);
+    // Fetch ALL columns — Supabase select('*') never fails on missing columns
+    // We only filter archived_at on JS side so missing column is safe
     const { data: coRaw, error: coError } = await supabase
       .from('client_orders')
-      .select(SAFE_CO_COLS)
+      .select('*')
       .order('created_at', { ascending: false });
-    if (coError) { console.error('client_orders fetch error:', coError.message); return; }
+    if (coError) {
+      console.error('client_orders fetch error:', coError.message);
+      setLoading(false);
+      return;
+    }
     const coData = (coRaw || []).filter((r: any) => !r.archived_at);
 
     // Fetch clients for names
