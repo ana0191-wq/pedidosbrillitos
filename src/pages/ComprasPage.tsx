@@ -1,46 +1,47 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Upload, Search, Filter, Package, Camera, FileText, PenLine } from 'lucide-react';
+import { Upload, Search, Package, ShoppingBag } from 'lucide-react';
 import { useOrders } from '@/hooks/useOrders';
 import UploadComprasDialog from '@/components/UploadComprasDialog';
 import CompraCard from '@/components/CompraCard';
 
 const STATUS_TABS = ['Todos', 'Pendiente', 'En Tránsito', 'Llegó', 'En Venezuela', 'Entregado'];
-const CATEGORY_TABS = ['Todas', 'Cliente', 'Mercancía', 'Personal'];
-
-const catMap: Record<string, string> = {
-  'Cliente': 'client',
+const CAT_TABS    = ['Todas', 'Cliente', 'Mercancía', 'Personal'];
+const CAT_MAP: Record<string, string> = {
+  'Cliente':   'client',
   'Mercancía': 'merchandise',
-  'Personal': 'personal',
+  'Personal':  'personal',
 };
 
 export default function ComprasPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { orders, loading } = useOrders();
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [statusTab, setStatusTab] = useState('Todos');
-  const [catTab, setCatTab] = useState('Todas');
+  const [search,     setSearch]     = useState('');
+  const [statusTab,  setStatusTab]  = useState('Todos');
+  const [catTab,     setCatTab]     = useState('Todas');
 
-  // Auto-open if ?upload=1
+  // Auto-open upload if ?upload=1
   useEffect(() => {
     if (searchParams.get('upload') === '1') {
       setUploadOpen(true);
       setSearchParams({});
     }
-  }, [searchParams]);
+  }, [searchParams, setSearchParams]);
 
   const filtered = (orders ?? []).filter(o => {
-    const matchSearch = !search ||
-      o.product_name.toLowerCase().includes(search.toLowerCase()) ||
-      o.store.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase();
+    const matchSearch = !q ||
+      o.productName.toLowerCase().includes(q) ||
+      o.store.toLowerCase().includes(q);
     const matchStatus = statusTab === 'Todos' || o.status === statusTab;
-    const matchCat = catTab === 'Todas' || o.category === catMap[catTab];
+    const matchCat    = catTab === 'Todas'    || o.category === CAT_MAP[catTab];
     return matchSearch && matchStatus && matchCat;
   });
 
   return (
-    <div className="p-4 lg:p-6 max-w-5xl mx-auto space-y-5">
+    <div className="p-4 lg:p-6 max-w-5xl mx-auto space-y-4">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -49,7 +50,8 @@ export default function ComprasPage() {
         </div>
         <button
           onClick={() => setUploadOpen(true)}
-          className="flex items-center gap-2 bg-coral text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm"
+          className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-sm"
+          style={{ background: 'hsl(14 90% 58%)' }}
         >
           <Upload className="w-4 h-4" />
           Subir compras
@@ -58,7 +60,7 @@ export default function ComprasPage() {
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -67,25 +69,26 @@ export default function ComprasPage() {
         />
       </div>
 
-      {/* Category tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {CATEGORY_TABS.map(tab => (
+      {/* Category pills */}
+      <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
+        {CAT_TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setCatTab(tab)}
             className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition ${
               catTab === tab
-                ? 'bg-coral text-white'
-                : 'bg-white border border-gray-200 text-gray-600 hover:border-coral/50'
+                ? 'text-white shadow-sm'
+                : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-300'
             }`}
+            style={catTab === tab ? { background: 'hsl(14 90% 58%)' } : {}}
           >
             {tab}
           </button>
         ))}
       </div>
 
-      {/* Status tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+      {/* Status pills */}
+      <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
         {STATUS_TABS.map(tab => (
           <button
             key={tab}
@@ -104,20 +107,20 @@ export default function ComprasPage() {
       {/* List */}
       {loading ? (
         <div className="space-y-3">
-          {[1,2,3].map(i => (
+          {[1, 2, 3].map(i => (
             <div key={i} className="h-24 bg-white rounded-2xl border border-gray-100 animate-pulse" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 py-16 text-center">
-          <Package className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+          <ShoppingBag className="w-10 h-10 text-gray-200 mx-auto mb-3" />
           <p className="text-sm text-gray-400">
             {search ? 'No se encontraron productos' : 'Aún no hay compras registradas'}
           </p>
           {!search && (
             <button
               onClick={() => setUploadOpen(true)}
-              className="mt-3 text-sm text-coral font-medium hover:underline"
+              className="mt-3 text-sm font-medium hover:underline text-orange-500"
             >
               Subir primera compra →
             </button>
@@ -131,7 +134,6 @@ export default function ComprasPage() {
         </div>
       )}
 
-      {/* Upload dialog */}
       <UploadComprasDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
     </div>
   );
