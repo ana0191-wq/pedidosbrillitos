@@ -67,26 +67,14 @@ export function useClientOrders() {
   const { toast } = useToast();
 
   const fetchClientOrders = useCallback(async () => {
-    // Fetch client orders — try with archived_at filter first, fall back without it
-    let coData: any[] = [];
-    {
-      const { data: d1, error: e1 } = await supabase
-        .from('client_orders')
-        .select('*')
-        .is('archived_at', null)
-        .order('created_at', { ascending: false });
-      if (!e1) {
-        coData = d1 || [];
-      } else {
-        console.warn('client_orders with archived_at failed, trying without:', e1.message);
-        const { data: d2, error: e2 } = await supabase
-          .from('client_orders')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (e2) { console.error('client_orders fetch failed:', e2.message); }
-        else { coData = d2 || []; }
-      }
-    }
+    // Fetch client orders — only columns confirmed to exist in production DB
+    const SAFE_CO_COLS = 'id,user_id,client_id,status,payment_method,payment_reference,shipping_cost,amount_charged,shipping_type,notes,created_at,updated_at,product_payment_status,product_payment_amount,product_payment_method,product_payment_date,shipping_payment_status,shipping_payment_amount,shipping_payment_method,shipping_payment_date,shipping_cost_company,shipping_charge_to_client,brother_involved,tracking_number,archived_at';
+    const { data: coRaw, error: coError } = await supabase
+      .from('client_orders')
+      .select(SAFE_CO_COLS)
+      .order('created_at', { ascending: false });
+    if (coError) { console.error('client_orders fetch error:', coError.message); return; }
+    const coData = (coRaw || []).filter((r: any) => !r.archived_at);
 
     // Fetch clients for names
     const { data: clientsData } = await supabase.from('clients').select('id, name');
@@ -135,7 +123,7 @@ export function useClientOrders() {
       });
     }
 
-    setClientOrders((coData || []).filter((r: any) => !r.archived_at).map((r: any) => ({
+    setClientOrders(coData.map((r: any) => ({
       id: r.id,
       clientId: r.client_id,
       clientName: clientMap[r.client_id] || 'Desconocido',
@@ -145,9 +133,9 @@ export function useClientOrders() {
       shippingCost: Number(r.shipping_cost) || 0,
       amountCharged: Number(r.amount_charged) || 0,
       shippingType: r.shipping_type || '',
-      shippingWeightLb: Number(r.shipping_weight_lb) || 0,
-      shippingVolumeFt3: Number(r.shipping_volume_ft3) || 0,
-      shippingDimensions: r.shipping_dimensions || '',
+      shippingWeightLb: 0,
+      shippingVolumeFt3: 0,
+      shippingDimensions: '',
       notes: r.notes || '',
       createdAt: r.created_at,
       products: productsMap[r.id] || [],
@@ -161,7 +149,7 @@ export function useClientOrders() {
       shippingPaymentDate: r.shipping_payment_date || null,
       shippingCostCompany: r.shipping_cost_company != null ? Number(r.shipping_cost_company) : null,
       shippingChargeToClient: r.shipping_charge_to_client != null ? Number(r.shipping_charge_to_client) : null,
-      brotherInvolved: r.brother_involved !== false,
+      brotherInvolved: !!r.brother_involved,
       trackingNumber: r.tracking_number || null,
       estimatedArrivalDate: null,
     })));
@@ -205,9 +193,7 @@ export function useClientOrders() {
     if (updates.shippingCost !== undefined) row.shipping_cost = updates.shippingCost;
     if (updates.amountCharged !== undefined) row.amount_charged = updates.amountCharged;
     if (updates.shippingType !== undefined) row.shipping_type = updates.shippingType;
-    if (updates.shippingWeightLb !== undefined) row.shipping_weight_lb = updates.shippingWeightLb;
-    if (updates.shippingVolumeFt3 !== undefined) row.shipping_volume_ft3 = updates.shippingVolumeFt3;
-    if (updates.shippingDimensions !== undefined) row.shipping_dimensions = updates.shippingDimensions;
+    // shipping_weight_lb, shipping_volume_ft3, shipping_dimensions don't exist in DB — skip
     if (updates.notes !== undefined) row.notes = updates.notes;
     if (updates.productPaymentStatus !== undefined) row.product_payment_status = updates.productPaymentStatus;
     if (updates.productPaymentAmount !== undefined) row.product_payment_amount = updates.productPaymentAmount;
@@ -236,8 +222,12 @@ export function useClientOrders() {
 
   const archiveClientOrder = useCallback(async (id: string) => {
     const { error } = await supabase.from('client_orders').update({ archived_at: new Date().toISOString() }).eq('id', id);
-    if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    else await fetchClientOrders();
+    if (error) {
+      // archived_at may not exist — just delete instead
+      const { error: e2 } = await supabase.from('client_orders').delete().eq('id', id);
+      if (e2) toast({ title: 'Error', description: e2.message, variant: 'destructive' });
+    }
+    await fetchClientOrders();
   }, [fetchClientOrders, toast]);
 
   const linkProductToOrder = useCallback(async (productId: string, clientOrderId: string) => {

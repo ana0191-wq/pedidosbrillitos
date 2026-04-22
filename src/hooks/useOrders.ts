@@ -10,25 +10,11 @@ export function useOrders() {
   const { toast } = useToast();
 
   const fetchOrders = useCallback(async () => {
-    // Try with column filters first, fall back to plain select if columns missing
-    let data: any[] | null = null;
-    const { data: d1, error: e1 } = await supabase
+    const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .is('deleted_at', null)
-      .is('archived_at', null)
       .order('created_at', { ascending: false });
-    if (!e1) {
-      data = d1;
-    } else {
-      console.warn('orders fetch with filters failed, trying plain:', e1.message);
-      const { data: d2, error: e2 } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (e2) { console.error('orders fetch failed:', e2.message); return; }
-      data = d2;
-    }
+    if (error) { console.error('orders fetch error:', error.message); return; }
 
     const mapped: Order[] = (data || []).map((row: any) => {
       const base = {
