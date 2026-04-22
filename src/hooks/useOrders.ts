@@ -189,5 +189,5 @@ export function useOrders() {
     await fetchOrders();
   }, [fetchOrders, toast]);
 
-  return { orders, loading, addOrder, updateOrder, deleteOrder, archiveOrder, getByCategory, getCounts };
+  return { orders, loading, addOrder, updateOrder, deleteOrder, archiveOrder, getByCategory, getCounts, refetch: fetchOrders };
 }

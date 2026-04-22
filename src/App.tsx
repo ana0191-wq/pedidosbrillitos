@@ -1,45 +1,35 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from '@/components/ui/sonner';
+import { useAuth } from '@/hooks/useAuth';
+import Auth from '@/pages/Auth';
+import AppShell from '@/components/AppShell';
 
-const queryClient = new QueryClient();
-
-function AppRoutes() {
+function App() {
   const { session, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">Cargando...</p>
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-coral animate-pulse" />
+          <p className="text-sm text-muted-foreground">Cargando...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <Routes>
-      <Route path="/" element={session ? <Index /> : <Navigate to="/auth" replace />} />
-      <Route path="/auth" element={session ? <Navigate to="/" replace /> : <Auth />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <BrowserRouter>
+      <Routes>
+        {!session ? (
+          <Route path="*" element={<Auth />} />
+        ) : (
+          <Route path="/*" element={<AppShell />} />
+        )}
+      </Routes>
+      <Toaster richColors position="top-right" />
+    </BrowserRouter>
   );
 }
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-    <BrowserRouter basename="/pedidosbrillitos/">
-        <AppRoutes />
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
 
 export default App;
