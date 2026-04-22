@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Package, Search, MessageCircle, ChevronRight, CheckCircle2, Clock, Truck, X, Trash2 } from 'lucide-react';
+import { Plus, Package, Search, MessageCircle, ChevronRight, CheckCircle2, Clock, Truck, X, Trash2, Check, Pencil } from 'lucide-react';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { AddClientOrderDialog } from '@/components/AddClientOrderDialog';
 import { EditClientOrderDialog } from '@/components/EditClientOrderDialog';
@@ -20,6 +20,7 @@ interface Props {
   onAddProduct: (order: Order, clientOrderId?: string) => Promise<void>;
   onUpdateOrder: (id: string, updates: Record<string, any>) => void;
   onDeleteOrder: (id: string) => void;
+  onToggleDelivered?: (productId: string, delivered: boolean) => Promise<void>;
   onArchiveOrder?: (id: string) => void;
   exchangeRate: number | null;
   shippingSettings?: ShippingSettings;
@@ -76,7 +77,7 @@ const STATUS_CONFIG = {
 export function ClientOrdersList({
   clientOrders, clients, onAddClient, onAddOrder, onAddProduct,
   onUpdateOrder, onDeleteOrder, onArchiveOrder,
-  exchangeRate, shippingSettings, collaborators, onUpsertEarning,
+  exchangeRate, shippingSettings, collaborators, onUpsertEarning, onToggleDelivered,
 }: Props) {
   const fmt = fmtMoney;
   const [showAdd, setShowAdd] = useState(false);
@@ -263,33 +264,41 @@ export function ClientOrdersList({
                   )}
                 </div>
 
-                {/* Product names list (no photo ones) */}
-                {productsNoPhoto.length > 0 && productsWithPhotos.length === 0 && (
-                  <div className="space-y-1">
-                    {order.products.slice(0, 3).map(p => (
-                      <div key={p.id} className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="h-7 w-7 rounded-lg bg-muted flex-shrink-0 flex items-center justify-center">
-                            <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                          </div>
-                          <p className="text-xs text-foreground truncate">{p.productName}</p>
-                        </div>
-                        <p className="text-xs font-semibold flex-shrink-0">${p.pricePaid.toFixed(2)}</p>
-                      </div>
-                    ))}
-                    {order.products.length > 3 && (
-                      <p className="text-[10px] text-muted-foreground pl-9">+{order.products.length - 3} más</p>
-                    )}
-                  </div>
-                )}
-
-                {/* All product names when there ARE photos (below the strip) */}
-                {productsWithPhotos.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
+                {/* Product checklist */}
+                {order.products.length > 0 && (
+                  <div className="space-y-1.5">
                     {order.products.map(p => (
-                      <span key={p.id} className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full truncate max-w-[140px]">
-                        {p.productName}
-                      </span>
+                      <div key={p.id} className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 border transition-all ${
+                        p.delivered ? 'bg-green-50 border-green-200 dark:bg-green-950/20' : 'bg-card border-border'
+                      }`}>
+                        {/* Toggle delivered */}
+                        <button
+                          onClick={e => { e.stopPropagation(); onToggleDelivered?.(p.id, !p.delivered); }}
+                          className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                            p.delivered ? 'bg-green-500 border-green-500 text-white' : 'border-muted-foreground/40 hover:border-primary'
+                          }`}
+                        >
+                          {p.delivered && <Check className="h-3.5 w-3.5" />}
+                        </button>
+                        {/* Photo */}
+                        {p.productPhoto
+                          ? <img src={p.productPhoto} alt="" className="h-8 w-8 rounded-md object-cover flex-shrink-0 border" />
+                          : <div className="h-8 w-8 rounded-md bg-muted flex-shrink-0 flex items-center justify-center border"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
+                        }
+                        {/* Name + store */}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium leading-tight truncate ${p.delivered ? 'line-through text-muted-foreground' : ''}`}>{p.productName}</p>
+                          <p className="text-[10px] text-muted-foreground">{p.store}</p>
+                        </div>
+                        <span className="text-xs font-bold flex-shrink-0">${p.pricePaid.toFixed(2)}</span>
+                        {/* Edit shortcut */}
+                        <button
+                          onClick={e => { e.stopPropagation(); setEditing(order); }}
+                          className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground flex-shrink-0"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}

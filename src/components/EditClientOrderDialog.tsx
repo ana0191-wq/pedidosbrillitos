@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle, Send, FileText, Scale } from 'lucide-react';
+import { Trash2, Package, Check, Save, DollarSign, Truck, AlertTriangle, Send, FileText, Scale, Pencil, CheckCircle2, Circle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import type { ClientOrder, ClientOrderProduct } from '@/hooks/useClientOrders';
@@ -199,6 +199,14 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
     deleteProduct(productId);
     setProducts(prev => prev.filter(p => p.id !== productId));
   };
+
+  const toggleDelivered = async (productId: string, current: boolean) => {
+    const next = !current;
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, delivered: next } : p));
+    await updateProduct(productId, { delivered: next } as any);
+  };
+
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   const confirmPrices = async (productId: string) => {
     const d = productDims[productId];
@@ -519,9 +527,18 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                 const isNegative = c.anaShippingProfit < 0 && hasWeight;
 
                 return (
-                  <div key={p.id} className="mx-4 mt-4 border border-border rounded-lg overflow-hidden">
+                  <div key={p.id} className={`mx-4 mt-4 border-2 rounded-lg overflow-hidden transition-all ${p.delivered ? 'border-green-400/50' : 'border-border'}`}>
                     {/* Product header */}
-                    <div className="flex items-center gap-3 px-4 py-3 bg-muted/40 border-b border-border">
+                    <div className={`flex items-center gap-3 px-4 py-3 border-b border-border ${p.delivered ? 'bg-green-50 dark:bg-green-950/20' : 'bg-muted/40'}`}>
+                      {/* Delivered toggle */}
+                      <button
+                        onClick={() => toggleDelivered(p.id, p.delivered)}
+                        className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                          p.delivered ? 'bg-green-500 border-green-500 text-white' : 'border-muted-foreground/40 hover:border-primary'
+                        }`}
+                      >
+                        {p.delivered && <Check className="h-4 w-4" />}
+                      </button>
                       <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
                         {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-5 w-5 m-2.5 text-muted-foreground" />}
                       </div>
@@ -784,21 +801,115 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             </>
           )}
 
-          {/* ═══ Product list (when in invoice mode or paid) — show products without calculator ═══ */}
+          {/* ═══ Product checklist ═══ */}
           {(stage2Mode === 'invoice' || shipPayStatus === 'Pagado') && products.length > 0 && (
-            <div className="mx-4 mt-4 space-y-2">
-              {products.map(p => (
-                <div key={p.id} className="flex items-center gap-3 px-4 py-2 bg-muted/20 rounded-lg border border-border">
-                  <div className="h-8 w-8 rounded bg-muted flex-shrink-0 overflow-hidden">
-                    {p.productPhoto ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" /> : <Package className="h-4 w-4 m-2 text-muted-foreground" />}
+            <div className="mx-4 mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Productos ({products.filter(p => p.delivered).length}/{products.length} entregados)</span>
+              </div>
+              <div className="space-y-2">
+                {products.map(p => (
+                  <div key={p.id} className={`rounded-xl border-2 transition-all ${p.delivered ? 'border-green-400/50 bg-green-50 dark:bg-green-950/20' : 'border-border bg-card'}`}>
+                    {/* Main row */}
+                    <div className="flex items-center gap-3 p-3">
+                      {/* Delivered toggle */}
+                      <button
+                        onClick={() => toggleDelivered(p.id, p.delivered)}
+                        className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                          p.delivered ? 'bg-green-500 border-green-500 text-white' : 'border-muted-foreground/40 hover:border-primary'
+                        }`}
+                      >
+                        {p.delivered && <Check className="h-4 w-4" />}
+                      </button>
+                      {/* Photo */}
+                      <div className="h-12 w-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden border">
+                        {p.productPhoto
+                          ? <img src={p.productPhoto} alt="" className="h-full w-full object-cover" />
+                          : <Package className="h-5 w-5 m-3.5 text-muted-foreground" />}
+                      </div>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-semibold text-sm leading-tight ${p.delivered ? 'line-through text-muted-foreground' : ''}`}>{p.productName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{p.store} · {fmt(p.pricePaid)}</p>
+                      </div>
+                      {/* Edit toggle */}
+                      <button
+                        onClick={() => setEditingProductId(editingProductId === p.id ? null : p.id)}
+                        className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {editingProductId === p.id ? <ChevronUp className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                      </button>
+                      <button onClick={() => handleDeleteProduct(p.id)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-destructive/10 text-destructive transition-colors">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {/* Inline edit panel */}
+                    {editingProductId === p.id && (
+                      <div className="border-t border-border px-4 py-3 space-y-2 bg-muted/30">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Nombre</label>
+                            <Input
+                              defaultValue={p.productName}
+                              className="h-8 text-xs"
+                              onBlur={e => {
+                                const val = e.target.value.trim();
+                                if (val && val !== p.productName) {
+                                  updateProduct(p.id, { productName: val } as any);
+                                  setProducts(prev => prev.map(x => x.id === p.id ? { ...x, productName: val } : x));
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Precio ($)</label>
+                            <Input
+                              defaultValue={p.pricePaid}
+                              type="number"
+                              className="h-8 text-xs"
+                              onBlur={e => {
+                                const val = parseFloat(e.target.value);
+                                if (!isNaN(val) && val !== p.pricePaid) {
+                                  updateProduct(p.id, { pricePaid: val } as any);
+                                  setProducts(prev => prev.map(x => x.id === p.id ? { ...x, pricePaid: val } : x));
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Tienda</label>
+                            <Input
+                              defaultValue={p.store}
+                              className="h-8 text-xs"
+                              onBlur={e => {
+                                const val = e.target.value.trim();
+                                if (val !== p.store) {
+                                  updateProduct(p.id, { store: val } as any);
+                                  setProducts(prev => prev.map(x => x.id === p.id ? { ...x, store: val } : x));
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Número de orden</label>
+                            <Input
+                              defaultValue={p.orderNumber}
+                              className="h-8 text-xs"
+                              onBlur={e => {
+                                const val = e.target.value.trim();
+                                if (val !== p.orderNumber) {
+                                  updateProduct(p.id, { orderNumber: val } as any);
+                                  setProducts(prev => prev.map(x => x.id === p.id ? { ...x, orderNumber: val } : x));
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{p.productName}</p>
-                    <p className="text-xs text-muted-foreground">{p.store}</p>
-                  </div>
-                  <span className="text-sm font-bold">{fmt(p.pricePaid)}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 

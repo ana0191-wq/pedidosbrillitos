@@ -239,6 +239,7 @@ const Index = () => {
             shippingSettings={shippingSettings}
             collaborators={collaborators}
             onUpsertEarning={upsertEarning}
+            onToggleDelivered={async (productId, delivered) => { await updateOrder(productId, { delivered } as any); }}
           />
           </>
         );

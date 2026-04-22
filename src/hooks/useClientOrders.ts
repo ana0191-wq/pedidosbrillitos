@@ -24,6 +24,7 @@ export interface ClientOrderProduct {
   salePriceVes: number | null;
   shippingChargeClient: number | null;
   pricesConfirmed: boolean;
+  delivered: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -114,6 +115,7 @@ export function useClientOrders() {
           salePriceVes: p.sale_price_ves != null ? Number(p.sale_price_ves) : null,
           shippingChargeClient: p.shipping_charge_client != null ? Number(p.shipping_charge_client) : null,
           pricesConfirmed: !!p.prices_confirmed,
+          delivered: !!p.delivered,
           createdAt: p.created_at,
           updatedAt: p.updated_at,
         });
