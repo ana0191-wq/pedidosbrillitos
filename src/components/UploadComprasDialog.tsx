@@ -72,38 +72,84 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
     }
   };
 
+  // Ensure bucket exists (creates it if missing)
+  const ensureBucket = async () => {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const exists = buckets?.some(b => b.id === 'order-photos');
+    if (!exists) {
+      await supabase.storage.createBucket('order-photos', {
+        public: true,
+        fileSizeLimit: 10 * 1024 * 1024,
+        allowedMimeTypes: ['image/*', 'application/pdf'],
+      });
+    }
+  };
+
+  // Convert file to base64 data URL (fallback when storage unavailable)
+  const toDataUrl = (file: File): Promise<string> =>
+    new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result as string);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+
   // Shared file processor (used by input + paste + drop)
   const processFile = async (file: File) => {
     setStep('scanning');
     try {
-      const ext  = file.name?.split('.').pop() ?? 'jpg';
+      // Ensure bucket exists first
+      await ensureBucket();
+
+      const ext  = (file.name?.split('.').pop() ?? 'jpg').toLowerCase();
       const path = `scans/${session!.user.id}/${Date.now()}.${ext}`;
+
+      let publicUrl: string;
       const { error: upErr } = await supabase.storage
         .from('order-photos')
         .upload(path, file, { upsert: true });
-      if (upErr) throw upErr;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('order-photos')
-        .getPublicUrl(path);
-
-      const { data, error } = await supabase.functions.invoke('scan-products', {
-        body: { imageUrl: publicUrl, mode: method }
-      });
-      if (error) throw error;
-
-      const scanned: ScannedProduct[] = (data?.products ?? []).map((p: any) => ({
-        id: uid(), name: p.name ?? 'Producto', price: parseFloat(p.price) || 0,
-        store: p.store ?? 'SHEIN', imageUrl: p.imageUrl ?? publicUrl,
-        category: null, clientId: null, newClientName: '',
-      }));
-      if (scanned.length === 0) {
-        scanned.push({ id: uid(), name: 'Producto escaneado', price: 0, store: 'SHEIN', imageUrl: publicUrl, category: null, clientId: null, newClientName: '' });
+      if (upErr) {
+        // Fallback: use base64 data URL directly
+        console.warn('Storage upload failed, using base64 fallback:', upErr.message);
+        publicUrl = await toDataUrl(file);
+      } else {
+        const { data: { publicUrl: url } } = supabase.storage
+          .from('order-photos')
+          .getPublicUrl(path);
+        publicUrl = url;
       }
+
+      // Try AI scan — if edge function not deployed, create one product manually
+      let scanned: ScannedProduct[] = [];
+      try {
+        const { data, error } = await supabase.functions.invoke('scan-products', {
+          body: { imageUrl: publicUrl, mode: method }
+        });
+        if (!error && data?.products?.length > 0) {
+          scanned = data.products.map((p: any) => ({
+            id: uid(), name: p.name ?? 'Producto', price: parseFloat(p.price) || 0,
+            store: p.store ?? 'SHEIN', imageUrl: p.imageUrl ?? publicUrl,
+            category: null, clientId: null, newClientName: '',
+          }));
+        }
+      } catch (_) {
+        // Edge function not available — fallback to manual classification
+      }
+
+      // Always create at least one product card with the uploaded image
+      if (scanned.length === 0) {
+        scanned.push({
+          id: uid(), name: 'Producto escaneado', price: 0,
+          store: 'SHEIN', imageUrl: publicUrl,
+          category: null, clientId: null, newClientName: '',
+        });
+      }
+
       setProducts(scanned);
       setStep('classify');
     } catch (err: any) {
-      toast.error('Error al escanear: ' + (err.message ?? 'Intenta de nuevo'));
+      toast.error('Error al procesar imagen: ' + (err.message ?? 'Intenta de nuevo'));
       setStep('upload');
     }
     if (fileRef.current) fileRef.current.value = '';
