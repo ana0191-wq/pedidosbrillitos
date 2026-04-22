@@ -17,6 +17,7 @@ export type Database = {
       client_orders: {
         Row: {
           amount_charged: number | null
+          archived_at: string | null
           brother_involved: boolean
           client_id: string
           created_at: string
@@ -36,12 +37,15 @@ export type Database = {
           shipping_payment_method: string | null
           shipping_payment_status: string
           shipping_type: string | null
+          estimated_arrival_date: string | null
           status: string
+          tracking_number: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           amount_charged?: number | null
+          archived_at?: string | null
           brother_involved?: boolean
           client_id: string
           created_at?: string
@@ -61,12 +65,15 @@ export type Database = {
           shipping_payment_method?: string | null
           shipping_payment_status?: string
           shipping_type?: string | null
+          estimated_arrival_date?: string | null
           status?: string
+          tracking_number?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           amount_charged?: number | null
+          archived_at?: string | null
           brother_involved?: boolean
           client_id?: string
           created_at?: string
@@ -86,7 +93,9 @@ export type Database = {
           shipping_payment_method?: string | null
           shipping_payment_status?: string
           shipping_type?: string | null
+          estimated_arrival_date?: string | null
           status?: string
+          tracking_number?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -251,6 +260,8 @@ export type Database = {
         Row: {
           amount_charged: number | null
           amount_paid: number | null
+          archived_at: string | null
+          arrival_photo: string | null
           arrived: boolean
           brother_involved: boolean
           category: string
@@ -260,9 +271,11 @@ export type Database = {
           company_invoice_notes: string | null
           created_at: string
           deleted_at: string | null
+          delivered: boolean
           delivered_at: string | null
           delivery_notes: string | null
           estimated_arrival: string | null
+          estimated_arrival_date: string | null
           euro_rate: number | null
           height_in: number | null
           id: string
@@ -276,15 +289,18 @@ export type Database = {
           price_paid: number
           price_per_unit: number | null
           prices_confirmed: boolean
+          product_link: string | null
           product_name: string
           product_photo: string | null
           sale_price_usd: number | null
           sale_price_ves: number | null
           shipping_charge_client: number | null
           shipping_cost: number | null
+          size_color: string | null
           status: string
           store: string
           suggested_price: number | null
+          tracking_number: string | null
           units_ordered: number | null
           units_received: number | null
           updated_at: string
@@ -295,6 +311,8 @@ export type Database = {
         Insert: {
           amount_charged?: number | null
           amount_paid?: number | null
+          archived_at?: string | null
+          arrival_photo?: string | null
           arrived?: boolean
           brother_involved?: boolean
           category: string
@@ -304,9 +322,11 @@ export type Database = {
           company_invoice_notes?: string | null
           created_at?: string
           deleted_at?: string | null
+          delivered?: boolean
           delivered_at?: string | null
           delivery_notes?: string | null
           estimated_arrival?: string | null
+          estimated_arrival_date?: string | null
           euro_rate?: number | null
           height_in?: number | null
           id?: string
@@ -320,15 +340,18 @@ export type Database = {
           price_paid?: number
           price_per_unit?: number | null
           prices_confirmed?: boolean
+          product_link?: string | null
           product_name: string
           product_photo?: string | null
           sale_price_usd?: number | null
           sale_price_ves?: number | null
           shipping_charge_client?: number | null
           shipping_cost?: number | null
+          size_color?: string | null
           status?: string
           store: string
           suggested_price?: number | null
+          tracking_number?: string | null
           units_ordered?: number | null
           units_received?: number | null
           updated_at?: string
@@ -339,6 +362,8 @@ export type Database = {
         Update: {
           amount_charged?: number | null
           amount_paid?: number | null
+          archived_at?: string | null
+          arrival_photo?: string | null
           arrived?: boolean
           brother_involved?: boolean
           category?: string
@@ -348,9 +373,11 @@ export type Database = {
           company_invoice_notes?: string | null
           created_at?: string
           deleted_at?: string | null
+          delivered?: boolean
           delivered_at?: string | null
           delivery_notes?: string | null
           estimated_arrival?: string | null
+          estimated_arrival_date?: string | null
           euro_rate?: number | null
           height_in?: number | null
           id?: string
@@ -364,15 +391,18 @@ export type Database = {
           price_paid?: number
           price_per_unit?: number | null
           prices_confirmed?: boolean
+          product_link?: string | null
           product_name?: string
           product_photo?: string | null
           sale_price_usd?: number | null
           sale_price_ves?: number | null
           shipping_charge_client?: number | null
           shipping_cost?: number | null
+          size_color?: string | null
           status?: string
           store?: string
           suggested_price?: number | null
+          tracking_number?: string | null
           units_ordered?: number | null
           units_received?: number | null
           updated_at?: string

@@ -155,8 +155,8 @@ export function useClientOrders() {
       shippingCostCompany: r.shipping_cost_company != null ? Number(r.shipping_cost_company) : null,
       shippingChargeToClient: r.shipping_charge_to_client != null ? Number(r.shipping_charge_to_client) : null,
       brotherInvolved: !!r.brother_involved,
-      trackingNumber: null,
-      estimatedArrivalDate: null,
+      trackingNumber: r.tracking_number || null,
+      estimatedArrivalDate: r.estimated_arrival_date || null,
     })));
     setLoading(false);
   }, []);
@@ -211,7 +211,8 @@ export function useClientOrders() {
     if (updates.shippingCostCompany !== undefined) row.shipping_cost_company = updates.shippingCostCompany;
     if (updates.shippingChargeToClient !== undefined) row.shipping_charge_to_client = updates.shippingChargeToClient;
     if (updates.brotherInvolved !== undefined) row.brother_involved = updates.brotherInvolved;
-    // tracking_number and estimated_arrival_date not in client_orders table — skip
+    if (updates.trackingNumber !== undefined) row.tracking_number = updates.trackingNumber;
+    if (updates.estimatedArrivalDate !== undefined) row.estimated_arrival_date = updates.estimatedArrivalDate;
 
     const { error } = await supabase.from('client_orders').update(row).eq('id', id);
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -225,8 +226,7 @@ export function useClientOrders() {
   }, [fetchClientOrders, toast]);
 
   const archiveClientOrder = useCallback(async (id: string) => {
-    // archived_at column does not exist in DB — delete directly
-    const { error } = await supabase.from('client_orders').delete().eq('id', id);
+    const { error } = await supabase.from('client_orders').update({ archived_at: new Date().toISOString() }).eq('id', id);
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
     else await fetchClientOrders();
   }, [fetchClientOrders, toast]);
