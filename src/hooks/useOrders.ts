@@ -135,6 +135,7 @@ export function useOrders() {
     if (updates.notes !== undefined) row.notes = updates.notes;
     if ((updates as any).suggestedPrice !== undefined) row.suggested_price = (updates as any).suggestedPrice;
     if ((updates as any).arrived !== undefined) row.arrived = (updates as any).arrived;
+    if ((updates as any).delivered !== undefined) row.delivered = (updates as any).delivered;
     // Payment fields
     if ((updates as any).amountPaid !== undefined) row.amount_paid = (updates as any).amountPaid;
     if ((updates as any).paymentMethod !== undefined) row.payment_method = (updates as any).paymentMethod;
