@@ -71,38 +71,65 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
       r.readAsDataURL(file);
     });
 
+  const toText = (file: File): Promise<string> =>
+    new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result as string);
+      r.onerror = rej;
+      r.readAsText(file, 'utf-8');
+    });
+
   const processFile = async (file: File) => {
     setStep('scanning');
     try {
-      const base64 = await toDataUrl(file);
-      const { data, error } = await supabase.functions.invoke('extract-screenshot', {
-        body: { imageBase64: base64 }
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error ?? 'Error al escanear');
+      const isHtml = file.name?.toLowerCase().endsWith('.html') || file.type === 'text/html';
+      let scanned: ScannedProduct[] = [];
 
-      const orders: any[] = data.orders ?? [];
-      const scanned: ScannedProduct[] = orders.map((o: any) => ({
-        id: uid(),
-        name:  o.productName ?? 'Producto',
-        price: parseFloat(o.pricePaid) || 0,
-        store: o.store ?? 'SHEIN',
-        imageUrl: base64,
-        category: null, clientId: null, newClientName: '',
-      }));
-
-      if (scanned.length === 0) {
-        scanned.push({ id: uid(), name: 'Producto escaneado', price: 0, store: 'SHEIN', imageUrl: base64, category: null, clientId: null, newClientName: '' });
+      if (isHtml) {
+        // ── HTML path: extract-html-order ──────────────────────────────
+        const htmlContent = await toText(file);
+        const { data, error } = await supabase.functions.invoke('extract-html-order', {
+          body: { htmlContent }
+        });
+        if (error) throw new Error(error.message);
+        if (!data?.success) throw new Error(data?.error ?? 'Error al procesar HTML');
+        scanned = (data.products ?? []).map((p: any) => ({
+          id: uid(),
+          name:     p.productName ?? 'Producto',
+          price:    parseFloat(p.pricePaid) || 0,
+          store:    p.store ?? 'SHEIN',
+          imageUrl: p.productImageUrl ?? '',
+          category: null, clientId: null, newClientName: '',
+        }));
+      } else {
+        // ── Image path: extract-screenshot ─────────────────────────────
+        const base64 = await toDataUrl(file);
+        const { data, error } = await supabase.functions.invoke('extract-screenshot', {
+          body: { imageBase64: base64 }
+        });
+        if (error) throw new Error(error.message);
+        if (!data?.success) throw new Error(data?.error ?? 'Error al escanear');
+        scanned = (data.orders ?? []).map((o: any) => ({
+          id: uid(),
+          name:     o.productName ?? 'Producto',
+          price:    parseFloat(o.pricePaid) || 0,
+          store:    o.store ?? 'SHEIN',
+          imageUrl: base64,
+          category: null, clientId: null, newClientName: '',
+        }));
       }
 
-      // Pre-fill total with sum of extracted prices
+      if (scanned.length === 0) {
+        scanned.push({ id: uid(), name: 'Producto escaneado', price: 0, store: 'SHEIN', imageUrl: '', category: null, clientId: null, newClientName: '' });
+      }
+
       const sum = scanned.reduce((a, p) => a + p.price, 0);
       if (sum > 0) setTotalPaid(sum.toFixed(2));
 
       setProducts(scanned);
       setStep('classify');
     } catch (err: any) {
-      toast.error('Error al escanear: ' + (err.message ?? 'Intenta de nuevo'));
+      toast.error('Error al procesar archivo: ' + (err.message ?? 'Intenta de nuevo'));
       setStep('upload');
     }
     if (fileRef.current) fileRef.current.value = '';
@@ -332,7 +359,7 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
           {/* ── UPLOAD ── */}
           {step === 'upload' && (
             <div className="p-5 space-y-3">
-              <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFile} />
+              <input ref={fileRef} type="file" accept="image/*,application/pdf,text/html,.html" className="hidden" onChange={handleFile} />
               <div
                 onClick={() => fileRef.current?.click()}
                 className="w-full border-2 border-dashed border-orange-200 rounded-2xl py-10 flex flex-col items-center gap-3 bg-orange-50/40 cursor-pointer hover:border-orange-400 hover:bg-orange-50/70 transition"
@@ -345,7 +372,7 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
                     {method === 'invoice' ? 'Sube la factura' : 'Sube la captura'}
                   </p>
                   <p className="text-sm text-gray-400 mt-1">
-                    {method === 'invoice' ? 'PDF o imagen de la orden' : 'Foto o screenshot del carrito'}
+                    {method === 'invoice' ? 'PDF, imagen o archivo .html de la orden' : 'Foto, screenshot o .html del carrito'}
                   </p>
                 </div>
                 <span className="text-xs font-medium bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
