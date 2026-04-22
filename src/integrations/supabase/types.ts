@@ -17,7 +17,6 @@ export type Database = {
       client_orders: {
         Row: {
           amount_charged: number | null
-          archived_at: string | null
           brother_involved: boolean
           client_id: string
           created_at: string
@@ -37,19 +36,15 @@ export type Database = {
           shipping_payment_method: string | null
           shipping_payment_status: string
           shipping_type: string | null
-          estimated_arrival_date: string | null
           status: string
-          tracking_number: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           amount_charged?: number | null
-          archived_at?: string | null
           brother_involved?: boolean
           client_id: string
           created_at?: string
-          estimated_arrival_date?: string | null
           id?: string
           notes?: string | null
           payment_method?: string | null
@@ -67,17 +62,14 @@ export type Database = {
           shipping_payment_status?: string
           shipping_type?: string | null
           status?: string
-          tracking_number?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           amount_charged?: number | null
-          archived_at?: string | null
           brother_involved?: boolean
           client_id?: string
           created_at?: string
-          estimated_arrival_date?: string | null
           id?: string
           notes?: string | null
           payment_method?: string | null
@@ -95,7 +87,6 @@ export type Database = {
           shipping_payment_status?: string
           shipping_type?: string | null
           status?: string
-          tracking_number?: string | null
           updated_at?: string
           user_id?: string
         }
