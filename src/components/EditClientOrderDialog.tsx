@@ -421,7 +421,16 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                 </div>
                 <div className="flex gap-2 items-center">
                   <Input value={prodPayAmount} onChange={e => setProdPayAmount(e.target.value)} placeholder={totals.totalProductCost.toFixed(2)} type="number" step="0.01" className="h-8 text-sm w-32" />
-                  <Button size="sm" className="h-8" onClick={() => setProdPayStatus('Pagado')} disabled={!prodPayMethod}>
+                  <Button size="sm" className="h-8" onClick={() => {
+                    setProdPayStatus('Pagado');
+                    const amount = prodPayAmount ? parseFloat(prodPayAmount) : totals.totalProductCost;
+                    onUpdateOrder(order.id, {
+                      productPaymentStatus: 'Pagado',
+                      productPaymentAmount: amount,
+                      productPaymentMethod: prodPayMethod || null,
+                      productPaymentDate: new Date().toISOString(),
+                    });
+                  }} disabled={!prodPayMethod}>
                     <Check className="h-3 w-3 mr-1" /> Registrar pago
                   </Button>
                 </div>
@@ -943,7 +952,16 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                 </div>
                 <div className="flex gap-2 items-center">
                   <Input value={shipPayAmount} onChange={e => setShipPayAmount(e.target.value)} placeholder={totals.totalClientPaysShipping.toFixed(2)} type="number" step="0.01" className="h-8 text-sm w-32" />
-                  <Button size="sm" className="h-8" onClick={() => setShipPayStatus('Pagado')} disabled={!shipPayMethod}>
+                  <Button size="sm" className="h-8" onClick={() => {
+                    setShipPayStatus('Pagado');
+                    const amount = shipPayAmount ? parseFloat(shipPayAmount) : totals.totalClientPaysShipping;
+                    onUpdateOrder(order.id, {
+                      shippingPaymentStatus: 'Pagado',
+                      shippingPaymentAmount: amount,
+                      shippingPaymentMethod: shipPayMethod || null,
+                      shippingPaymentDate: new Date().toISOString(),
+                    });
+                  }} disabled={!shipPayMethod}>
                     💰 Registrar pago envío
                   </Button>
                 </div>
