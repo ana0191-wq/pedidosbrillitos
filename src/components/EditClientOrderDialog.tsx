@@ -362,6 +362,21 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
   const invoiceBrotherCut = (invoiceProfit != null && brotherInvolved) ? invoiceProfit * 0.30 : null;
   const invoiceNetProfit = invoiceProfit != null ? (invoiceBrotherCut != null ? invoiceProfit - invoiceBrotherCut : invoiceProfit) : null;
 
+  // Effective shipping values for desglose
+  // Priority: registered payment amount > invoice field > weight calc > saved in DB
+  const effectiveShipIn = shipPayStatus === 'Pagado' && shipPayAmount && parseFloat(shipPayAmount) > 0
+    ? parseFloat(shipPayAmount)
+    : invoiceClient != null
+      ? invoiceClient
+      : totals.totalClientPaysShipping > 0
+        ? totals.totalClientPaysShipping
+        : (order?.shippingChargeToClient ?? 0);
+  const effectiveShipOut = invoiceCompany != null
+    ? invoiceCompany
+    : totals.totalAnaPaysFreight > 0
+      ? totals.totalAnaPaysFreight
+      : (order?.shippingCostCompany ?? 0);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden max-h-[95vh]">
@@ -944,8 +959,8 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
             ) : (
               <div className="pl-6 space-y-3">
                 <div className="text-sm space-y-0.5">
-                  <p className="text-muted-foreground">Cobrar al cliente: <strong className="text-foreground">{fmt(totals.totalClientPaysShipping)}</strong></p>
-                  <p className="text-muted-foreground text-xs">Yo pago a empresa: {fmt(totals.totalAnaPaysFreight)} → Mi ganancia: <span className="text-green-600 font-semibold">{fmt(totals.totalAnaProfit)}</span></p>
+                  <p className="text-muted-foreground">Cobrar al cliente: <strong className="text-foreground">{fmt(effectiveShipIn)}</strong></p>
+                  <p className="text-muted-foreground text-xs">Yo pago a empresa: {fmt(effectiveShipOut)} → Mi ganancia: <span className="text-green-600 font-semibold">{fmt(effectiveShipIn - effectiveShipOut)}</span></p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {PAYMENT_METHODS.map(m => <Pill key={m} label={m} active={shipPayMethod === m} onClick={() => setShipPayMethod(m)} />)}
@@ -970,7 +985,7 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
           </div>
 
           {/* ═══ DESGLOSE DE GANANCIA ═══ */}
-          {(totals.totalProductCost > 0 || totals.totalClientPaysShipping > 0) && (
+          {(totals.totalProductCost > 0 || effectiveShipIn > 0) && (
             <div className="mx-4 mt-4 rounded-xl border border-border overflow-hidden">
               <div className="bg-muted/40 px-4 py-2.5 border-b border-border">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Desglose de ganancia</p>
@@ -986,11 +1001,11 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Envío cobrado al cliente</span>
-                    <span className="font-semibold">${(invoiceClient ?? totals.totalClientPaysShipping).toFixed(2)}</span>
+                    <span className="font-semibold">${effectiveShipIn.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between border-t border-border/50 pt-1.5 font-bold">
                     <span>Total cobrado</span>
-                    <span>${(totals.totalProductCost + (invoiceClient ?? totals.totalClientPaysShipping)).toFixed(2)}</span>
+                    <span>${(totals.totalProductCost + effectiveShipIn).toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -1003,14 +1018,14 @@ export function EditClientOrderDialog({ open, onOpenChange, order, onUpdateOrder
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Envío a empresa de carga</span>
-                    <span className="font-semibold text-red-500">−${(invoiceCompany ?? totals.totalAnaPaysFreight).toFixed(2)}</span>
+                    <span className="font-semibold text-red-500">−${effectiveShipOut.toFixed(2)}</span>
                   </div>
                 </div>
 
                 {/* GANANCIA BRUTA */}
                 {(() => {
-                  const shipIn = invoiceClient ?? totals.totalClientPaysShipping;
-                  const shipOut = invoiceCompany ?? totals.totalAnaPaysFreight;
+                  const shipIn = effectiveShipIn;
+                  const shipOut = effectiveShipOut;
                   const bruta = shipIn - shipOut;
                   const brotherCut = brotherInvolved ? bruta * 0.30 : 0;
                   const neta = bruta - brotherCut;
