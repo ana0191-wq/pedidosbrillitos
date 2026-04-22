@@ -14,8 +14,8 @@ interface TopNavProps {
 
 const NAV_ITEMS = [
   { id: 'dashboard',     label: 'Dashboard',  icon: BarChart3 },
-  { id: 'clients',       label: 'Clientes',   icon: Users },
   { id: 'client-orders', label: 'Pedidos',    icon: Package },
+  { id: 'clients',       label: 'Clientes',   icon: Users },
   { id: 'por-cobrar',    label: 'Por Cobrar', icon: DollarSign },
   { id: 'personal',      label: 'Compras',    icon: ShoppingBag },
   { id: 'merchandise',   label: 'Mercancía',  icon: Package },
