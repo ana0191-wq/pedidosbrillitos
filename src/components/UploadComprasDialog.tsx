@@ -86,48 +86,21 @@ export default function UploadComprasDialog({ open, onClose }: Props) {
       let scanned: ScannedProduct[] = [];
 
       if (isHtml) {
-        // ── HTML path: clean HTML → text → gmail-scan style prompt via extract-screenshot ──
-        const raw = await toText(file);
-        // Strip tags, scripts, styles — keep only readable text
-        const cleaned = raw
-          .replace(/<script[\s\S]*?<\/script>/gi, '')
-          .replace(/<style[\s\S]*?<\/style>/gi, '')
-          .replace(/<svg[\s\S]*?<\/svg>/gi, '')
-          .replace(/<!--[\s\S]*?-->/g, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\s{2,}/g, ' ')
-          .trim()
-          .slice(0, 25000);
-
-        const { data, error } = await supabase.functions.invoke('extract-html-order', {
-          body: { htmlContent: cleaned }
-        }).catch(() => ({ data: null, error: new Error('not deployed') }));
-
-        if (!error && data?.success && data.products?.length > 0) {
-          scanned = data.products.map((p: any) => ({
-            id: uid(),
-            name:     p.productName ?? 'Producto',
-            price:    parseFloat(p.pricePaid) || 0,
-            store:    p.store ?? 'SHEIN',
-            imageUrl: p.productImageUrl ?? '',
-            category: null, clientId: null, newClientName: '',
-          }));
-        } else {
-          // Fallback: use gmail-scan which accepts raw text
-          const { data: d2, error: e2 } = await supabase.functions.invoke('gmail-scan', {
-            body: { rawText: cleaned, source: 'html-upload' }
-          });
-          if (e2) throw new Error(e2.message);
-          const orders = d2?.orders ?? d2?.products ?? [];
-          scanned = orders.map((o: any) => ({
-            id: uid(),
-            name:     o.productName ?? o.name ?? 'Producto',
-            price:    parseFloat(o.pricePaid ?? o.price) || 0,
-            store:    o.store ?? 'SHEIN',
-            imageUrl: '',
-            category: null, clientId: null, newClientName: '',
-          }));
-        }
+        // ── HTML path → extract-screenshot (now accepts htmlContent too) ──
+        const htmlContent = await toText(file);
+        const { data, error } = await supabase.functions.invoke('extract-screenshot', {
+          body: { htmlContent }
+        });
+        if (error) throw new Error(error.message);
+        if (!data?.success) throw new Error(data?.error ?? 'Error al procesar HTML');
+        scanned = (data.orders ?? []).map((o: any) => ({
+          id: uid(),
+          name:     o.productName ?? 'Producto',
+          price:    parseFloat(o.pricePaid) || 0,
+          store:    o.store ?? 'SHEIN',
+          imageUrl: o.productImageUrl ?? '',
+          category: null, clientId: null, newClientName: '',
+        }));
       } else {
         // ── Image path: extract-screenshot ─────────────────────────────
         const base64 = await toDataUrl(file);

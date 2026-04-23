@@ -5,11 +5,7 @@ const corsHeaders = {
 
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
-const EXTRACTION_PROMPT = `Eres un asistente que lee capturas de pantalla de pedidos de tiendas online (Temu, AliExpress, Shein, Amazon, etc.) y extrae la información de cada producto.
-
-Tu trabajo tiene DOS partes:
-1. LEER el texto visible en la imagen para extraer nombre, precio y tienda
-2. LOCALIZAR la foto/miniatura del producto para recortarla
+const IMAGE_PROMPT = `Eres un asistente que lee capturas de pantalla de pedidos de tiendas online (Temu, AliExpress, Shein, Amazon, etc.) y extrae la información de cada producto.
 
 Devuelve un JSON array con UN objeto por producto:
 {
@@ -22,28 +18,51 @@ Devuelve un JSON array con UN objeto por producto:
   "imageBbox": [x1, y1, x2, y2]
 }
 
-REGLAS PARA productName:
-- Copia el nombre EXACTO del producto como aparece en la pantalla
-- Si el nombre es muy largo, puedes recortarlo pero mantén las palabras clave
-- NUNCA inventes un nombre genérico
+REGLAS:
+- productName: copia el nombre EXACTO. NUNCA inventes un nombre genérico.
+- store: detecta por logo, diseño o texto visible. Si no puedes, usa "Otro".
+- pricePaid = total pagado (unitario × cantidad)
+- imageBbox = coordenadas [x1,y1,x2,y2] en % (0-100) de la miniatura del producto. null si no la ves.
 
-REGLAS PARA store:
-- Detecta la tienda por el logo, diseño o texto visible
-- Si no puedes identificarla, usa "Otro"
+Devuelve SOLO el JSON array. Sin markdown. Si no hay productos, devuelve [].`;
 
-REGLAS PARA PRECIOS:
-- pricePaid = total pagado por ese producto (unitario × cantidad)
-- Si ves "$2.00 × 3" → pricePaid=6.00, pricePerUnit=2.00, unitsOrdered=3
-- Si solo hay un precio → pricePaid=ese precio, unitsOrdered=1
+const TEXT_PROMPT = `Eres un extractor de pedidos de tiendas online. Se te dará texto extraído de una página HTML de órdenes (SHEIN, Temu, AliExpress, Amazon, etc.).
 
-REGLAS PARA imageBbox (MUY IMPORTANTE):
-- Cada producto tiene una foto/miniatura cuadrada a la izquierda
-- imageBbox = [x1, y1, x2, y2] en PORCENTAJES (0-100) del tamaño total de la imagen
-- (x1,y1) = esquina superior-izquierda de la foto, (x2,y2) = esquina inferior-derecha
-- Si hay varias miniaturas, cada producto tiene la suya propia
-- Si NO puedes localizar la foto con certeza, usa null
+Extrae CADA producto y devuelve un JSON array:
+{
+  "productName": "nombre exacto del producto",
+  "store": "SHEIN" | "Temu" | "AliExpress" | "Amazon" | "Otro",
+  "pricePaid": 12.99,
+  "unitsOrdered": 1,
+  "orderNumber": "123456" | null,
+  "orderDate": "2026-01-15" | null,
+  "estimatedArrival": "2026-02-01" | null,
+  "productImageUrl": "https://..." | null
+}
 
-Devuelve SOLO el JSON array. Sin markdown, sin explicación. Si no hay productos visibles, devuelve [].`;
+REGLAS:
+- productName DEBE ser el nombre real. NUNCA escribas "Producto", "Item" o genéricos.
+- Si hay múltiples productos, extrae TODOS.
+- pricePaid = precio final pagado por unidad × cantidad.
+- Devuelve SOLO el JSON array. Sin markdown. Si no hay productos, devuelve [].`;
+
+// Strip HTML to clean readable text
+function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|li|td|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n/g, '\n')
+    .trim()
+    .slice(0, 28000);
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -59,32 +78,79 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { imageBase64 } = await req.json();
+    const body = await req.json();
+    const { imageBase64, rawText, htmlContent } = body;
 
+    // ── TEXT mode (HTML page) ─────────────────────────────────────────────
+    if (rawText || htmlContent) {
+      const inputText = rawText ?? htmlToText(htmlContent);
+      console.log('Processing text/HTML, length:', inputText.length);
+
+      const aiResponse = await fetch(AI_GATEWAY, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-pro',
+          messages: [
+            { role: 'system', content: TEXT_PROMPT },
+            { role: 'user', content: `Extrae todos los productos de este contenido:\n\n${inputText}` },
+          ],
+          temperature: 0.1,
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        const err = await aiResponse.text();
+        console.error('AI text error:', err);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Error al procesar el texto.' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const aiData = await aiResponse.json();
+      const content = aiData.choices?.[0]?.message?.content || '';
+
+      let orders = [];
+      try {
+        const cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+        const match = cleaned.match(/\[[\s\S]*\]/);
+        orders = match ? JSON.parse(match[0]) : [];
+        console.log(`Text extracted ${orders.length} products`);
+      } catch {
+        console.error('Parse error:', content.slice(0, 300));
+        return new Response(
+          JSON.stringify({ success: false, error: 'No se pudo interpretar la respuesta.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, orders }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ── IMAGE mode (screenshot) ───────────────────────────────────────────
     if (!imageBase64) {
       return new Response(
-        JSON.stringify({ success: false, error: 'No se proporcionó imagen.' }),
+        JSON.stringify({ success: false, error: 'No se proporcionó imagen o texto.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     console.log('Processing screenshot with AI vision...');
-
-    // Ensure proper data URL format
     const imageUrl = imageBase64.startsWith('data:')
       ? imageBase64
       : `data:image/png;base64,${imageBase64}`;
 
     const aiResponse = await fetch(AI_GATEWAY, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'google/gemini-2.5-pro',
         messages: [
-          { role: 'system', content: EXTRACTION_PROMPT },
+          { role: 'system', content: IMAGE_PROMPT },
           {
             role: 'user',
             content: [
@@ -100,24 +166,9 @@ Deno.serve(async (req) => {
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error('AI error:', errText);
-
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Demasiadas solicitudes. Espera un momento.' }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Créditos de IA agotados. Intenta más tarde.' }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      return new Response(
-        JSON.stringify({ success: false, error: 'Error al procesar la imagen.' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (aiResponse.status === 429) return new Response(JSON.stringify({ success: false, error: 'Demasiadas solicitudes. Espera un momento.' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      if (aiResponse.status === 402) return new Response(JSON.stringify({ success: false, error: 'Créditos de IA agotados.' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ success: false, error: 'Error al procesar la imagen.' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const aiData = await aiResponse.json();
@@ -125,22 +176,20 @@ Deno.serve(async (req) => {
 
     let orders = [];
     try {
-      let cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-      const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
-      orders = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-      console.log(`Extracted ${orders.length} orders:`, JSON.stringify(orders.map((o: any) => ({ name: o.productName?.slice(0, 30), bbox: o.imageBbox, price: o.pricePaid }))));
+      const cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+      const match = cleaned.match(/\[[\s\S]*\]/);
+      orders = match ? JSON.parse(match[0]) : [];
+      console.log(`Image extracted ${orders.length} orders`);
     } catch {
       console.error('Parse error:', content.slice(0, 300));
-      return new Response(
-        JSON.stringify({ success: false, error: 'No se pudo interpretar la respuesta del AI.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ success: false, error: 'No se pudo interpretar la respuesta del AI.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     return new Response(
       JSON.stringify({ success: true, orders }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+
   } catch (error) {
     console.error('Error:', error);
     return new Response(
